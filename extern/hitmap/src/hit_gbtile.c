@@ -10,7 +10,7 @@
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.2
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -30,7 +30,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2015, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -110,7 +110,7 @@ void hit_gbTileAllocInternal(void *newVarP, const char *name, const char *file, 
 
 
 
-int hit_gbTileGraphVertexAtIndex(void * varP, int vertex){
+inline int hit_gbTileGraphVertexAtIndex(void * varP, int vertex){
 
 	/* 1. Get the shape of the tile */
 	HitTile *var = (HitTile *)varP;
@@ -125,7 +125,7 @@ int hit_gbTileGraphVertexAtIndex(void * varP, int vertex){
 
 
 
-int hit_gbTileGraphEdgeAtIndex(void * varP, int pos1, int pos2){
+inline int hit_gbTileGraphEdgeAtIndex(void * varP, int pos1, int pos2){
 
 	/* 1. Get the shape of the tile */
 	HitTile *var = (HitTile *)varP;

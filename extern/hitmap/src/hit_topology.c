@@ -6,17 +6,17 @@
  * 
  * 
  * @file hit_topology.c
- * @version 1.4
+ * @version 1.3
  * @author Arturo Gonzalez-Escribano
  * @author Javier Fresno Bausela
- * @date Mar 2019
+ * @date Ene 2014
  *
  */
 
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.2
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -36,7 +36,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2015, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -142,14 +142,10 @@ HitTopology hit_topology_plug_topPlain( HitPTopology *ptopo ) {
 	res.type = HIT_TOPOLOGY_PLAIN;
 	res.numDims = 1;
 	res.card[0] = ptopo->numProcs;
+	res.self.rank[0] = ptopo->selfRank;
 	// @arturo 2015/01/22
 	//res.linearRank = ptopo->selfRank;
-	// @arturo 2019/09/12 Non-active processes have ranks NULL
 	res.active = ( ptopo->selfRank < ptopo->numProcs ) ? 1 : 0;
-	if ( res.active )
-		res.self.rank[0] = ptopo->selfRank;
-	else
-		res.self.rank[0] = HIT_RANK_NULL_STATIC;
 
 	res.pTopology = hit_ptopDup( ptopo );
 
@@ -164,14 +160,10 @@ HitTopology hit_topology_plug_topPlainPower2( HitPTopology *ptopo ) {
 	res.numDims = 1;
 
 	res.card[0] = (int)( pow2( (int)log2( ptopo->numProcs ) ) );
+	res.self.rank[0] = ptopo->selfRank;
 	// @arturo 2015/01/22
 	//res.linearRank = ptopo->selfRank;
-	// @arturo 2019/09/12 Non-active processes have ranks NULL
 	res.active = ( ptopo->selfRank < res.card[0] ) ? 1 : 0;
-	if ( res.active ) 
-		res.self.rank[0] = ptopo->selfRank;
-	else
-		res.self.rank[0] = HIT_RANK_NULL_STATIC;
 
 	/* IF NOT ALL PROCESSORS ARE ACTIVE, SPLIT PHISICAL TOPOLOGY */
 	if ( res.card[0] == ptopo->numProcs ) res.pTopology = hit_ptopDup( ptopo );
@@ -198,16 +190,9 @@ HitTopology hit_topology_plug_topSquare( HitPTopology *ptopo ) {
 	/* GET FIRST COORDINATE */
 	// @arturo 2015/01/22
 	//res.linearRank = ptopo->selfRank;
-	// @arturo 2019/09/12 Non-active processes have ranks NULL
-	res.active = ( ptopo->selfRank < size*size ) ? 1 : 0;
-	if ( res.active ) {
-		res.self.rank[0] = ptopo->selfRank / size;
-		res.self.rank[1] = ptopo->selfRank % size;
-	}
-	else {
-		res.self.rank[0] = HIT_RANK_NULL_STATIC;
-		res.self.rank[1] = HIT_RANK_NULL_STATIC;
-	}
+	res.self.rank[0] = ptopo->selfRank / size;
+	res.self.rank[1] = ptopo->selfRank % size;
+	res.active = ( res.self.rank[0] < size ) ? 1 : 0;
 
 	/* IF NOT ALL PROCESSORS ARE ACTIVE, SPLIT PHISICAL TOPOLOGY */
 	if ( dsize == (double)size ) res.pTopology = hit_ptopDup( ptopo );
@@ -247,19 +232,11 @@ HitTopology hit_topology_plug_topArray2DComplete( HitPTopology *ptopo ) {
 	res.numDims = 2;
 	res.card[0] = high;
 	res.card[1] = low;
+	res.self.rank[0] = ptopo->selfRank / low;
+	res.self.rank[1] = ptopo->selfRank % low;
 	// @arturo 2015/01/22
 	//res.linearRank = ptopo->selfRank;
-	//res.active = ( res.self.rank[0] < res.card[0] ) ? 1 : 0;
-	// @arturo 2019/09/12 Non-active processes have ranks NULL
-	res.active = ( ptopo->selfRank < high*low ) ? 1 : 0;
-	if ( res.active ) {
-		res.self.rank[0] = ptopo->selfRank / low;
-		res.self.rank[1] = ptopo->selfRank % low;
-	}
-	else {
-		res.self.rank[0] = HIT_RANK_NULL_STATIC;
-		res.self.rank[1] = HIT_RANK_NULL_STATIC;
-	}
+	res.active = ( res.self.rank[0] < res.card[0] ) ? 1 : 0;
 
 	res.pTopology = hit_ptopDup( ptopo );
 
@@ -279,7 +256,7 @@ HitTopology hit_topology_plug_topArrayDims( HitPTopology *ptopo , int dims ) {
 	int logs[dims];
 	int logn;
 	int i,j;
-	int go_on;
+	int goon;
 	int product;
 
 
@@ -307,16 +284,20 @@ HitTopology hit_topology_plug_topArrayDims( HitPTopology *ptopo , int dims ) {
 		}
 
 		/* Check out condition */
-		go_on = 0;
+		goon = 0;
 		for(i=0;i<dims;i++){
-			if(cards[i] != oldcards[i]) go_on = 1;
+			if(cards[i] != oldcards[i]) goon = 1;
 		}
 
-	} while(go_on);
+	} while(goon);
 
 	/* 3. BUILD RESULT */
 	res.numDims = dims;
 	for(i=0;i<dims;i++) res.card[i] = cards[i];
+
+	res.self = hit_topRanksInternal(res,ptopo->selfRank);
+	// @arturo 2015/01/22
+	//res.linearRank = ptopo->selfRank;
 
 	/* Check if active */
 	product = 1;
@@ -324,16 +305,6 @@ HitTopology hit_topology_plug_topArrayDims( HitPTopology *ptopo , int dims ) {
 		product *= cards[i];
 	}
 	res.active = ( ptopo->selfRank < product ) ? 1 : 0;
-
-	// @arturo 2015/01/22
-	//res.linearRank = ptopo->selfRank;
-	// @arturo 2019/09/12 Non-active processes have ranks NULL
-	if ( res.active ) {
-		res.self = hit_topRanksInternal(res,ptopo->selfRank);
-	}
-	else {
-		for(i=0;i<dims;i++) res.self.rank[i] = HIT_RANK_NULL_STATIC;
-	}
 
 	/* IF NOT ALL PROCESSORS ARE ACTIVE, SPLIT PHISICAL TOPOLOGY */
 	if ( product == ptopo->numProcs ) res.pTopology = hit_ptopDup( ptopo );
@@ -343,34 +314,45 @@ HitTopology hit_topology_plug_topArrayDims( HitPTopology *ptopo , int dims ) {
 	return res;
 }
 
-/* 5.6. Hit DIMENSIONAL PROJECTION ARRAY TOPOLOGY */
-HitTopology hit_topology_plug_topArrayDimProjection( HitPTopology *ptopo, int dim ) {
+
+/* 5.6 Hit DUMMY TOPOLOGY*/
+HitTopology hit_topology_plug_topDummyDims( HitPTopology *ptopo, int dims, int* virprocelems ) {
+
 	HitTopology res = HIT_TOPOLOGY_NULL;
-	res.type = HIT_TOPOLOGY_ARRAYDIMPROJECTION;
+
+	if (dims > HIT_MAXDIMS)
+		hit_errInternal( __FUNCTION__, "Trying to use a number of dimensions greater above the maximum\n. Increment HIT_MAXDIMS and recompile Hitmap", "", __FILE__, __LINE__);
+
+	if (dims == 0)
+		hit_errInternal( __FUNCTION__, "You cannot define a number of dimensions equal to zero", "", __FILE__, __LINE__);
+
+	res.type = HIT_TOPOLOGY_DUMMYDIMS;
+	res.numDims = 1;
+	int i;
+	for (i = 0; (i < dims)||(i < HIT_MAXDIMS); i++)
+		res.card[i] = virprocelems[i];
 	
-	/* 1. NUMBER OF DIMENSIONS */
-	res.numDims = dim+1;
-//	res.numDims = HIT_MAXDIMS;
+	for (i = 0; (i < dims)||(i < HIT_MAXDIMS); i++)
+		res.self.rank[i] = 0; //XXX	
 
-	/* 2. CARDINALITY AND INDEX OF DIMENSIONS BELOW */
-	int ind;
-	// @arturo: NON-PROJECTED DIMENSIONS REPORT CARDINALITY 1 AND RANK 0, EVEN THOSE ABOVE 
-	// THE PROJECTED DIMENSION
-	//for ( ind=0; ind<dim; ind++ ) {
-	for ( ind=0; ind<HIT_MAXDIMS; ind++ ) {
-		res.card[ind] = 1;
-		res.self.rank[ind] = 0;
-	}
+	int totalProcNumber=1;
+	for (i = 0; (i < dims)||(i < HIT_MAXDIMS); i++)
+		totalProcNumber *= virprocelems[i]; //FIXME ¿qué pasa si el numero de elementos que nos pasan en una dimension dada es cero?
 
-	/* 3. CARDINALITY AND INDEX ON THE SELECTED DIMENSION */
-	res.card[dim] = ptopo->numProcs;
-	res.self.rank[dim] = ptopo->selfRank;
-
-	/* 4. ALL ARE ACTIVE */
 	res.active = 1;
-	res.pTopology = hit_ptopDup( ptopo );
 
-	/* 5. RETURN RESULT */
+	//Since hit_layout_wrapper checks if the pTopology is null,
+	//  we will have to fake it.
+	HitPTopology *ptopo2;
+
+	hit_malloc( ptopo2, HitPTopology, 1 );
+	*ptopo2 = HIT_PTOPOLOGY_NULL;
+	ptopo2->numUses = 1;
+	ptopo2->numProcs = totalProcNumber;
+	ptopo2->selfRank = 0;
+	ptopo2->comm = MPI_COMM_SELF; //This is a hack since hit_ptopoIsNull() from hit_layout_wrapper checks if the comm is MPI_COMM_NULL
+	res.pTopology = ptopo2;
+
 	return res;
 }
 

@@ -1,0 +1,67 @@
+#!/bin/sh
+#SBATCH
+
+TEST_EXE=./build/CellAutom
+EXE_NAME="./build/CellAutom ./build/CellAutomCuda ./build/CellAutomComm"
+RESULT_DIR=CorrectResults
+PROCS="1"
+SIZES="10 100"
+ITERATIONS="1 10 100"
+
+function doTest() {
+	rm -f *.dtxt
+	srun -p gpus -N $2 $1 $3 $3 $4 > Result.out.dtxt
+
+	diff Result.out.dtxt $RESULT_DIR/Result.$3.$4 >/dev/null 2>/dev/null
+	if [ $? -eq 0 ]
+	then 
+		echo -e "\e[33m[\e[32mPASS\e[33m] - $1 $3 $3 $4 Process: $2\e[0m"
+		return 0
+	else
+		echo -e "\e[33m[\e[31mFAIL\e[33m] - $1 $3 $3 $4 Process: $2\e[0m"
+		return 1
+	fi
+}
+
+function doCheck() {
+	for size in $SIZES
+	do
+		for iter in $ITERATIONS
+		do
+			srun $TEST_EXE $size $size $iter > $RESULT_DIR/Result.$size.$iter
+		done
+	done
+}
+
+if [ "$1" != "" ]
+then
+	PROCS=$1
+fi
+
+if [ "$2" != "" ]
+then
+	SIZES=$2
+fi
+
+if [ "$3" != "" ]
+then
+	ITERATIONS=$3
+fi
+
+doCheck
+
+for exe in $EXE_NAME
+do
+	for size in $SIZES
+	do
+		for iter in $ITERATIONS
+		do
+			for procs in $PROCS
+			do
+				doTest $exe $procs $size $iter 
+			done
+		done
+	done
+done
+
+rm -f *.dtxt

@@ -10,7 +10,7 @@
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.2
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -30,7 +30,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2019, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2015, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -148,7 +148,10 @@ int main(int argc, char *argv[]) {
 		/* 4.1. CREATE AND ALLOCATE LOCAL TILES */
 		/* 4.1.1. LOCAL TILE WITH SPACE FOR FOREIGN DATA */
 		HitTile_double tileMat;
-		HitShape expandedShape = hit_shapeExpand( hit_layShape(matLayout), 2, 1 );
+		HitShape expandedShape = hit_shapeDimExpand( hit_layShape(matLayout), 0, HIT_SHAPE_BEGIN, -1 );
+		expandedShape = hit_shapeDimExpand( expandedShape, 0, HIT_SHAPE_END, 1 );
+		expandedShape = hit_shapeDimExpand( expandedShape, 1, HIT_SHAPE_BEGIN, -1 );
+		expandedShape = hit_shapeDimExpand( expandedShape, 1, HIT_SHAPE_END, 1 );
 		hit_tileSelect( &tileMat, &matrix, expandedShape );
 		hit_tileAlloc( &tileMat );
 
@@ -253,16 +256,16 @@ int main(int argc, char *argv[]) {
 		HitShape outputShape = hit_tileShape( tileMat );
 		/* FIRST ROW IS NOT MINE */
 		if ( ! hit_sigIn( hit_shapeSig( outputShape, 0 ), hit_tileDimBegin( root, 0 ) ) )
-			outputShape	= hit_shapeTransform( outputShape, 0, HIT_SHAPE_BEGIN, +1 );
+			outputShape	= hit_shapeDimExpand( outputShape, 0, HIT_SHAPE_BEGIN, +1 );
 		/* LAST ROW IS NOT MINE */
 		if ( ! hit_sigIn( hit_shapeSig( outputShape, 0 ), hit_tileDimEnd( root, 0 ) ) )
-			outputShape = hit_shapeTransform( outputShape, 0, HIT_SHAPE_END, -1 );
+			outputShape = hit_shapeDimExpand( outputShape, 0, HIT_SHAPE_END, -1 );
 		/* FIRST COLUMN IS NOT MINE */
 		if ( ! hit_sigIn( hit_shapeSig( outputShape, 1 ), hit_tileDimBegin( root, 1 ) ) )
-			outputShape = hit_shapeTransform( outputShape, 1, HIT_SHAPE_BEGIN, +1 );
+			outputShape = hit_shapeDimExpand( outputShape, 1, HIT_SHAPE_BEGIN, +1 );
 		/* LAST COLUMN IS NOT MINE */
 		if ( ! hit_sigIn( hit_shapeSig( outputShape, 1 ), hit_tileDimEnd( root, 1 ) ) )
-			outputShape = hit_shapeTransform( outputShape, 1, HIT_SHAPE_END, -1 );
+			outputShape = hit_shapeDimExpand( outputShape, 1, HIT_SHAPE_END, -1 );
 		hit_tileSelectArrayCoords( &outputTile, &tileMat, outputShape );
 #ifdef WRITE_BIN
 		hit_tileFileWrite( &outputTile, "Result.out", HIT_FILE_ARRAY );

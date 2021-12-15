@@ -1,0 +1,26 @@
+1º Frontend users:
+	 cwdfront;
+	 module load mpich3/gcc; 
+
+2º Update Hitmap path (HITMAP_PATH) in CMakeList.txt
+
+3º Recompile Hitmap 
+	cd Hitmap1.3:
+	make clean; make
+	cd ..
+
+4º Create "build" directory and Makefiles
+	mkdir build; cd build; cmake .. ; cd ..
+
+5º Compile all 
+	sh compile.sh
+
+6º Checking
+	./check.py
+
+7º Executing an example
+
+	srun --gres=gpu:1 -p dark-night -w hydra -n 1 ./build/examples_gpu/matrixAdd/matrixAddCuda 4 1 0
+
+The source codes are in ./examples_xxx/  (xxx = (cpu|gpu#xphi))
+The generated files are in the ./build/examples_xxx/ 

@@ -12,19 +12,19 @@
 
 /*
  * <license>
- * 
- * Hitmap v1.3
- * 
+ *
+ * Hitmap v1.2
+ *
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
- * or use for commercial purpose, public redistribution, in source or binary forms, with or 
- * without modifications, is NOT ALLOWED without the previous authorization of the copyright 
+ * or use for commercial purpose, public redistribution, in source or binary forms, with or
+ * without modifications, is NOT ALLOWED without the previous authorization of the copyright
  * holder. The origin of this software must not be misrepresented; you must not claim that you
  * wrote the original software. If you use this software for any purpose (e.g. publication),
  * a reference to the software package and the authors must be included.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
  * THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
  * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
@@ -32,12 +32,12 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ *
+ * Copyright (c) 2007-2015, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
- * 
+ *
  * More information on http://trasgo.infor.uva.es/
- * 
+ *
  * </license>
 */
 
@@ -205,54 +205,12 @@ HitShape hit_shapeTileToArray(HitShape sh1, HitShape sh2) {
 	return res;
 }
 
-HitShape hit_shapeArrayToTile(HitShape sh1, HitShape sh2) {
-
-	/* 0. ONLY FOR SIGNATURE SHAPE */
-	if(	hit_shapeType(sh1) != HIT_SIG_SHAPE ||
-		hit_shapeType(sh2) != HIT_SIG_SHAPE	) return HIT_SHAPE_NULL;
-
-	/* 1. DIFFERENT DIMENSIONS, RETURN EMPTY SHAPE */
-	if (hit_shapeDims(sh1) != hit_shapeDims(sh2)) return HIT_SHAPE_NULL;
-
-
-	/* 2. FOR EACH DIMENSION IN BOTH SHAPES: OBSOLETE IF DIMENSIONS ARE EQUAL */
-	HitShape res = HIT_SHAPE_NULL;
-	//int minDims = ( hit_shapeDims(sh1) < hit_shapeDims(sh2) ) ? hit_shapeDims(sh1) : hit_shapeDims(sh2);
-	int minDims = hit_shapeDims(sh1);
-	int i, minStride, maxStride;
-	for (i=0; i<minDims; i++) {
-		if (hit_shapeSig(sh1,i).stride > hit_shapeSig(sh2,i).stride){
-			minStride = hit_shapeSig(sh2,i).stride;
-			maxStride = hit_shapeSig(sh1,i).stride;
-		}
-		else {
-			minStride = hit_shapeSig(sh1,i).stride;
-			maxStride = hit_shapeSig(sh2,i).stride;
-		}
-		/* 2.1 IF SIGS AREN'T COMPATIBLE, RETURN EMPTY SHAPE */
-		if (maxStride % minStride != 0) return HIT_SHAPE_NULL;
-
-		/* 2.2. COMPUTE TRANSFORMATION */
-		hit_shapeSig(res,i).begin =
-				hit_sigArrayToTile( hit_shapeSig(sh1,i), hit_shapeSig(sh2,i).begin );
-		hit_shapeSig(res,i).end =
-				hit_sigArrayToTile( hit_shapeSig(sh1,i), hit_shapeSig(sh2,i).end );
-		//hit_shapeSig(res,i).stride = hit_shapeSig(sh1,i).stride * hit_shapeSig(sh2,i).stride;
-		hit_shapeSig(res,i).stride = maxStride/minStride;
-
-		//if(hit_shapeSig(res,i).stride < 1) hit_shapeSig(res,i).stride = 1;
-	}
-
-	/* 3. RETURN */
-	hit_shapeDimsSet( res, minDims );
-	return res;
-}
 
 /* 9.1 Hit SHAPE EXPAND MANY DIMS IN EQUAL OFFSET */
 HitShape hit_shapeExpand(HitShape shape,int dims,int offset){
 
 	// Only works for Signature Shape.
-	if(	hit_shapeType(shape) != HIT_SIG_SHAPE ) return HIT_SHAPE_NULL;
+	if(	hit_shapeType(shape) == HIT_CSR_SHAPE ) return HIT_SHAPE_NULL;
 
 	HitShape res = shape;
 
@@ -264,22 +222,22 @@ HitShape hit_shapeExpand(HitShape shape,int dims,int offset){
 	return res;
 }
 
-/* 9.2 Hit SHAPE EXPAND A DIM IN A GIVEN DIRECTION */
+/* 9.1 Hit SHAPE EXPAND A DIM IN A GIVEN DIRECTION */
 HitShape hit_shapeDimExpand(HitShape shape,int dim, int position, int offset ){
 
 	// Only works for Signature Shape.
-	if(	hit_shapeType(shape) != HIT_SIG_SHAPE ) return HIT_SHAPE_NULL;
+	if(	hit_shapeType(shape) == HIT_CSR_SHAPE ) return HIT_SHAPE_NULL;
 
 	HitShape res = shape;
 
-	if ( position == HIT_SHAPE_BEGIN ) hit_shapeSig(res,dim).begin -= offset;
+	if ( position == HIT_SHAPE_BEGIN ) hit_shapeSig(res,dim).begin += offset;
 	else hit_shapeSig(res,dim).end += offset;
 
 	return res;
 }
 
 
-/* 9.3 Hit SHAPE GET BORDER */
+/* 9.2 Hit SHAPE GET BORDER */
 HitShape hit_shapeBorder(HitShape shape, int dim, int position, int offset){
 
 	// Only works for Signature Shape.
@@ -294,65 +252,6 @@ HitShape hit_shapeBorder(HitShape shape, int dim, int position, int offset){
 		hit_shapeSig(res,dim).end += offset;
 		hit_shapeSig(res,dim).begin = hit_shapeSig(res,dim).end;
 	}
-	return res;
-}
-
-// @arturo Oct, 31st 2018
-/* 9.4 Hit SHAPE TRANSFORM (MOVE,EXPAND,CUT,ETC...) */
-HitShape hit_shapeTransform( HitShape shape, int dim, int action, int offset ){
-
-	// Only works for Signature Shape.
-	if( hit_shapeType(shape) == HIT_CSR_SHAPE ) return HIT_SHAPE_NULL;
-
-	HitShape res = shape;
-
-	// Raw vs. shape coordinates (take into account the strides by default)
-	int strideFlag = 1;
-	if ( action >= HIT_SHAPE_RAW ) {
-		strideFlag = 0;
-		action = action - HIT_SHAPE_RAW;
-	}
-
-	// Dimensions to transform
-	int dimStart, dimEnd;
-	if ( dim == HIT_SHAPE_ALLDIMS ) {
-		dimStart = 0;
-		dimEnd = hit_shapeDims( res )-1;
-	}
-	else dimStart = dimEnd = dim;
-
-	int index;
-	for( index=dimStart; index<=dimEnd; index++ ){
-		// Offset in saw vs. strided coordinates for this dimension
-		int dimOffset = offset;
-		if ( strideFlag ) dimOffset *= hit_shapeSig(res,index).stride;
-
-		// Apply action
-		if ( action == HIT_SHAPE_BEGIN ) {
-			hit_shapeSig(res,index).begin += dimOffset;
-		}
-		else if ( action == HIT_SHAPE_END ) {
-			hit_shapeSig(res,index).end += dimOffset;
-		}
-		else if ( action == HIT_SHAPE_MOVE ) {
-			hit_shapeSig(res,index).begin += dimOffset;
-			hit_shapeSig(res,index).end += dimOffset;
-		}
-		else if ( action == HIT_SHAPE_STRETCH ) {
-			hit_shapeSig(res,index).begin -= dimOffset;
-			hit_shapeSig(res,index).end += dimOffset;
-		}
-		else if ( action == HIT_SHAPE_FIRST ) {
-			// offset means here a number of selected elements
-			hit_shapeSig(res,index).end = hit_shapeSig(res,index).begin + dimOffset -1;
-		}
-		else if ( action == HIT_SHAPE_LAST ) {
-			// offset means here a number of selected elements
-			hit_shapeSig(res,index).begin = hit_shapeSig(res,index).end - dimOffset +1;
-		}
-	}
-
-	// Return resulting shape
 	return res;
 }
 

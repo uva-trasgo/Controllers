@@ -7,17 +7,17 @@
  * 
  * @file hit_topology.h
  * @ingroup Com
- * @version 1.4
+ * @version 1.3
  * @author Arturo Gonzalez-Escribano
  * @author Javier Fresno Bausela
- * @date Mar 2019
+ * @date Ene 2015
  *
  */
 
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.2
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -37,7 +37,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2015, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -141,7 +141,7 @@ typedef struct HitRanks {
  */
 extern int	HIT_RANK_NULL;
 /** Value for null static rank */
-#define	HIT_RANK_NULL_STATIC	-9999999
+#define	HIT_RANK_NULL_STATIC	-1
 
 /* 2.3 HitRanks NULL VALUE*/
 /**
@@ -276,15 +276,9 @@ typedef struct HitTopology {
 #define HIT_TOPOLOGY_ARRAYDIMS		4
 
 /**
- * Array dimensional projection topology type constant.
- */
-#define HIT_TOPOLOGY_ARRAYDIMPROJECTION		5
-
-/**
- * Array dims complete topology type constant.
- */
-#define HIT_TOPOLOGY_ARRAYDIMSCOMP		6
-
+  * Multidimensional dummy topology type constant.
+  */
+#define HIT_TOPOLOGY_DUMMYDIMS		5
 
 
 /**
@@ -299,11 +293,9 @@ typedef struct HitTopology {
  */
 extern HitTopology	HIT_TOPOLOGY_NULL;
 
-/** HitTopology null static value. */
 // @arturo 2015/01/22
-//#define HIT_TOPOLOGY_NULL_STATIC	{0, 0, { 0, 0, 0, 0 }, { { -1, -1, -1, -1} }, 0, NULL }
-// @arturo 2019/09/12
-#define HIT_TOPOLOGY_NULL_STATIC	{0, 0, { 0, 0, 0, 0 }, HIT_RANKS_NULL_STATIC, 0, NULL }
+/** HitTopology null static value. */
+#define HIT_TOPOLOGY_NULL_STATIC	{0, 0, { 0, 0, 0, 0 }, { { -1, -1, -1, -1} }, 0, NULL }
 
 /* 3.3. Hit TOPOLOGY GENERATION */
 /**
@@ -326,7 +318,7 @@ extern HitTopology	HIT_TOPOLOGY_NULL;
  */
 HitTopology hit_topology_plug_topPlain( HitPTopology *topo );
 
-/* 3.4.2 Hit PLAIN TOPOLOGY */
+/* 3.4.1 Hit PLAIN TOPOLOGY */
 /**
  * Plain topology generator, which restricts the number of active processors to a power of 2
  *
@@ -335,7 +327,7 @@ HitTopology hit_topology_plug_topPlain( HitPTopology *topo );
  */
 HitTopology hit_topology_plug_topPlainPower2( HitPTopology *topo );
 
-/* 3.4.3 Hit SQUARE TOPOLOGY */
+/* 3.4.1 Hit SQUARE TOPOLOGY */
 /**
  * Square topology generator
  *
@@ -344,20 +336,18 @@ HitTopology hit_topology_plug_topPlainPower2( HitPTopology *topo );
  */
 HitTopology hit_topology_plug_topSquare( HitPTopology *topo );
 
-/* 3.4.4 Hit COMPLETE 2D ARRAY TOPOLOGY */
+/* 3.4.1 Hit COMPLETE 2D ARRAY TOPOLOGY */
 /**
  * Complete 2D Array topology generator
  *
  * First dimension bigger.
- * All processes are arranged in a two-dimensional topology 
- * with the two cardinalities being the highest integer divisors
- * of the number of processes 
- * All of the processes are active.
- * NOTE: This means a single row if the number of processes is prime
+ * All processors are arranged in a two-dimensional topology or
+ * in a one-dimensional topology if some of then can't active.
+ * All of them are active.
  */
 HitTopology hit_topology_plug_topArray2DComplete( HitPTopology *topo );
 
-/* 3.4.5 Hit X-D ARRAY TOPOLOGY */
+/* 3.4.1 Hit X-D ARRAY TOPOLOGY */
 /**
  * X-D Array topology generator
  *
@@ -366,18 +356,12 @@ HitTopology hit_topology_plug_topArray2DComplete( HitPTopology *topo );
  * If the input is power of two the result cardinalities keep this property
  * First dimensions are bigger
  *
- * This function is meant to be used through the macros below.
+ * This function is meant to be used thought the macros below.
  */
 HitTopology hit_topology_plug_topArrayDims( HitPTopology *topo , int dims );
 
-/**
- * 1D Array topology generator
- *
- * The processors are arranged in a 1-dimensional topology
- * Some processor may be inactive.
- * If the input is power of two the result cardinality keep this property
- */
-#define hit_topology_plug_topArray1D(topo) hit_topology_plug_topArrayDims(topo, 1)
+/* 3.4.1 Hit X-D DUMMY ARRAY TOPOLOGY */
+HitTopology hit_topology_plug_topDummyDims( HitPTopology *topo, int dims, int* virprocelems );
 
 /**
  * 2D Array topology generator
@@ -387,7 +371,7 @@ HitTopology hit_topology_plug_topArrayDims( HitPTopology *topo , int dims );
  * If the input is power of two the result cardinalities keep this property
  * First dimensions are bigger
  */
-#define hit_topology_plug_topArray2D(topo) hit_topology_plug_topArrayDims(topo, 2)
+#define hit_topology_plug_topArray2D(topo) hit_topology_plug_topArrayDims(topo, 2);
 
 /**
  * 3D Array topology generator
@@ -408,23 +392,6 @@ HitTopology hit_topology_plug_topArrayDims( HitPTopology *topo , int dims );
  * First dimensions are bigger
  */
 #define hit_topology_plug_topArray4D(topo) hit_topology_plug_topArrayDims(topo, 4);
-
-/* 3.4.6 Hit DIMENSIONAL PROJECTION TOPOLOGY */
-/**
- * DIMENSIONAL PROJECTOR TOPOLOGY
- *
- * The processors are arranged in a sequence in a selected dimension
- * Dimensions higher than the selected one do not exist.
- * Dimensions lower than the selected one have cardinality one, and all the 
- * processes share the same index: 0.
- *
- * This topology allows to easily map a selected dimension with the
- * desired layout function, assigning the whole signature of the
- * rest of dimensions to all the processors. The distribution is
- * applied only to the dimension of the topology.
- *
- */
-HitTopology hit_topology_plug_topArrayDimProjection( HitPTopology *topo , int dim );
 
 /* 3.5. Hit ACCESS TO TOPOLOGY INFORMATION */
 /* 3.5.1. ACTIVE */
@@ -469,9 +436,7 @@ int hit_topCard(HitTopology topo);
  */
 // @arturo 2015/01/22
 //#define	hit_topSelfRankInternal(topo)	(topo.linearRank)
-//#define	hit_topSelfRankInternal(topo)	( (topo).pTopology->selfRank )
-// @arturo 2019/09/12
-#define	hit_topSelfRankInternal(topo)	( (!topo.active) ? HIT_RANK_NULL_STATIC : (topo).pTopology->selfRank )
+#define	hit_topSelfRankInternal(topo)	( (topo).pTopology->selfRank )
 
 /* 3.6 FREE TOPOLOGY METHOD */
 /**

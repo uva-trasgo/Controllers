@@ -13,7 +13,7 @@
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.2
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -33,7 +33,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2015, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -56,7 +56,7 @@
  * Null value for bitmap sparse shapes.
  */
 extern HitShape HIT_BITMAP_SHAPE_NULL;
-/** @cond INTERNAL */
+// @cond INTERNAL
 /**
  *  Null internal value for bitmap sparse shapes.
  */
@@ -65,20 +65,19 @@ extern HitShape HIT_BITMAP_SHAPE_NULL;
 // @author javfres: C++ do not support this kind of struct initialization.
 // @author arturo: Solution, do the initialization in two assignments in the .c file. Done.
 #ifdef __cplusplus
-extern "C" {
 #else
 #define HIT_BITMAP_SHAPE_NULL_STATIC { HIT_BITMAP_SHAPE, { .bitmap = HIT_BITMAP_SHAPE_INTERNAL_NULL_STATIC } }
 #endif
-/** @endcond */
+// @endcond
 
-/** @cond INTERNAL */
+// @cond INTERNAL
 /** Index of a bitmap element */
 #define hit_bitmapShapeIndex(b) 	(((size_t)(b))/HIT_BITMAP_SIZE)
 /** Offset of a bitmap element */
 #define hit_bitmapShapeOffset(b)	(((size_t)(b))%HIT_BITMAP_SIZE)
-/** @endcond */
+// @endcond
 
-/** @cond INTERNAL */
+// @cond INTERNAL
 /** Bitmap type with a 1 in its first bit */
 #define HIT_BITMAP_1 (((HIT_BITMAP_TYPE) 1) << (HIT_BITMAP_SIZE-1))
 /**
@@ -102,7 +101,7 @@ static inline const char * hit_bitmap_tostring(HIT_BITMAP_TYPE element){
 	}
 	return buffer;
 }
-/** @endcond */
+// @endcond
 
 /* 1. Hit Bitmap Shape generating functions */
 /**

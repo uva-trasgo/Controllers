@@ -1,4 +1,4 @@
-/** @cond INTERNAL */
+// @cond INTERNAL
 /**
 * Signatures for dense or strided domains.
 *
@@ -12,12 +12,12 @@
 * @author Carlos de Blas Carton
 * @date Jun 2010
 */
-/** @endcond */
+// @endcond
 
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.2
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -37,7 +37,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2015, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -48,7 +48,7 @@
 #ifndef _HitSigP_
 #define _HitSigP_
 
-/** @cond INTERNAL */
+// @cond INTERNAL
 #define HIT_SIG_NUM_FIELDS	3
 
 /* 2.1. Hit SIGNATURE NULL CONSTANT */
@@ -90,9 +90,9 @@ static inline HitSig hit_sigBlend(HitSig s1, HitSig s2) {
 	return newSig;
 }
 
-/** @endcond */
+// @endcond
 
-/** @cond OLD */
+// @cond OLD
 /**
  * To expand the tile cardinalities cardinalities through two different signatures
  * @author Yuri
@@ -104,7 +104,7 @@ static inline HitSig hit_sigExpand(HitSig s1, HitSig s2) {
 	newSig.stride = s1.stride * s2.stride;
 	return newSig;
 }
-/** @endcond */
+// @endcond
 
 
 /* END OF HEADER FILE _HitSigP_ */

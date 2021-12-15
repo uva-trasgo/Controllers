@@ -14,19 +14,19 @@
 
 /*
  * <license>
- * 
- * Hitmap v1.3
- * 
+ *
+ * Hitmap v1.2
+ *
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
- * or use for commercial purpose, public redistribution, in source or binary forms, with or 
- * without modifications, is NOT ALLOWED without the previous authorization of the copyright 
+ * or use for commercial purpose, public redistribution, in source or binary forms, with or
+ * without modifications, is NOT ALLOWED without the previous authorization of the copyright
  * holder. The origin of this software must not be misrepresented; you must not claim that you
  * wrote the original software. If you use this software for any purpose (e.g. publication),
  * a reference to the software package and the authors must be included.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
  * THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
  * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
@@ -34,12 +34,12 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ *
+ * Copyright (c) 2007-2015, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
- * 
+ *
  * More information on http://trasgo.infor.uva.es/
- * 
+ *
  * </license>
 */
 
@@ -48,7 +48,7 @@
 
 #include "hit_sig.h"
 
-/** @cond INTERNAL */
+// @cond INTERNAL
 #ifndef INCLUDE_METIS__H
 	#define INCLUDE_METIS__H
 	#include "metis.h"
@@ -57,7 +57,7 @@
 #ifdef __cplusplus
 	extern "C" {
 #endif
-/** @endcond */
+// @endcond
 
 
 /* MAXIMUM NUMBER OF DIMENSIONS, FIXED AT COMPILATION TIME */
@@ -94,7 +94,7 @@ typedef struct {
 
 
 /* 1.2 LIST OF NAME ALIASES FOR THE INDEX IN AN SPARSE DOMAIN */
-/** @cond INTERNAL */
+// @cond INTERNAL
 /**
  * Internal structure for translation of tile to array coordinates for sparse
  * data formats such as CSR.
@@ -107,7 +107,7 @@ typedef struct {
 	int * invNames;		/**< Array with the global to local translation of vertices. */
 	int nInvNames;		/**< Number of inv names. */
 } HitNameList;
-/** @endcond */
+// @endcond
 
 
 /* 1.3 CShape data structure */
@@ -131,14 +131,14 @@ typedef struct{
 
 
 /* 1.3 BitmapShape data structure */
-/** @cond INTERNAL */
+// @cond INTERNAL
 /** Bitmap datatype */
 #define HIT_BITMAP_TYPE unsigned int
 /** Bitmap communication datatype */
 #define HIT_BITMAP_COMM_TYPE MPI_UNSIGNED
 /** Number of bits per Bitmap datatype */
 #define HIT_BITMAP_SIZE (sizeof(HIT_BITMAP_TYPE) * (size_t) 8)
-/** @endcond */
+// @endcond
 
 /**
  * ADT for sparse domains in Bitmap format.
@@ -205,9 +205,8 @@ typedef struct {
 } HitShape;
 
 
-/**@{*/
 // CONSTANTS FOR THE INVERSE TRANSLATION LIST IN THE CSR AND BITMAP SHAPES.
-/** @cond INTERNAL */
+// @cond INTERNAL
 /**
  * Constant to indicate that the cShape or bShape does not have an inverse
  * translation is of vertices from global to local.
@@ -224,24 +223,24 @@ typedef struct {
  * are already numbered from 0 to N-1. The two coordinates spaces are the same.
  */
 #define HIT_SHAPE_NAMES_ORDERED	2
-/** @endcond */
-/**@}*/
+// @endcond
 
-/**@{*/
+
 /* 2. Hit SHAPE NULL CONSTANT */
+
 /**
  * Null value for abstract shapes.
  *
  * The number of dimensions of this value is -1.
  */
 extern HitShape	HIT_SHAPE_NULL;
-/** @cond INTERNAL */
+// @cond INTERNAL
 /** Null internal static value for signature shapes. */
 #define HIT_SHAPE_NULL_STATIC { HIT_SIG_SHAPE, { { -1, { HIT_SIG_NULL_STATIC, HIT_SIG_NULL_STATIC, HIT_SIG_NULL_STATIC, HIT_SIG_NULL_STATIC } } } }
-/** @endcond */
+// @endcond
 
 
-/** @cond INTERNAL */
+// @cond INTERNAL
 /**
  * Null value for Name list.
  */
@@ -250,13 +249,8 @@ extern HitNameList HIT_NAMELIST_NULL;
  * Null static value for Name list.
  */
 #define HIT_NAMELIST_NULL_STATIC {NULL,0,HIT_SHAPE_NAMES_NOARRAY,NULL,0}
-/** @endcond */
-/**@}*/
+// @endcond
 
-/**
- * @name HitShape access macros
- */
-/**@{*/
 
 /* HIT SHAPE ACCESS MACROS */
 /**
@@ -272,7 +266,7 @@ extern HitNameList HIT_NAMELIST_NULL;
 #define hit_shapeType(s) ((s).type)
 
 
-/** @cond INTERNAL */
+// @cond INTERNAL
 /**
  * Access to the sparse shape struct.
  * @hideinitializer
@@ -287,11 +281,8 @@ extern HitNameList HIT_NAMELIST_NULL;
  * @return The Bitmap internal shape.
  */
 #define hit_bShapeAccess(s) ((s).info.bitmap)
-/** @endcond */
-/**@}*/
+// @endcond
 
-
-/**@{*/
 /* 6. HIT SHAPE FREE FUNTION */
 /**
  * Free resources of a sparse shape.
@@ -302,9 +293,8 @@ extern HitNameList HIT_NAMELIST_NULL;
  * @param[in,out] s A domain shape.
  */
 void hit_shapeFree(HitShape s);
-/**@}*/
 
-/** @cond INTERNAL */
+// @cond INTERNAL
 /* 12. Name list functionalities for sparse (csr and bitmap) shapes */
 /**
  * Returns a name of the list
@@ -354,12 +344,7 @@ void hit_nameListCreateInvNames(HitNameList * list);
  * @param src Source list.
  */
 void hit_nameListClone(HitNameList * dst, HitNameList * src);
-/** @endcond */
-
-#ifdef __cplusplus
-	}
-#endif
-
+// @endcond
 
 /* END OF HEADER FILE _HitShape_ */
 #endif

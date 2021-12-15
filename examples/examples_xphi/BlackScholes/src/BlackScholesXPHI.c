@@ -1,0 +1,226 @@
+/*
+ * Code adapted to compile for CPU only in C99 
+ * 	by Arturo Gonzalez-Escribano, Aug 2016
+ *
+ * Copyright 1993-2015 NVIDIA Corporation.  All rights reserved.
+ *
+ * Please refer to the NVIDIA end user license agreement (EULA) associated
+ * with this source code for terms and conditions that govern your use of
+ * this software. Any use, reproduction, disclosure, or distribution of
+ * this software and related documentation outside the terms of the EULA
+ * is strictly prohibited.
+ */
+
+/*
+ * This sample evaluates fair call and put prices for a
+ * given set of European options by Black-Scholes formula.
+ * See supplied whitepaper for more explanations.
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <omp.h>
+#define ALLOC   alloc_if(1)
+#define FREE    free_if(1)
+#define RETAIN  free_if(0)
+#define REUSE   alloc_if(0)
+
+////////////////////////////////////////////////////////////////////////////////
+// Data configuration
+////////////////////////////////////////////////////////////////////////////////
+int  NUM_ITERATIONS = 1; //512;
+
+
+const float      RISKFREE = 0.02f;
+const float    VOLATILITY = 0.30f;
+
+///////////////////////////////////////////////////////////////////////////////
+// Polynomial approximation of cumulative normal distribution function
+///////////////////////////////////////////////////////////////////////////////
+static float __attribute__((target(mic))) CND(float d)
+{
+    const float       A1 = 0.31938153;
+    const float       A2 = -0.356563782;
+    const float       A3 = 1.781477937;
+    const float       A4 = -1.821255978;
+    const float       A5 = 1.330274429;
+    const float RSQRT2PI = 0.39894228040143267793994605993438;
+
+    float
+    K = 1.0 / (1.0 + 0.2316419 * fabs(d));
+
+    float
+    cnd = RSQRT2PI * exp(- 0.5 * d * d) *
+          (K * (A1 + K * (A2 + K * (A3 + K * (A4 + K * A5)))));
+
+    if (d > 0)
+        cnd = 1.0 - cnd;
+
+    return cnd;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Black-Scholes formula for both call and put
+///////////////////////////////////////////////////////////////////////////////
+static void __attribute__((target(mic))) BlackScholesBodyCPU(
+    float *callResult,
+    float *putResult,
+    float Sf, //Stock price
+    float Xf, //Option strike
+    float Tf, //Option years
+    float Rf, //Riskless rate
+    float Vf  //Volatility rate
+)
+{
+    float S = Sf;
+    float X = Xf; 
+    float T = Tf;
+    float R = Rf; 
+    float V = Vf;
+
+    float sqrtT = sqrt(T);
+    float    d1 = (log(S / X) + (R + 0.5 * V * V) * T) / (V * sqrtT);
+    float    d2 = d1 - V * sqrtT;
+    float CNDD1 = CND(d1);
+    float CNDD2 = CND(d2);
+
+    //Calculate Call and Put simultaneously
+    float expRT = exp(- R * T);
+    *callResult   = (float)(S * CNDD1 - X * expRT * CNDD2);
+    *putResult    = (float)(X * expRT * (1.0 - CNDD2) - S * (1.0 - CNDD1));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Helper function, returning uniformly distributed
+// random float in [low, high] range
+////////////////////////////////////////////////////////////////////////////////
+float RandFloat(float low, float high)
+{
+    float t = (float)rand() / (float)RAND_MAX;
+    return (1.0f - t) * low + t * high;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Main program
+////////////////////////////////////////////////////////////////////////////////
+int main(int argc, char **argv)
+{
+
+    if ( argc < 3 ) {
+       fprintf(stderr, "\nUsage: %s <numOpts> <numIter> \n", argv[0]);
+       exit(EXIT_FAILURE);
+    }
+    int OPT_N = atoi( argv[1] );
+    int OPT_SZ = OPT_N * sizeof(float);
+    NUM_ITERATIONS =atoi( argv[2]);
+ //   omp_set_num_threads( num_threads );
+
+    // Start logs
+    //printf("[%s] - Starting...\n", argv[0]);
+
+    //'h_' prefix - CPU (host) memory space
+    float
+    //Results calculated by CPU for reference
+    *h_CallResultCPU,
+    *h_PutResultCPU,
+    //CPU instance of input data
+    *h_StockPrice,
+    *h_OptionStrike,
+    *h_OptionYears;
+
+    int i;
+    // Arturo: Timers
+    double mainClock;
+    double totalClock;
+    totalClock = omp_get_wtime();
+
+    //printf("Initializing data...\n");
+    //printf("...allocating CPU memory for options.\n");
+    h_CallResultCPU = (float *)malloc(OPT_SZ);
+    h_PutResultCPU  = (float *)malloc(OPT_SZ);
+    h_StockPrice    = (float *)malloc(OPT_SZ);
+    h_OptionStrike  = (float *)malloc(OPT_SZ);
+    h_OptionYears   = (float *)malloc(OPT_SZ);
+
+    //printf("...generating input data in CPU mem.\n");
+    srand(5347);
+
+    //Generate options set
+    for (i = 0; i < OPT_N; i++)
+    {
+        h_CallResultCPU[i] = 0.0f;
+        h_PutResultCPU[i]  = -1.0f;
+        h_StockPrice[i]    = RandFloat(5.0f, 30.0f);
+        h_OptionStrike[i]  = RandFloat(1.0f, 100.0f);
+        h_OptionYears[i]   = RandFloat(0.25f, 10.0f);
+    }
+
+    //printf("Executing Black-Scholes CPU kernel (%i iterations)...\n", NUM_ITERATIONS);
+
+    //printf("...running CPU calculations.\n\n");
+    //Calculate options values on CPU
+    
+    mainClock = omp_get_wtime();
+
+   #pragma offload target(mic:0) in(h_CallResultCPU:length(OPT_N) ALLOC RETAIN) in(h_PutResultCPU:length(OPT_N) ALLOC RETAIN) in(h_StockPrice:length(OPT_N) ALLOC RETAIN)\
+				 in(h_OptionStrike:length(OPT_N) ALLOC RETAIN) in(h_OptionYears:length(OPT_N) ALLOC RETAIN) 
+   {} 
+   for (i = 0; i < NUM_ITERATIONS; i++) 
+    {
+   #pragma offload target(mic:0) nocopy(h_CallResultCPU) nocopy(h_PutResultCPU) nocopy(h_StockPrice) \
+				 nocopy(h_OptionStrike) nocopy(h_OptionYears) 
+   {
+	int opt;
+        #pragma omp parallel for
+        for ( opt = 0; opt < OPT_N; opt++)
+            BlackScholesBodyCPU(
+                &h_CallResultCPU[opt],
+                &h_PutResultCPU[opt],
+                h_StockPrice[opt],
+                h_OptionStrike[opt],
+                h_OptionYears[opt],
+                RISKFREE,
+                VOLATILITY
+            );
+    }
+   }
+   #pragma offload target(mic:0) out(h_CallResultCPU:length(OPT_N)) out(h_PutResultCPU:length(OPT_N))
+  {}
+
+
+    mainClock = omp_get_wtime() - mainClock;
+    totalClock = omp_get_wtime() - totalClock;
+
+    // TIMES
+    printf("\n ----------------------- TIME ----------------------- \n");
+    printf("Clock main: %lf\n", mainClock );
+    //printf("Clock seq: %lf\n", mainClock );
+
+        // Calculate NORM
+        double resultado=0,suma=0;
+        for (int i=0; i<OPT_N; i++){
+                suma+= pow( (h_CallResultCPU[i] + h_PutResultCPU[i]), 2 );
+        }
+
+        printf("\n ----------------------- NORM ----------------------- \n");
+        printf("\n Acumulated sum: %lf",suma);
+
+        resultado=sqrt( suma );
+        printf("\n Result: %lf \n",resultado);
+
+        printf("\n ---------------------------------------------------- \n");
+
+    //printf("...releasing CPU memory.\n");
+    free(h_OptionYears);
+    free(h_OptionStrike);
+    free(h_StockPrice);
+    free(h_PutResultCPU);
+    free(h_CallResultCPU);
+    //printf("Shutdown done.\n");
+
+    //printf("\n[BlackScholes] - Test Summary\n");
+
+    exit(EXIT_SUCCESS);
+}

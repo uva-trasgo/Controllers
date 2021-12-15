@@ -15,7 +15,7 @@
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.2
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -35,7 +35,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2015, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -531,7 +531,6 @@ printf("Ranks: Lay1: %d, Lay2: %d, Global: %d COM to RLay2: %d, RGlobal: %d\n", 
  */
 #define HIT_PAT_REDISTRIBUTE_TAG	15001
 HitPattern hit_patternLayRedistribute(	HitLayout lay1, HitLayout lay2, void *tileP1, void *tileP2, HitType baseType ) {
-#define DEBUG
 	int i;
 
 	/* 1. CHECK THAT THE TOPOLOGY IS THE SAME IN BOTH LAYOUTS */
@@ -577,17 +576,14 @@ HitPattern hit_patternLayRedistribute(	HitLayout lay1, HitLayout lay2, void *til
 					&& ( i == 0 || hit_shapeCmp( alreadyThere, HIT_SHAPE_NULL ) ) ) {
 
 #ifdef DEBUG
-fprintf(stderr, "%s Adding send from %d to %d with shape %d [%d:%d:%d][%d:%d:%d][%d:%d:%d]\n", __FUNCTION__, myRank, foreignId,
+fprintf(stderr, "%s Adding send from %d to %d with shape %d [%d:%d:%d][%d:%d:%d]\n", __FUNCTION__, myRank, foreignId,
 		hit_shapeDims( overlapShp2 ),
 		hit_shapeSig( overlapShp2, 0 ).begin,
 		hit_shapeSig( overlapShp2, 0 ).end,
 		hit_shapeSig( overlapShp2, 0 ).stride,
 		hit_shapeSig( overlapShp2, 1 ).begin,
 		hit_shapeSig( overlapShp2, 1 ).end,
-		hit_shapeSig( overlapShp2, 1 ).stride,
-		hit_shapeSig( overlapShp2, 2 ).begin,
-		hit_shapeSig( overlapShp2, 2 ).end,
-		hit_shapeSig( overlapShp2, 2 ).stride
+		hit_shapeSig( overlapShp2, 1 ).stride
 	   );
 #endif
 				hit_patternAdd( &allToAll, 
@@ -624,17 +620,14 @@ fprintf(stderr, "%s Adding send from %d to %d with shape %d [%d:%d:%d][%d:%d:%d]
 					&& ( i == 0 || hit_shapeCmp( alreadyHere, HIT_SHAPE_NULL ) ) ) {
 
 #ifdef DEBUG
-fprintf(stderr, "%s Adding recv from %d to %d with shape %d [%d:%d:%d][%d:%d:%d][%d:%d:%d]\n", __FUNCTION__, foreignId, myRank,
+fprintf(stderr, "%s Adding recv from %d to %d with shape %d [%d:%d:%d][%d:%d:%d]\n", __FUNCTION__, foreignId, myRank,
 		hit_shapeDims( overlapShp ),
 		hit_shapeSig( overlapShp, 0 ).begin,
 		hit_shapeSig( overlapShp, 0 ).end,
 		hit_shapeSig( overlapShp, 0 ).stride,
 		hit_shapeSig( overlapShp, 1 ).begin,
 		hit_shapeSig( overlapShp, 1 ).end,
-		hit_shapeSig( overlapShp, 1 ).stride,
-		hit_shapeSig( overlapShp, 2 ).begin,
-		hit_shapeSig( overlapShp, 2 ).end,
-		hit_shapeSig( overlapShp, 2 ).stride
+		hit_shapeSig( overlapShp, 1 ).stride
 	   );
 #endif
 				hit_patternAdd( &allToAll, 
@@ -649,17 +642,15 @@ fprintf(stderr, "%s Adding recv from %d to %d with shape %d [%d:%d:%d][%d:%d:%d]
 
 	/* 7. RETURN */
 	return allToAll;
-#undef DEBUG
 }
 
 
 /*
  * @arturo Feb 2013
- * hit_patternRedistributeCom: Redistribute data of a distributed tile into another distributed tile
- * wihout using layout information of the remote shapes. The shapes are communicated across all
+ * hit_patternRedistribute: Redistribute data of a distributed tile into another distributed tile
  */
 #define HIT_PAT_REDISTRIBUTE_TAG2	15002
-HitPattern hit_patternRedistributeCom(	HitLayout lay, void *tileP1, void *tileP2, HitType baseType, int flagCompact ) {
+HitPattern hit_patternRedistribute(	HitLayout lay, void *tileP1, void *tileP2, HitType baseType, int flagCompact ) {
 	int i;
 	HitTile tile1 = *(HitTile *)tileP1;
 	HitTile tile2 = *(HitTile *)tileP2;

@@ -4,18 +4,18 @@
  * into the processes from a virtual topology
  * 
  * @file hit_layout.c
- * @version 1.7
+ * @version 1.6
  * @author Arturo Gonzalez-Escribano
  * @author Javier Fresno Bausela
  * @author Carlos de Blas Carton
- * @date Sep 2019
+ * @date Ene 2015
  *
  */
 
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.2
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -35,7 +35,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2015, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -268,70 +268,6 @@ int	hit_layout_plug_layAllInOne_ranks( char topoActiveMode,
 
 
 
-
-/* 1.0. BASIC LAYOUT, COPY IN ALL: LAYOUT FUNCTION INTERFACE */
-HitLayout	hit_layout_plug_layCopy(int freeTopo, HitTopology topo, HitShape shape ) {
-	HitLayout res;
-
-	/* ACTIVE */
-	res = hit_layout_wrapper(
-				topo,
-				shape,
-				&(hit_layout_plug_layCopy_Sig),
-				&(hit_layout_plug_layCopy_SigInv),
-				NULL,
-				NULL,
-				&(hit_layout_plug_layRegularContiguos_ranks),
-				NULL,
-				&(hit_layout_plug_layCopy_maxCard),
-				NULL,
-				&(hit_layout_plug_layCopy_minCard),
-				NULL,
-				&(hit_layout_plug_layRegular_numActives),
-				NULL,
-				NULL, //&extraParameterValue,
-				HIT_LAYOUT_NODIM
-			);
-	
-	res.type = HIT_LAYOUT_COPY;
-
-	if(! res.active) {
-		if( freeTopo ) hit_topFree( topo );
-		return res;
-	}
-
-	// @arturo: 2019-09-04 Signature layouts have a single group of active processors
-	/* MY GROUP */
-	/*
-	HitRanks group = HIT_RANKS_NULL;
-	int dim;
-	for (dim=0; dim<hit_shapeDims(shape); dim++) {
-		if(  res.active  ){
-			group.rank[dim] = topo.self.rank[dim];
-		} else {
-			group.rank[dim] = -1;
-		}
-	}
-	res.group =  hit_layActiveRanksId( res, group );
-	*/
-	res.group = 0;
-
-	// @arturo: 2019-09-04 Copy layouts, the leader is always the topology leader
-	/* MY LEADER */
-	/*
-	//res.leader = topo.linearRank;
-	res.leaderRanks = group;
-	res.leader = 1;
-	*/
-	for( int dim=0; dim<topo.numDims; dim++ ) res.leaderRanks.rank[dim] = 0;
-	res.leader = ( hit_topRankInternal( topo, topo.self ) == 0 ) ? 1 : 0;
-
-	if( freeTopo ) hit_topFree( topo );
-	return res;
-}
-
-
-
 /* 1. LAYOUT (SIGNATURES): BLOCKS */
 /* 1.1. BLOCKS: SIGNATURE */
 int	hit_layout_plug_layBlocks_Sig(int procId, int procsCard, int blocksCard,
@@ -387,8 +323,9 @@ int	hit_layout_plug_layBlocks_SigInv(int procId, int procsCard, int blocksCard,
 
 
 /* 1.4. BLOCKS: LAYOUT FUNCTION INTERFACE */
-HitLayout	hit_layout_plug_layBlocks(int freeTopo, HitTopology topo, HitShape shape) {
+HitLayout	hit_layout_plug_layBlocks(HitTopology topo, HitShape shape) {
 	HitLayout res;
+	HitRanks group;
 	//float extraParameterValue = 0.0;
 
 	/* ACTIVE */
@@ -418,14 +355,10 @@ HitLayout	hit_layout_plug_layBlocks(int freeTopo, HitTopology topo, HitShape sha
 		//res.group = HIT_GROUP_ID_NULL;
 		//res.leaderRanks = HIT_RANKS_NULL;
 		//res.leader = 0;
-		if( freeTopo ) hit_topFree( topo );
 		return res;
 	}
 
-	// @arturo: 2019-09-04 Signature layouts have a single group of active processors
 	/* MY GROUP */
-	/*
-	HitRanks group = HIT_RANKS_NULL;
 	int dim;
 	for (dim=0; dim<hit_shapeDims(shape); dim++) {
 		if(  res.active  ){
@@ -435,27 +368,20 @@ HitLayout	hit_layout_plug_layBlocks(int freeTopo, HitTopology topo, HitShape sha
 		}
 	}
 	res.group =  hit_layActiveRanksId( res, group );
-	*/
-	res.group = 0;
 
-	// @arturo: 2019-09-04 Block layouts, the leader is always the topology leader
 	/* MY LEADER */
-	/*
 	//res.leader = topo.linearRank;
 	res.leaderRanks = group;
 	res.leader = 1;
-	*/
-	for( int dim=0; dim<topo.numDims; dim++ ) res.leaderRanks.rank[dim] = 0;
-	res.leader = ( hit_topRankInternal( topo, topo.self ) == 0 ) ? 1 : 0;
 
-	if( freeTopo ) hit_topFree( topo );
 	return res;
 }
 
 
 /* 1.4.S. BLOCKS IN A RESTRICTED DIMENSION: LAYOUT FUNCTION INTERFACE */
-HitLayout	hit_layout_plug_layDimBlocks(int freeTopo, HitTopology topo, HitShape shape, int restrictDim ) {
+HitLayout	hit_layout_plug_layDimBlocks(HitTopology topo, HitShape shape, int restrictDim ) {
 	HitLayout res;
+	HitRanks group;
 	//float extraParameterValue = 0.0;
 
 	/* ACTIVE */
@@ -485,14 +411,10 @@ HitLayout	hit_layout_plug_layDimBlocks(int freeTopo, HitTopology topo, HitShape 
 		//res.group = HIT_GROUP_ID_NULL;
 		//res.leaderRanks = HIT_RANKS_NULL;
 		//res.leader = 0;
-		if( freeTopo ) hit_topFree( topo );
 		return res;
 	}
 
-	// @arturo: 2019-09-04 Signature layouts have a single group of active processors
 	/* MY GROUP */
-	/*
-	HitRanks group = HIT_RANKS_NULL;
 	int dim;
 	for (dim=0; dim<hit_shapeDims(shape); dim++) {
 		if(  res.active  ){
@@ -502,20 +424,12 @@ HitLayout	hit_layout_plug_layDimBlocks(int freeTopo, HitTopology topo, HitShape 
 		}
 	}
 	res.group =  hit_layActiveRanksId( res, group );
-	*/
-	res.group = 0;
 
-	// @arturo: 2019-09-04 DimBlock layouts, the leader is always the topology leader
 	/* MY LEADER */
-	/*
 	//res.leader = topo.linearRank;
 	res.leaderRanks = group;
 	res.leader = 1;
-	*/
-	for( int dim=0; dim<topo.numDims; dim++ ) res.leaderRanks.rank[dim] = 0;
-	res.leader = ( hit_topRankInternal( topo, topo.self ) == 0 ) ? 1 : 0;
 
-	if( freeTopo ) hit_topFree( topo );
 	return res;
 }
 
@@ -612,8 +526,9 @@ int	hit_layout_plug_layMinBlocks_ranks( char topoActiveMode,
 
 
 /* 1.4.M. BLOCKS WITH A MINIMUM SIZE: LAYOUT FUNCTION INTERFACE */
-HitLayout	hit_layout_plug_layMinBlocks(int freeTopo, HitTopology topo, HitShape shape, int minElems ) {
+HitLayout	hit_layout_plug_layMinBlocks(HitTopology topo, HitShape shape, int minElems ) {
 	HitLayout res;
+	HitRanks group;
 	float extraParameterValue = (float)minElems;
 
 	/* ACTIVE */
@@ -644,14 +559,10 @@ HitLayout	hit_layout_plug_layMinBlocks(int freeTopo, HitTopology topo, HitShape 
 		//res.group = HIT_GROUP_ID_NULL;
 		//res.leaderRanks = HIT_RANKS_NULL;
 		//res.leader = 0;
-		if( freeTopo ) hit_topFree( topo );
 		return res;
 	}
 
-	// @arturo: 2019-09-04 Signature layouts have a single group of active processors
 	/* MY GROUP */
-	/*
-	HitRanks group = HIT_RANKS_NULL;
 	int dim;
 	for (dim=0; dim<hit_shapeDims(shape); dim++) {
 		if(  res.active  ){
@@ -661,20 +572,12 @@ HitLayout	hit_layout_plug_layMinBlocks(int freeTopo, HitTopology topo, HitShape 
 		}
 	}
 	res.group =  hit_layActiveRanksId( res, group );
-	*/
-	res.group = 0;
 
-	// @arturo: 2019-09-04 MinBlock layouts, the leader is always the topology leader
 	/* MY LEADER */
-	/*
 	//res.leader = topo.linearRank;
 	res.leaderRanks = group;
 	res.leader = 1;
-	*/
-	for( int dim=0; dim<topo.numDims; dim++ ) res.leaderRanks.rank[dim] = 0;
-	res.leader = ( hit_topRankInternal( topo, topo.self ) == 0 ) ? 1 : 0;
 
-	if( freeTopo ) hit_topFree( topo );
 	return res;
 }
 
@@ -682,7 +585,8 @@ HitLayout	hit_layout_plug_layMinBlocks(int freeTopo, HitTopology topo, HitShape 
 /* 1.X LAYOUT (SIGNATURES): BLOCKS NO REPEATED, NON-ACTIVES AT THE END 
  * 		THIS IS AN ALTERNATIVE IMPLEMENTATION TO THE CURRENT BLOCKS LAYOUT */
 /* 1.1. BLOCKS X: SIGNATURE */
-int	hit_layout_plug_layBlocksX_Sig(int procId, int procsCard, int blocksCard, HitSig input, HitSig *res ) {
+int	hit_layout_plug_layBlocksX_Sig(int procId, int procsCard, int blocksCard,
+												HitSig input, HitSig *res ) {
 	/* DETECT NON-ACTIVE VIRTUAL PROCESS (NOT ENOUGH LOGICAL PROCESSES) */
 	if ( blocksCard <= procsCard ) {
 		if ( procId >= blocksCard ) {
@@ -718,10 +622,11 @@ int	hit_layout_plug_layBlocksX_Sig(int procId, int procsCard, int blocksCard, Hi
 
 
 /* 1.4. BLOCKS: LAYOUT FUNCTION INTERFACE */
-HitLayout	hit_layout_plug_layBlocksX(int freeTopo, HitTopology topo, HitShape shape) {
+HitLayout	hit_layout_plug_layBlocksX(HitTopology topo, HitShape shape) {
 
 	/* CHECK IF ACTIVE */
 	HitLayout res;
+	HitRanks group = HIT_RANKS_NULL;
 	//float extraParameterValue = 0.0;
 
 	/* ACTIVE */
@@ -751,14 +656,10 @@ HitLayout	hit_layout_plug_layBlocksX(int freeTopo, HitTopology topo, HitShape sh
 		//res.group = HIT_GROUP_ID_NULL;
 		//res.leaderRanks = HIT_RANKS_NULL;
 		//res.leader = 0;
-		if( freeTopo ) hit_topFree( topo );
 		return res;
 	}
 
-	// @arturo: 2019-09-04 Signature layouts have a single group of active processors
 	/* MY GROUP */
-	/*
-	HitRanks group = HIT_RANKS_NULL;
 	int dim;
 	for (dim=0; dim<hit_shapeDims(shape); dim++) {
 		if(  res.active  ){
@@ -770,19 +671,12 @@ HitLayout	hit_layout_plug_layBlocksX(int freeTopo, HitTopology topo, HitShape sh
 
 	// Transform ranks to process id
 	res.group =  hit_layActiveRanksId(res,group);
-	*/
 
-	// @arturo: 2019-09-04 BlocksX layouts, the leader is always the topology leader
 	/* MY LEADER */
-	/*
 	//res.leader = topo.linearRank;
 	res.leaderRanks = group;
 	res.leader = 1;
-	*/
-	for( int dim=0; dim<topo.numDims; dim++ ) res.leaderRanks.rank[dim] = 0;
-	res.leader = ( hit_topRankInternal( topo, topo.self ) == 0 ) ? 1 : 0;
 
-	if( freeTopo ) hit_topFree( topo );
 	return res;
 }
 
@@ -824,9 +718,10 @@ int	hit_layout_plug_layBlocksF_Sig(int procId, int procsCard, int blocksCard,
 }
 
 /* 2.4. BLOCKSF: LAYOUT FUNCTION INTERFACE */
-HitLayout	hit_layout_plug_layBlocksF(int freeTopo, HitTopology topo, HitShape shape) {
+HitLayout	hit_layout_plug_layBlocksF(HitTopology topo, HitShape shape) {
 
 	HitLayout res;
+	HitRanks group;
 	//HitRanks leader;
 	//float extraParameterValue = 0.0;
 
@@ -856,13 +751,11 @@ HitLayout	hit_layout_plug_layBlocksF(int freeTopo, HitTopology topo, HitShape sh
 		//res.group = HIT_GROUP_ID_NULL;
 		//res.leaderRanks = HIT_RANKS_NULL;
 		//res.leader = 0;
-		if( freeTopo ) hit_topFree( topo );
 		return res;
 	}
 
 
 	/* MY GROUP & MY LEADER */
-	HitRanks group = HIT_RANKS_NULL;
 	int dim;
 	for (dim=0; dim<hit_shapeDims(shape); dim++) {
 		double ratio = (double) hit_sigCard(hit_shapeSig(shape,dim)) / topo.card[dim];
@@ -887,7 +780,6 @@ HitLayout	hit_layout_plug_layBlocksF(int freeTopo, HitTopology topo, HitShape sh
 						hit_topSelfRankInternal( topo ) ) ? 1 : 0 ;
 
 	/* RETURN */
-	if( freeTopo ) hit_topFree( topo );
 	return res;
 }
 
@@ -943,9 +835,10 @@ int	hit_layout_plug_layBlocksL_Sig(int procId, int procsCard, int blocksCard,
 
 
 /* 3.4. BLOCKSL: LAYOUT FUNCTION INTERFACE */
-HitLayout	hit_layout_plug_layBlocksL(int freeTopo, HitTopology topo, HitShape shape) {
+HitLayout	hit_layout_plug_layBlocksL(HitTopology topo, HitShape shape) {
 
 	HitLayout res;
+	HitRanks group;
 	//HitRanks leader;
 	//float extraParameterValue = 0.0;
 
@@ -975,12 +868,10 @@ HitLayout	hit_layout_plug_layBlocksL(int freeTopo, HitTopology topo, HitShape sh
 		//res.group = HIT_GROUP_ID_NULL;
 		//res.leaderRanks = HIT_RANKS_NULL;
 		//res.leader = 0;
-		if( freeTopo ) hit_topFree( topo );
 		return res;
 	}
 
 	/* MY GROUP & MY LEADER */
-	HitRanks group = HIT_RANKS_NULL;
 	int dim;
 	for (dim=0; dim<hit_shapeDims(shape); dim++) {
 		double ratio = (double) hit_sigCard(hit_shapeSig(shape,dim)) / topo.card[dim];
@@ -1005,7 +896,6 @@ HitLayout	hit_layout_plug_layBlocksL(int freeTopo, HitTopology topo, HitShape sh
 						hit_topSelfRankInternal( topo ) ) ? 1 : 0 ;
 
 	/* RETURN */
-	if( freeTopo ) hit_topFree( topo );
 	return res;
 }
 
@@ -1055,11 +945,11 @@ int	hit_layout_plug_layCyclic_SigInv(int procId, int procsCard, int blocksCard,
 
 
 /* 4.4. CYCLIC: LAYOUT FUNCTION INTERFACE */
-HitLayout	hit_layout_plug_layCyclic(int freeTopo, HitTopology topo, HitShape shape, int restrictToDim) {
+HitLayout	hit_layout_plug_layCyclic(HitTopology topo, HitShape shape, int restrictToDim) {
 
 	//float extraParameterValue = 0.0;
 
-	HitLayout res = hit_layout_wrapper(
+	HitLayout lay = hit_layout_wrapper(
 				topo,
 				shape,
 				&(hit_layout_plug_layCyclic_Sig),
@@ -1078,62 +968,51 @@ HitLayout	hit_layout_plug_layCyclic(int freeTopo, HitTopology topo, HitShape sha
 				restrictToDim
 			);
 	
-	res.type = HIT_LAYOUT_CYCLIC;
+	lay.type = HIT_LAYOUT_CYCLIC;
 
 	/* MY GROUP & MY LEADER */
-	if ( ! res.active ){
+	if ( ! lay.active ){
 		// DEFAULT VALUES
 		//res.group = HIT_GROUP_ID_NULL;
 		//res.leaderRanks = HIT_RANKS_NULL;
 		//res.leader = 0;
-		if( freeTopo ) hit_topFree( topo );
-		return res;
+		return lay;
 	}
 
 
+	HitRanks group;
 	//HitRanks leader;
 
-	// @arturo: 2019-09-04 Signature layouts have a single group of active processors
-	/*
-	HitRanks group = HIT_RANKS_NULL;
 	int dim;
 	for (dim=0; dim<hit_shapeDims(shape); dim++) {
 		if ( restrictToDim != dim ) { 
 			group.rank[dim] = 0;
 			//leader.rank[dim] = 0;
-			res.leaderRanks.rank[dim] = 0;
+			lay.leaderRanks.rank[dim] = 0;
 		}
 		else {
 			group.rank[dim] = topo.self.rank[dim];
 			//leader.rank[dim] = topo.self.rank[dim];
-			res.leaderRanks.rank[dim] = topo.self.rank[dim];
+			lay.leaderRanks.rank[dim] = topo.self.rank[dim];
 		}
 	}
-	res.group =  hit_layActiveRanksId(res,group);
-	*/
-	res.group = 0;
-
-	// @arturo: 2019-09-04 Cyclic layouts, the leader is always the topology leader
-	/*
-	//res.leader = hit_topRankInternal(topo,leader);
+	lay.group =  hit_layActiveRanksId(lay,group);
+	//lay.leader = hit_topRankInternal(topo,leader);
 	// @arturo 2015/01/22
-	//res.leader = ( hit_topRankInternal(topo,res.leaderRanks) == topo.linearRank ) ? 1 : 0;
-	res.leader = ( hit_topRankInternal(topo,res.leaderRanks) == 
+	//lay.leader = ( hit_topRankInternal(topo,lay.leaderRanks) == topo.linearRank ) ? 1 : 0;
+	lay.leader = ( hit_topRankInternal(topo,lay.leaderRanks) == 
 						hit_topSelfRankInternal( topo ) ) ? 1 : 0;
-	*/
-	for( int dim=0; dim<topo.numDims; dim++ ) res.leaderRanks.rank[dim] = 0;
-	res.leader = ( hit_topRankInternal( topo, topo.self ) == 0 ) ? 1 : 0;
 
 	/* RETURN */
-	if( freeTopo ) hit_topFree( topo );
-	return res;
+	return lay;
 }
 
 
 
 /* 5. ALL THE STRUCTURE IN THE LEADER: LAYOUT FUNCTION INTERFACE */
-HitLayout	hit_layout_plug_layInLeader(int freeTopo, HitTopology topo, HitShape shape) {
+HitLayout	hit_layout_plug_layInLeader(HitTopology topo, HitShape shape) {
 	HitLayout res;
+	HitRanks group;
 	//float extraParameterValue = 0.0;
 
 	res = hit_layout_wrapper(
@@ -1157,466 +1036,22 @@ HitLayout	hit_layout_plug_layInLeader(int freeTopo, HitTopology topo, HitShape s
 	
 	res.type = HIT_LAYOUT_ALLINLEADER;
 
-	if(! res.active) {
-		if( freeTopo ) hit_topFree( topo );
-		return res;
-	}
+	if(! res.active) return res;
 
-	// @arturo: 2019-09-04 Signature layouts have a single group of active processors
 	/* MY GROUP */
-	/*
-	HitRanks group = HIT_RANKS_NULL;
 	int dim;
 	for (dim=0; dim<hit_shapeDims(shape); dim++) {
 		group.rank[dim] = 0;
 	}
 	res.group =  hit_layActiveRanksId( res, group );
-	*/
-	res.group = 0;
 
-	// @arturo: 2019-09-04 InLeader layouts, the leader is always the topology leader
 	/* MY LEADER */
-	/*
 	res.leaderRanks = group;
 	res.leader = 1;
-	*/
-	for( int dim=0; dim<topo.numDims; dim++ ) res.leaderRanks.rank[dim] = 0;
-	res.leader = ( hit_topRankInternal( topo, topo.self ) == 0 ) ? 1 : 0;
 
-	if( freeTopo ) hit_topFree( topo );
 	return res;
 }
 
-/* 8.  LAYOUT (SIGNATURES): BLOCKS DIM WEIGHTED TO RESTRICTED DIM */
-/* 8.1. BLOCKS DIM WEIGHTED: SIGNATURE */
-int hit_layout_plug_layDimBlocksWeighted_Sig(int procId, int procsCard, int blocksCard, float *extraParam, HitSig input, HitSig *res)
-{
-	HIT_NOT_USED(procsCard);
-
-	/* REJECT EMPTY INPUT SIGNATURES */
-	if (blocksCard <= 0)
-	{
-		(*res) = HIT_SIG_NULL;
-		return 0;
-	}
-
-	/* Load ratios */
-	HitWeights *load_ratios = (HitWeights *)extraParam;
-
-	if (procId < 0 || procId >= load_ratios->num_procs)
-	{
-		(*res) = HIT_SIG_NULL;
-		return 0;
-	}
-
-	int begin = (int)(load_ratios->ratios[procId] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard);
-	int end = ((int)(load_ratios->ratios[procId + 1] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard)) - 1;
-
-	if (end - begin < 0)
-	{
-		(*res) = HIT_SIG_NULL;
-		return 0;
-	}
-
-	/* BEGIN */
-	(*res).begin = begin * input.stride + input.begin;
-
-	/* END */
-	(*res).end = end * input.stride + input.begin;
-
-	/* STRIDE */
-	(*res).stride = input.stride;
-
-	/* RETURN ACTIVE */
-	return 1;
-}
-int hit_layout_plug_layDimBlocksWeighted_SigInv(int procId, int procsCard, int blocksCard,
-										   float *extraParameter, HitSig input, int ind)
-{
-	HIT_NOT_USED(procId);
-	HIT_NOT_USED(procsCard);
-
-	/* CHECK: THE INDEX SHOULD BE IN THE INPUT DOMAIN */
-	if (!hit_sigIn(input, ind))
-		return HIT_RANK_NULL;
-
-	/* REJECT EMPTY INPUT SIGNATURES */
-	if (blocksCard <= 0)
-		return HIT_RANK_NULL;
-
-	/* Load ratios */
-	HitWeights *load_ratios = (HitWeights *)extraParameter;
-
-	float *weights = load_ratios->ratios;
-
-	/* FIND WEIGHT */
-	int tileInd = (ind - input.begin) / input.stride;
-	float weightAprox = (float)tileInd * weights[load_ratios->num_procs] / (float)blocksCard;
-
-	/* BIN-LIKE	SEARCH IN ARRAY OF WEIGHTS (SORTED)*/
-	int l = 0, r = load_ratios->num_procs - 1, c;
-	int proc = 0;
-
-	while (l <= r)
-	{
-		c = (l + r) / 2;
-		proc = c;
-
-		if (weightAprox >= weights[c] && weightAprox < weights[c + 1])
-			break;
-
-		if (weightAprox < weights[c])
-			r = c - 1;
-		else
-			l = c + 1;
-	}
-
-	/* SKIP PROCS WITH 0 BLOCKS */
-	int i = proc + 1;
-	while (i < load_ratios->num_procs)
-	{
-
-		int begin =(int)(weights[i] / weights[load_ratios->num_procs] * (float)blocksCard);
-		int end = ((int)(weights[i + 1] / weights[load_ratios->num_procs] * (float)blocksCard)) - 1;
-
-		if (end - begin >= 0)
-			break;
-		i++;
-	}
-
-	/* RETURN PROC */
-	/* IF PRECISION WAS LOST, AND THE INDEX IS AT THE BEGINNING OF THE NEXT PROC(NOT EMPTY) */
-	if ((int)(weights[i]/ weights[load_ratios->num_procs] * (float)blocksCard ) == tileInd)
-		return i;
-	else
-		return proc;
-}
-
-/* 8.2.A BLOCKS DIM WEIGHTED: MAX CARDINALITY */
-int hit_layout_plug_layDimBlocksWeighted_maxCard(int procsCard, int blocksCard, float *extraParameter)
-{
-	HIT_NOT_USED(procsCard);
-
-	/* REJECT EMPTY INPUT SIGNATURES */
-	if (blocksCard <= 0)
-		return 0;
-
-	/* Load ratios */
-	HitWeights *load_ratios = (HitWeights *)extraParameter;
-
-	float threshold = load_ratios->ratios[load_ratios->num_procs] / (float)blocksCard;
-	int i, proc = 0;
-	float max = 0;
-
-	/* Find the maximum ratio (max Card) */
-	for (i = 0; i < load_ratios->num_procs; i++)
-	{
-		if (load_ratios->ratios[i + 1] - load_ratios->ratios[i] + threshold >= max)
-		{
-			if ((int)(load_ratios->ratios[i + 1] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard) -
-					(int)(load_ratios->ratios[i] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard) >
-				(int)(load_ratios->ratios[proc + 1] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard) -
-					(int)(load_ratios->ratios[proc] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard))
-			{
-				max = load_ratios->ratios[i + 1] - load_ratios->ratios[i];
-				proc = i;
-			}
-	
-		}
-	}
-
-	return (int)(load_ratios->ratios[proc + 1] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard) -
-		   (int)(load_ratios->ratios[proc] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard);
-	;
-}
-
-/* 8.2.B BLOCKS DIM WEIGHTED: MIN CARDINALITY */
-int hit_layout_plug_layDimBlocksWeighted_minCard(int procsCard, int blocksCard, float *extraParameter)
-{
-	HIT_NOT_USED(procsCard);
-
-	/* REJECT EMPTY INPUT SIGNATURES */
-	if (blocksCard <= 0)
-		return 0;
-
-	/* Load ratios */
-	HitWeights *load_ratios = (HitWeights *)extraParameter;
-
-	if (load_ratios->num_procs <= 0)
-		return 0;
-
-	float threshold = load_ratios->ratios[load_ratios->num_procs] / (float)blocksCard;
-	int i = 0, proc = 0;
-	float min = load_ratios->ratios[i + 1] - load_ratios->ratios[i];
-
-	/* Find the minimum ratio (min Card) */
-	for (i = 1; i < load_ratios->num_procs; i++)
-	{
-		if (load_ratios->ratios[i + 1] - load_ratios->ratios[i] - threshold <= min)
-		{
-			if ((int)(load_ratios->ratios[i + 1] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard) -
-					(int)(load_ratios->ratios[i] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard) <
-				(int)(load_ratios->ratios[proc + 1] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard) -
-					(int)(load_ratios->ratios[proc] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard))
-			{
-				min = load_ratios->ratios[i + 1] - load_ratios->ratios[i];
-				proc = i;
-			}
-	
-		}
-	}
-
-	return (int)(load_ratios->ratios[proc + 1] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard) -
-		   (int)(load_ratios->ratios[proc] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard);
-}
-
-/* 8.3 BLOCKS DIM WEIGHTED: RANKS */
-int hit_layout_plug_layDimBlocksWeighted_ranks(char topoActiveMode,
-										  int procId, int procsCard, int blocksCard, float *extraParameter)
-{
-	HIT_NOT_USED(procsCard);
-
-	/* REJECT EMPTY INPUT SIGNATURES */
-	if (blocksCard <= 0)
-		return HIT_RANK_NULL;
-
-	/* Load ratios */
-	HitWeights *load_ratios = (HitWeights *)extraParameter;
-
-	if (procId < 0 || procId >= load_ratios->num_procs)
-		return HIT_RANK_NULL;
-
-	float *weights = load_ratios->ratios;
-
-	int i = 0, num_proc = -1, begin, end;
-
-	/* MODE: TOPO TO ACTIVE */
-	if (topoActiveMode == HIT_LAY_RANKS_TOPO_TO_ACTIVE)
-	{
-		for (i = 0; i <= procId; i++)
-		{
-			begin = (int) (weights[i] / weights[load_ratios->num_procs] * (float)blocksCard);
-			end = ((int)(weights[i + 1] / weights[load_ratios->num_procs] * (float)blocksCard)) - 1;
-
-			if (end - begin >= 0)
-				num_proc++;
-		}
-
-		if (end - begin < 0)
-			return HIT_RANK_NULL;
-		else
-			return num_proc;
-	}
-	/* MODE: ACTIVE TO TOPO */
-	else
-	{
-		while (num_proc < procId && i < load_ratios->num_procs)
-		{
-			begin = (int) (weights[i] / weights[load_ratios->num_procs] * (float)blocksCard);
-			end = ((int)(weights[i + 1] / weights[load_ratios->num_procs] * (float)blocksCard)) - 1;
-
-			if (end - begin >= 0)
-				num_proc++;
-			i++;
-		}
-
-		i--; /* To get the last proccess that entered in the loop */
-
-		if (num_proc == procId)
-			return i;
-		else
-			return HIT_RANK_NULL;
-	}
-}
-
-/* 8.4 BLOCKS DIM WEIGHTED: NUM ACTIVES */
-int hit_layout_plug_layDimBlocksWeighted_numActives(int procsCard, int blocksCard, float *extraParameter)
-{
-
-	HIT_NOT_USED(procsCard);
-
-	/* REJECT EMPTY INPUT SIGNATURES */
-	if (blocksCard <= 0)
-		return 0;
-
-	/* Load ratios */
-	HitWeights *load_ratios = (HitWeights *)extraParameter;
-
-	float *weights = load_ratios->ratios;
-
-	int i = 0, actives = 0;
-
-	for (i = 0; i < load_ratios->num_procs; i++)
-	{
-			int begin = (int) (weights[i] / weights[load_ratios->num_procs] * (float)blocksCard);
-			int end = ((int)(weights[i + 1] / weights[load_ratios->num_procs] * (float)blocksCard)) - 1;
-
-		if (end - begin >= 0)
-			actives++;
-	}
-
-	return actives;
-}
-
-/* 8.5 BLOCKS DIM WEIGHTED: LAYOUT FUNCTION INTERFACE */
-HitLayout hit_layout_plug_layDimWeighted_Copy(int freeTopo, HitTopology topo, HitShape shape, int restrictDim, HitWeights l_ratios)
-{
-	int i = 0;
-	HitLayout res;
-
-	// Struct for the actual store of the ratios
-	HitWeights *current_ld = (HitWeights *)malloc(sizeof(HitWeights));
-
-	// Compute the actual number of procs in the restricted dim
-	current_ld->num_procs = topo.card[restrictDim] < l_ratios.num_procs ? topo.card[restrictDim] : l_ratios.num_procs;
-	current_ld->ratios = (float *)malloc(sizeof(float) * (unsigned long)(current_ld->num_procs + 1));
-
-	current_ld->ratios[0] = 0;
-
-	// Compute the accumulate ratios
-	for (i = 0; i < current_ld->num_procs; i++)
-	{
-		current_ld->ratios[i + 1] = current_ld->ratios[i] + l_ratios.ratios[i];
-	}
-
-	/* ACTIVE */
-	res = hit_layout_wrapper(
-		topo,
-		shape,
-		&(hit_layout_plug_layCopy_Sig),
-		&(hit_layout_plug_layCopy_SigInv),
-		&(hit_layout_plug_layDimBlocksWeighted_Sig),
-		&(hit_layout_plug_layDimBlocksWeighted_SigInv),
-		&(hit_layout_plug_layRegularContiguos_ranks),
-		&(hit_layout_plug_layDimBlocksWeighted_ranks),
-		&(hit_layout_plug_layCopy_maxCard),
-		&(hit_layout_plug_layDimBlocksWeighted_maxCard),
-		&(hit_layout_plug_layCopy_minCard),
-		&(hit_layout_plug_layDimBlocksWeighted_minCard),
-		&(hit_layout_plug_layRegular_numActives),
-		&(hit_layout_plug_layDimBlocksWeighted_numActives),
-		(float *)current_ld,
-		restrictDim);
-
-	res.type = HIT_LAYOUT_DIMWEIGHTED_AND_COPY;
-
-	if (!res.active)
-	{
-		if( freeTopo ) hit_topFree( topo );
-		return res;
-	}
-
-	/* MY GROUP */
-	// @arturo: 2019-09-04 Signature layouts have a single group of active processors
-	/*
-	HitRanks group = HIT_RANKS_NULL;
-	int dim;
-	for (dim = 0; dim < hit_shapeDims(shape); dim++)
-	{
-		if (res.active)
-		{
-			group.rank[dim] = topo.self.rank[dim];
-		}
-		else
-		{
-			group.rank[dim] = -1;
-		}
-	}
-	res.group = hit_layActiveRanksId(res, group);
-	*/
-
-	/* MY LEADER */
-	// @arturo: 2019-09-04 The leader is always the topology leader
-	/*
-	res.leaderRanks = group;
-	res.leader = 1;
-	*/
-	for( int dim=0; dim<topo.numDims; dim++ ) res.leaderRanks.rank[dim] = 0;
-	res.leader = ( hit_topRankInternal( topo, topo.self ) == 0 ) ? 1 : 0;
-
-	if( freeTopo ) hit_topFree( topo );
-	return res;
-}
-
-/* 9.  LAYOUT (SIGNATURES): BLOCKS WEIGHTED IN SELECTED DIM, BLOCKS CONSTANT IN OTHER DIMS */
-HitLayout hit_layout_plug_layDimWeighted_Blocks(int freeTopo, HitTopology topo, HitShape shape, int restrictDim, HitWeights l_ratios)
-{
-	int i = 0;
-	HitLayout res;
-
-	// Struct for the actual store of the ratios
-	HitWeights *current_ld = (HitWeights *)malloc(sizeof(HitWeights));
-
-	// Compute the actual number of procs in the restricted dim
-	current_ld->num_procs = topo.card[restrictDim] < l_ratios.num_procs ? topo.card[restrictDim] : l_ratios.num_procs;
-	current_ld->ratios = (float *)malloc(sizeof(float) * (unsigned long)(current_ld->num_procs + 1));
-
-	current_ld->ratios[0] = 0;
-
-	// Compute the accumulate ratios
-	for (i = 0; i < current_ld->num_procs; i++)
-	{
-		current_ld->ratios[i + 1] = current_ld->ratios[i] + l_ratios.ratios[i];
-	}
-
-	/* ACTIVE */
-	res = hit_layout_wrapper(
-		topo,
-		shape,
-		&(hit_layout_plug_layBlocks_Sig),
-		&(hit_layout_plug_layBlocks_SigInv),
-		&(hit_layout_plug_layDimBlocksWeighted_Sig),
-		&(hit_layout_plug_layDimBlocksWeighted_SigInv),
-		&(hit_layout_plug_layRegularContiguos_ranks),
-		&(hit_layout_plug_layDimBlocksWeighted_ranks),
-		&(hit_layout_plug_layRegular_maxCard),
-		&(hit_layout_plug_layDimBlocksWeighted_maxCard),
-		&(hit_layout_plug_layRegular_minCard),
-		&(hit_layout_plug_layDimBlocksWeighted_minCard),
-		&(hit_layout_plug_layRegular_numActives),
-		&(hit_layout_plug_layDimBlocksWeighted_numActives),
-		(float *)current_ld,
-		restrictDim);
-
-	res.type = HIT_LAYOUT_DIMWEIGHTED_AND_BLOCKS;
-
-	if (!res.active)
-	{
-		if( freeTopo ) hit_topFree( topo );
-		return res;
-	}
-
-	/* MY GROUP */
-	// @arturo: 2019-09-04 Signature layouts have a single group of active processors
-	/*
-	HitRanks group;
-	int dim;
-	for (dim = 0; dim < hit_shapeDims(shape); dim++)
-	{
-		if (res.active)
-		{
-			group.rank[dim] = topo.self.rank[dim];
-		}
-		else
-		{
-			group.rank[dim] = -1;
-		}
-	}
-	res.group = hit_layActiveRanksId(res, group);
-	*/
-
-	/* MY LEADER */
-	// @arturo: 2019-09-04 BlocksX layouts, the leader is always the topology leader
-	/*
-	res.leaderRanks = group;
-	res.leader = 1;
-	*/
-	for( int dim=0; dim<topo.numDims; dim++ ) res.leaderRanks.rank[dim] = 0;
-	res.leader = ( hit_topRankInternal( topo, topo.self ) == 0 ) ? 1 : 0;
-
-	if( freeTopo ) hit_topFree( topo );
-	return res;
-}
 
 /* 10. LAYOUT (SIGNATURES): BLOCKS WITH LOAD BALANCE IN ONE DIMENSION */
 /* 10.1. BLOCKS BALANCE: SIGNATURE */
@@ -1764,7 +1199,7 @@ int	hit_layout_plug_layBlocksBalance_ranks( char topoActiveMode,
 
 
 /* 10.5. BLOCKS BALANCE: LAYOUT FUNCTION INTERFACE */
-HitLayout	hit_layout_plug_layBlocksBalance(int freeTopo, HitTopology topo, HitShape shape, int restrictToDim, float load ) {
+HitLayout	hit_layout_plug_layBlocksBalance(HitTopology topo, HitShape shape, int restrictToDim, float load ) {
 
 	/* ASSERT: LOAD RANGE [0.0:1.0] */
 	if ( load < 0.0 || load > 1.0 ) {
@@ -1773,6 +1208,7 @@ HitLayout	hit_layout_plug_layBlocksBalance(int freeTopo, HitTopology topo, HitSh
 
 	/* CHECK IF ACTIVE */
 	HitLayout res;
+	HitRanks group;
 
 	/* ACTIVE */
 	res = hit_layout_wrapper(
@@ -1801,14 +1237,10 @@ HitLayout	hit_layout_plug_layBlocksBalance(int freeTopo, HitTopology topo, HitSh
 		//res.group = HIT_GROUP_ID_NULL;
 		//res.leaderRanks = HIT_RANKS_NULL;
 		//res.leader = 0;
-		if( freeTopo ) hit_topFree( topo );
 		return res;
 	}
 
-	// @arturo: 2019-09-04 Signature layouts have a single group of active processors
 	/* MY GROUP */
-	/*
-	HitRanks group = HIT_RANKS_NULL;
 	int dim;
 	for (dim=0; dim<hit_shapeDims(shape); dim++) {
 		if( res.active ){
@@ -1818,20 +1250,12 @@ HitLayout	hit_layout_plug_layBlocksBalance(int freeTopo, HitTopology topo, HitSh
 		}
 	}
 	res.group =  hit_layActiveRanksId(res,group);
-	*/
-	res.group = 0;
 
-	// @arturo: 2019-09-04 Copy layouts, the leader is always the topology leader
 	/* MY LEADER */
-	/*
 	//res.leader = topo.linearRank;
 	res.leaderRanks = group;
 	res.leader = 1;
-	*/
-	for( int dim=0; dim<topo.numDims; dim++ ) res.leaderRanks.rank[dim] = 0;
-	res.leader = ( hit_topRankInternal( topo, topo.self ) == 0 ) ? 1 : 0;
 
-	if( freeTopo ) hit_topFree( topo );
 	return res;
 }
 
@@ -2057,8 +1481,9 @@ int     hit_layout_plug_layWeighted_numActives( int procsCard, int blocksCard, f
 }
 
 /* 7.5 WEIGHTED: LAYOUT FUNCTION INTERFACE */
-HitLayout       hit_layout_plug_layDimWeighted(int freeTopo, HitTopology topo, HitShape shape, int restrictDim, float* weights) {
+HitLayout       hit_layout_plug_layDimWeighted(HitTopology topo, HitShape shape, int restrictDim, float* weights) {
         HitLayout res;
+        HitRanks group;
 
         /* ACTIVE */
         res = hit_layout_wrapper(
@@ -2087,14 +1512,10 @@ HitLayout       hit_layout_plug_layDimWeighted(int freeTopo, HitTopology topo, H
 		//res.group = HIT_GROUP_ID_NULL;
 		//res.leaderRanks = HIT_RANKS_NULL;
 		//res.leader = 0;
-		if( freeTopo ) hit_topFree( topo );
 		return res;
 	}
 
-	// @arturo: 2019-09-04 Signature layouts have a single group of active processors
 	/* MY GROUP */
-	/*
-	HitRanks group = HIT_RANKS_NULL;
 	int dim;
 	for (dim=0; dim<hit_shapeDims(shape); dim++) {
 		if( res.active ){
@@ -2104,24 +1525,19 @@ HitLayout       hit_layout_plug_layDimWeighted(int freeTopo, HitTopology topo, H
 		}
 	}
 	res.group =  hit_layActiveRanksId(res,group);
-	*/
-	res.group = 0;
 
-	// @arturo: 2019-09-04 Weighted layouts, the leader is always the first proc with elements
-	// TODO: Locate the first processes that is active
-	
 	/* MY LEADER */
 	//res.leader = topo.linearRank;
-	res.leaderRanks = res.topo.self;
+	res.leaderRanks = group;
 	res.leader = 1;
 
-	if( freeTopo ) hit_topFree( topo );
 	return res;
 }
 
 /* 7.5 WEIGHTED: LAYOUT FUNCTION INTERFACE */
-HitLayout       hit_layout_plug_layWeighted(int freeTopo, HitTopology topo, HitShape shape, float* weights) {
+HitLayout       hit_layout_plug_layWeighted(HitTopology topo, HitShape shape, float* weights) {
         HitLayout res;
+        HitRanks group;
 
         /* ACTIVE */
         res = hit_layout_wrapper(
@@ -2150,12 +1566,10 @@ HitLayout       hit_layout_plug_layWeighted(int freeTopo, HitTopology topo, HitS
 		//res.group = HIT_GROUP_ID_NULL;
 		//res.leaderRanks = HIT_RANKS_NULL;
 		//res.leader = 0;
-		if( freeTopo ) hit_topFree( topo );
 		return res;
 	}
 
 	/* MY GROUP */
-	HitRanks group = HIT_RANKS_NULL;
 	int dim;
 	for (dim=0; dim<hit_shapeDims(shape); dim++) {
 		if( res.active ){
@@ -2171,7 +1585,6 @@ HitLayout       hit_layout_plug_layWeighted(int freeTopo, HitTopology topo, HitS
 	res.leaderRanks = group;
 	res.leader = 1;
 
-	if( freeTopo ) hit_topFree( topo );
 	return res;
 }
 
@@ -2316,8 +1729,7 @@ HitShape hit_layDimMinShape( HitLayout lay, int dim ) {
 
 /* 10. INTERNAL: WRAPPERS FOR SIGNATURE LAYOUTS */
 /* 10.1. INTERNAL WRAPPER: SHAPE (1st TIME LAYOUT IS COMPUTED) */
-int	hit_layout_wrapperShape(	int topoType,	
-								int topoNumDims, 
+int	hit_layout_wrapperShape(	int topoNumDims, 
 								HitRanks proc, 
 								int card[HIT_MAXDIMS],
 								HitShape shape, 
@@ -2329,17 +1741,13 @@ int	hit_layout_wrapperShape(	int topoType,
 								) {
 	HitShape res = HIT_SHAPE_NULL;
 
-	// PROJECTION ON PLAIN TOPOLOGY @arturo: 2019/01/11
-	int plainProjection = ( topoType == HIT_TOPOLOGY_PLAIN && restrictToDim != HIT_LAYOUT_NODIM );
-
 	/* FOR EACH DIMENSION IN THE SHAPE, COMPUTE LAYOUT */
 	hit_shapeDimsSet(res, hit_shapeDims(shape));
 	int active = ( hit_shapeDims(shape) > 0 );
 	int dim;
 	for (dim=0; dim<hit_shapeDims(shape); dim++) {
-		// PROJECTION ON PLAIN TOPOLOGY @arturo: 2019/01/11
 		/* NO TOPOLOGY DIMENSION, COPY ALL THE SIGNATURE */
-		if ( ( plainProjection && dim != restrictToDim ) || ( dim >= topoNumDims ) ) {
+		if ( dim >= topoNumDims ) {
 			hit_shapeSig(res,dim) = hit_shapeSig(shape,dim);
 		}
 		/* COMPUTE SIGNATURE LAYOUT FOR TOPOLOGY CARDINALITY */
@@ -2387,7 +1795,6 @@ HitShape	hit_layout_wrapperOtherShape(HitLayout self, HitRanks ranks) {
 	/* COMPUTE SHAPE */
 	// @arturo 2015/01/07 Add check for non-active processors
 	int active = hit_layout_wrapperShape(
-				self.topo.type,
 				self.topo.numDims,
 				ranks,
 				self.topo.card,
@@ -2510,9 +1917,6 @@ int hit_layActiveRanksId( HitLayout lay, HitRanks ranks ) {
 
 	if ( hit_ranksCmp(ranks,HIT_RANKS_NULL) ) return HIT_RANK_NULL;
 
-	// @arturo 2019/09/09 Return null for non-active processes
-	if ( ! lay.active ) return HIT_RANK_NULL;
-
 	int linear = 0;
 	int acumCard = 1;
 
@@ -2529,9 +1933,6 @@ int hit_layActiveRanksId( HitLayout lay, HitRanks ranks ) {
 
 /* 10.10. TRANSFORM PROCESS IDENTIFIER (LINEAR RANK) IN MULTIDIMENSIONAL ACTIVE RANKS */
 HitRanks hit_layActiveIdRanks(HitLayout lay, int linear){
-
-	// @arturo 2019/09/09 Return null for non-active processes
-	if ( linear <0 || linear >= hit_layNumActives( lay ) ) return HIT_RANKS_NULL;
 
 	HitRanks ranks = HIT_RANKS_NULL;
 	int acumCard[HIT_MAXDIMS];
@@ -2634,31 +2035,7 @@ HitRanks	hit_layNeighborRanksFrom(HitLayout self, HitRanks source, int dim, int 
 	return neighbor;
 }
 
-/* 10.6.2. INTERNAL WRAPPER: GENERIC SHIFTED NEIGHBOUR RANKS IN SEVERAL DIMENSIONS */
-HitRanks hit_layNeighborRanksFromRanks(HitLayout self, HitRanks source, HitRanks shifts) {
-	HitRanks neighbor = source;
-
-	int d;
-	for (d=0; d<hit_shapeDims(hit_layShape(self)); d++) {
-		/* COPY RANKs FOR DIMs ABOVE THE DIMENSIONS IN THE TOPOLOGY */
-		if( d >= self.topo.numDims ) {
-			if ( shifts.rank[d] == 0 )
-				neighbor.rank[d] = self.topo.self.rank[d];
-			else
-				neighbor.rank[d] = HIT_RANK_NULL;
-		}
-		/* SHIFT RANK IN THE DIMENSION */
-		else neighbor.rank[d] = hit_layNeighborFrom( self, source.rank[d], d, shifts.rank[d] );
-
-		/* IF ANY RESULTING RANK IS NULL, RETURN NULL RANKS */
-		if ( neighbor.rank[d] == HIT_RANK_NULL ) return HIT_RANKS_NULL;
-	}
-
-	/* RETURN RESULT */
-	return neighbor;
-}
-
-/* 10.6.3. INTERNAL WRAPPER: SHIFTED NEIGHBOUR RANKS */
+/* 10.6.2. INTERNAL WRAPPER: SHIFTED NEIGHBOUR RANKS */
 HitRanks	hit_layNeighborRanks(HitLayout self, int dim, int shift) {
 
 	HitRanks neighbor = HIT_RANKS_NULL;
@@ -2753,19 +2130,8 @@ HitLayout	hit_layout_wrapper(	HitTopology topo,
 			*/
 
 			int blocksCard = hit_sigCard(hit_shapeSig(shape,dim));
-			
-			/* 5.0. PROJECTION ON PLAIN TOPOLOGY @arturo: 2019/01/11 */
-			int plainProjection = ( topo.type == HIT_TOPOLOGY_PLAIN && restrictToDim != HIT_LAYOUT_NODIM );
-			if ( plainProjection ) {
-				// SELECTED DIM
-				if ( dim == restrictToDim ) 
-					res.numActives[dim] = activesRestrictedF( topo.card[0], blocksCard, extraParameter);
-				// DIMENSIONS OUT OF TOPOLOGY: ALL ACTIVE
-				else 
-					res.numActives[dim] = blocksCard;
-			}
 			/* 5.1. DIMENSIONS OUT OF TOPOLOGY: ALL ACTIVE */
-			else if ( dim >= topo.numDims ) res.numActives[dim] = blocksCard;
+			if ( dim >= topo.numDims ) res.numActives[dim] = blocksCard;
 			/* 5.2. DIMENSION RESTRICTED TO A SPECIFIC SIGNATURE FUNCTION */
 			else if ( dim == restrictToDim ) 
 				res.numActives[dim] = activesRestrictedF( topo.card[dim], blocksCard, extraParameter);
@@ -2782,7 +2148,7 @@ HitLayout	hit_layout_wrapper(	HitTopology topo,
 	if ( topo.active ) {
 
 		/* 6. COMPUTE BLOCK AND ACTIVE STATUS */
-		active = hit_layout_wrapperShape(		topo.type,
+		active = hit_layout_wrapperShape(
 								topo.numDims,
 								topo.self,
 								topo.card,
@@ -3126,7 +2492,7 @@ int hit_lay_procGroup(HitLayout layout, int processor){
 
 
 /* SCHEDULING OF n INDEPENDENT BLOCKS TO m PROCS, ACCORDING TO BLOCK WEIGHTs */
-HitLayout hit_layout_plug_layIndependentLB( int freeTopo, HitTopology topo , HitShape elements, const double *weights ) {
+HitLayout hit_layout_plug_layIndependentLB( HitTopology topo , HitShape elements, const double *weights ) {
 
 	HitLayout lay = HIT_LAYOUT_NULL;
 	double totWeight = 0.0;
@@ -3277,14 +2643,13 @@ printf("Block %d, assigned to group %d, new normWeight %lf\n",i,minPos,normWeigh
 	lay.leaderRanks = leaderRanks;
 
 	/* RETURN */
-	if( freeTopo ) hit_topFree( topo );
 	return lay;
 }
 
 
 
 /* SCHEDULING OF n CONTIGUOUS BLOCKS TO m PROCS, ACCORDING TO BLOCK WEIGHTs like IS NAS benckmark */
-HitLayout hit_layout_plug_layContiguous(int freeTopo, HitTopology topo, HitShape elements, const double *weights ) {
+HitLayout hit_layout_plug_layContiguous(HitTopology topo, HitShape elements, const double *weights ) {
 
 	HitLayout lay = HIT_LAYOUT_NULL;
 	double totWeight;		// Total weight
@@ -3433,7 +2798,6 @@ HitLayout hit_layout_plug_layContiguous(int freeTopo, HitTopology topo, HitShape
 	lay.leader = ( hit_topSelfRankInternal( topo ) == leader ) ? 1 : 0;
 
 	/* RETURN */
-	if( freeTopo ) hit_topFree( topo );
 	return lay;
 }
 
@@ -3492,7 +2856,7 @@ void hit_bShapeBcastInternal(HitShape * shape, HitTopology topo){
 }
 
 
-HitLayout hit_layout_plug_layBitmap(int freeTopo, HitTopology topo, HitShape * shapeP){
+HitLayout hit_layout_plug_layBitmap(HitTopology topo, HitShape * shapeP){
 
 	// 0. Broadcast the sparse shape
 	hit_bShapeBcastInternal(shapeP,topo);
@@ -3537,7 +2901,6 @@ HitLayout hit_layout_plug_layBitmap(int freeTopo, HitTopology topo, HitShape * s
 	int * names =  hit_bShapeNameList(shape,0).names + output.begin;
 	lay.shape = hit_bShapeSelect(shape, hit_sigCard(output), names);
 
-	if( freeTopo ) hit_topFree( topo );
 	return lay;
 }
 
@@ -3597,7 +2960,7 @@ void hit_cShapeBcastInternal(HitShape * shape, HitTopology topo){
 
 
 
-HitLayout hit_layout_plug_laySparseRows(int freeTopo, HitTopology topo, HitShape * shapeP){
+HitLayout hit_layout_plug_laySparseRows(HitTopology topo, HitShape * shapeP){
 
 	// 0. Broadcast the sparse shape
 	hit_cShapeBcastInternal(shapeP,topo);
@@ -3624,7 +2987,7 @@ HitLayout hit_layout_plug_laySparseRows(int freeTopo, HitTopology topo, HitShape
 	int nactives = hit_min(hit_cShapeCard(shape,0), procsCard);
 	lay.numActives[0] = nactives;
 
-	// @note @javfres This only work for whole rows
+	// @note @javfres Esto solo funciona para filas enteras.
 	hit_layout_list_initGroups(&lay, hit_cShapeCard(shape,0));
 
 	int i;
@@ -3643,14 +3006,13 @@ HitLayout hit_layout_plug_laySparseRows(int freeTopo, HitTopology topo, HitShape
 	int * names = hit_cShapeNameList(shape,0).names + output.begin;
 	lay.shape = hit_cShapeSelectRows(shape, hit_sigCard(output), names);
 
-	if( freeTopo ) hit_topFree( topo );
 	return lay;
 
 }
 
 
 
-HitLayout hit_layout_plug_laySparseBitmapRows(int freeTopo, HitTopology topo, HitShape * shapeP){
+HitLayout hit_layout_plug_laySparseBitmapRows(HitTopology topo, HitShape * shapeP){
 
 	// 0. Broadcast the sparse shape
 	hit_bShapeBcastInternal(shapeP,topo);
@@ -3696,7 +3058,11 @@ HitLayout hit_layout_plug_laySparseBitmapRows(int freeTopo, HitTopology topo, Hi
 	int * names = hit_bShapeNameList(shape,0).names + output.begin;
 	lay.shape = hit_bShapeSelectRows(shape, hit_sigCard(output), names);
 
-	if( freeTopo ) hit_topFree( topo );
 	return lay;
 }
+
+
+
+
+
 

@@ -28,7 +28,7 @@
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.2
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -48,7 +48,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2019, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2015, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -326,8 +326,8 @@ int main(int argc, char *argv[]) {
     lsize[1] = hit_shapeSigCard(layshape,1);
 
     // Local shape to alloc the H matriz
-    lshape = hit_shapeTransform(layshape,0,HIT_SHAPE_BEGIN,-1);
-    lshape = hit_shapeTransform(lshape  ,1,HIT_SHAPE_BEGIN,-1);
+    lshape = hit_shapeDimExpand(layshape,0,HIT_SHAPE_BEGIN,-1);
+    lshape = hit_shapeDimExpand(lshape  ,1,HIT_SHAPE_BEGIN,-1);
 
     // Shapes for the proteins
     HitShape protshape[2];

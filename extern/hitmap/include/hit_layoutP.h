@@ -1,4 +1,4 @@
-/** @cond INTERNAL */
+// @cond INTERNAL
 /**
  * Hitmap layout private definitions.
  * A layout maps the indexes in a shape domain
@@ -12,12 +12,12 @@
  * @author Javier Fresno Bausela
  * @date Ago 2011
  */
-/** @endcond */
+// @endcond
 
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.2
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -37,7 +37,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2015, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -48,7 +48,7 @@
 #ifndef _HitLayoutP_
 #define _HitLayoutP_
 
-/** @cond INTERNAL */
+// @cond INTERNAL
 
 /**
  * Initicalizes the list of groups in a list layout.
@@ -65,7 +65,7 @@ void hit_layout_list_initGroups(HitLayout * lay, int numElementsTotal);
  */
 void hit_layout_list_addGroup(HitLayout * lay, int leader, int np);
 
-/** @endcond */
+// @endcond
 
 /* END OF HEADER FILE _HitLayoutP_ */
 #endif

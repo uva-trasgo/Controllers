@@ -61,7 +61,7 @@ class Test:
 			# Create the execution line
 			exelist = []
 			if p > 0:
-				exelist = ["srun"]
+				exelist = ["mpiexec"]
 				exelist.append("-n")
 				exelist.append(str(p))
 			exelist.append("./"+self.program)

@@ -15,7 +15,7 @@
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.2
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -35,7 +35,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2015, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -63,9 +63,6 @@ HitComSparse HIT_COM_SPARSE_NULL = HIT_COM_SPARSE_NULL_STATIC;
 HitOp	HIT_OP_SUM_INT;
 HitOp	HIT_OP_MIN_INT;
 HitOp	HIT_OP_MAX_INT;
-HitOp	HIT_OP_SUM_FLOAT;
-HitOp	HIT_OP_MIN_FLOAT;
-HitOp	HIT_OP_MAX_FLOAT;
 HitOp	HIT_OP_SUM_DOUBLE;
 HitOp	HIT_OP_MIN_DOUBLE;
 HitOp	HIT_OP_MAX_DOUBLE;
@@ -109,15 +106,9 @@ static void mpi_error_handler(MPI_Comm *comm, int *err, ... ){
 }
 
 
-// FLAG TO CHECK IF THE COM MODULE HAS BEEN INITIALIZED OF FINALIZED
-static int hit_active = 0;
 
 /* Hit MPI INITIALIZATION */
 void hit_comInit(int *pargc, char **pargv[]) {
-	// 0. AVOID DOUBLE INITIALIZATION
-	if ( hit_active ) 
-		hit_error("hit_comInit: Already initialized", __FILE__, __LINE__);
-	hit_active = 1;
 
 	/* 1. INITIALIZE MPI */
 	int mpi_provided_thread;
@@ -128,12 +119,12 @@ void hit_comInit(int *pargc, char **pargv[]) {
 	MPI_Comm_create_errhandler(mpi_error_handler, &mpi_errhandler);
 	MPI_Comm_set_errhandler(MPI_COMM_WORLD, mpi_errhandler);
 
-	/* 2. GET BASIC GROUP PARAMETERS */
+    /* 2. GET BASIC GROUP PARAMETERS */
 	hit_malloc( HIT_TOPOLOGY_INFO, HitPTopology, 1 );
 	// @arturo Ago 2015: New allocP interface
 	// sizeof( HitPTopology), HitPTopology*);
-	MPI_Comm_rank(MPI_COMM_WORLD, &(HIT_TOPOLOGY_INFO->selfRank) );
-	MPI_Comm_size(MPI_COMM_WORLD, &(HIT_TOPOLOGY_INFO->numProcs) );
+    MPI_Comm_rank(MPI_COMM_WORLD, &(HIT_TOPOLOGY_INFO->selfRank) );
+    MPI_Comm_size(MPI_COMM_WORLD, &(HIT_TOPOLOGY_INFO->numProcs) );
 	MPI_Comm_dup ( MPI_COMM_WORLD,  &(HIT_TOPOLOGY_INFO->comm) );
 	HIT_TOPOLOGY_INFO->numUses = 1;
 	// @arturo 2015/01/03, 
@@ -152,9 +143,6 @@ void hit_comInit(int *pargc, char **pargv[]) {
 	hit_comOp( hit_comOpSumInt, HIT_OP_SUM_INT );
 	hit_comOp( hit_comOpMinInt, HIT_OP_MIN_INT );
 	hit_comOp( hit_comOpMaxInt, HIT_OP_MAX_INT );
-	hit_comOp( hit_comOpSumFloat, HIT_OP_SUM_FLOAT );
-	hit_comOp( hit_comOpMinFloat, HIT_OP_MIN_FLOAT );
-	hit_comOp( hit_comOpMaxFloat, HIT_OP_MAX_FLOAT );
 	hit_comOp( hit_comOpSumDouble, HIT_OP_SUM_DOUBLE );
 	hit_comOp( hit_comOpMinDouble, HIT_OP_MIN_DOUBLE );
 	hit_comOp( hit_comOpMaxDouble, HIT_OP_MAX_DOUBLE );
@@ -169,10 +157,6 @@ void hit_comInit(int *pargc, char **pargv[]) {
 
 /* Hit MPI FINALIZATION */
 void hit_comFinalize() {
-	// 0. AVOID CALLING BEFORE INITIALIZATION
-	if ( ! hit_active ) 
-		hit_error("hit_comFinalize: Not initialized or already finalized", __FILE__, __LINE__);
-	hit_active = 0;
 
 	/* 1. FREE BASIC TOPOLOGY INFORMATION */
 	//MPI_Comm_free( (MPI_Comm *) HIT_TOPOLOGY_INFO.lowLevel);
@@ -187,9 +171,6 @@ void hit_comFinalize() {
 	hit_comOpFree( HIT_OP_SUM_INT );
 	hit_comOpFree( HIT_OP_MIN_INT );
 	hit_comOpFree( HIT_OP_MAX_INT );
-	hit_comOpFree( HIT_OP_SUM_FLOAT );
-	hit_comOpFree( HIT_OP_MIN_FLOAT );
-	hit_comOpFree( HIT_OP_MAX_FLOAT );
 	hit_comOpFree( HIT_OP_SUM_DOUBLE );
 	hit_comOpFree( HIT_OP_MIN_DOUBLE );
 	hit_comOpFree( HIT_OP_MAX_DOUBLE );
@@ -200,7 +181,7 @@ void hit_comFinalize() {
 
 	/* 3. FINALIZE MPI */
 	MPI_Finalize();
-	//pthread_exit(NULL);
+	pthread_exit(NULL);
 }
 
 
@@ -209,7 +190,7 @@ HitType hit_comType(const void *varP, HitType baseType) {
 	HitType newType, prevType;
 	HitType aux[HIT_MAXDIMS];
 	int dim,numTypes, contiguous;
-	MPI_Aint baseExtent, baseLb;
+	MPI_Aint baseExtent;
 	HitTile var = *(const HitTile *)varP;
 
 #ifdef BARELY_FASTER
@@ -231,7 +212,7 @@ HitType hit_comType(const void *varP, HitType baseType) {
 	numTypes=hit_tileDims(var);
 		
 	/* 3. GET EXTENT OF THE BASE TYPE FOR THE STRIDES */
-	MPI_Type_get_extent(baseType, &baseLb, &baseExtent);
+	MPI_Type_extent(baseType, &baseExtent);
 
 	/* 4. START LOOP OF DIMENSIONS BACKWARDS (ROW ORIENTED) */
 	prevType = baseType;
@@ -240,8 +221,7 @@ HitType hit_comType(const void *varP, HitType baseType) {
 
 	for (dim=numTypes-1; dim >=0; dim-- ) {
 		/* 4.1. WHILE CONTIGUOUS AND THIS DIM HAS NO STRIDE, KEEP ON CONTIGUOS DATA TYPES */
-		// @arturo May 2021: BUG CORRECTED, USE MEMORY STRIDE, NOT GLOBAL COORDINATES STRIDE
-		if (contiguous && var.qstride[dim] == 1 ) {
+		if (contiguous && hit_tileDimStride(var,dim) == 1 ) {
 #ifdef DEBUG
 printf("Contiguous type for dim %d, with %d total elements\n", dim, partialAcumCard); fflush(stdout);
 #endif
@@ -258,13 +238,12 @@ printf("Contiguous type for dim %d, with %d total elements\n", dim, partialAcumC
 		else {
 			contiguous = 0;
 #ifdef DEBUG
-printf("Hvector type for dim %d, Card: %d, stride: %ld\n", dim, var.card[dim], baseExtent*var.origAcumCard[dim+1]* hit_tileDimStride(var,dim)
+printf("Hvector type for dim %d, Card: %d, stride: %d\n", dim, var.card[dim], baseExtent*var.origAcumCard[dim+1]* hit_tileDimStride(var,dim)
 //.shape.sig[dim].stride
 ); fflush(stdout);
 #endif
 			if (MPI_SUCCESS != MPI_Type_create_hvector(var.card[dim], 1, 
-					// @arturo May 2021: BUG CORRECTED, USE MEMORY STRIDE, NOT GLOBAL COORDINATES STRIDE
-					baseExtent*var.origAcumCard[dim+1] * var.qstride[dim],
+					baseExtent*var.origAcumCard[dim+1]*  hit_tileDimSig(var,dim).stride,
 					prevType, &(aux[dim])) )
 				hit_error("MPI_Type_create_hvector", __FILE__, __LINE__);
 		}
@@ -296,7 +275,7 @@ printf("Hvector type for dim %d, Card: %d, stride: %ld\n", dim, var.card[dim], b
  * @param varP Tile pointer.
  * @return Data pointer.
  */
-void * hit_comSearchData (const void * varP) {
+inline void * hit_comSearchData (const void * varP) {
 	const HitTile * var = (const HitTile *)varP;
 	while ( var->hierDepth > 0 ) {
 		var=(HitTile *)(var->data);
@@ -538,6 +517,7 @@ HitCom hit_comSendRecvSelectTag(HitLayout lay,
 		else return HIT_COM_NULL;
 
 		//printf("Tile %p(%d), Select Tile %p(%d)\n",tileSend,tileSend->memStatus,&selectSend,selectSend.memStatus);
+
 
 		newCom.typeSend = hit_comTypeRec( &selectSend, baseType);
 		newCom.dataSend = hit_comSearchData(&selectSend);
@@ -1008,57 +988,6 @@ HitCom hit_comAlltoallSelectv(	HitLayout lay,
 	return newCom;
 
 
-}
-
-
-HitCom hit_comAllgather(	HitLayout lay, const void * tilePSend, const void * tilePRecv, HitType baseType, int count){
-
-	/* 1. DECLARE NEW COMMUNICATION ISSUE */
-	HitCom newCom = HIT_COM_NULL;
-
-	/* 2. GET TOPOLOGY COMMUNICATOR */
-	MPI_Comm comm = lay.pTopology[0]->comm;
-	newCom.comm = comm;
-
-	/* 3. START FILLING UP ITS FIELDS */
-	newCom.myself = hit_topSelfRankInternal( lay.topo );
-
-	/* 4. COMMUNICATION */
-	/* 4.1. SEND */
-	const HitTile *tileSend = (const HitTile *)tilePSend;
-	//HitTile selectSend;
-	/* IF TILE HAS NO MEMORY OR NO DIMENSIONS RETURN NULL COMMUNICATION */
-	if ( tileSend->memStatus == HIT_MS_NULL || tileSend->memStatus == HIT_MS_NOMEM || hit_tileDims(*tileSend)==0 ) return HIT_COM_NULL;
-
-	//if (selectSendMode == HIT_COM_TILECOORDS) hit_tileSelect( &selectSend, tileSend, selectionSend );
-	//else if (selectSendMode == HIT_COM_ARRAYCOORDS) hit_tileSelectArrayCoords( &selectSend, tileSend, selectionSend);
-	//else return HIT_COM_NULL;
-
-	//newCom.dataSend = selectSend.data;
-	newCom.dataSend = tileSend->data;
-
-	/* 4.2. RECV */
-	const HitTile *tileRecv = (const HitTile *)tilePRecv;
-	//HitTile selectRecv;
-	/* IF TILE HAS NO MEMORY OR NO DIMENSIONS RETURN NULL COMMUNICATION */
-	if ( tileRecv->memStatus == HIT_MS_NULL || tileRecv->memStatus == HIT_MS_NOMEM || hit_tileDims(*tileRecv)==0 ) return HIT_COM_NULL;
-
-	//if (selectRecvMode == HIT_COM_TILECOORDS) hit_tileSelect( &selectRecv, tileRecv, selectionRecv );
-	//else if (selectRecvMode == HIT_COM_ARRAYCOORDS) hit_tileSelectArrayCoords( &selectRecv, tileRecv, selectionRecv);
-	//else return HIT_COM_NULL;
-
-	//newCom.dataRecv = selectRecv.data;
-	newCom.dataRecv = tileRecv->data;
-
-	/* 6. COMMUNICATION TYPE */
-	newCom.commType = HIT_ALLGATHER;
-
-	/* 7. TYPE and COUNT */
-	newCom.typeSend = baseType;
-	newCom.count = count;
-
-	/* 8. RETURN */
-	return newCom;
 }
 
 
@@ -2241,16 +2170,6 @@ void hit_comDoAlltoallv(HitCom *issue) {
 		hit_mpiTestError(ok,"Failed all-to-all v");
 }
 
-/* Hit DO COMMITED ALLGATHER */
-void hit_comDoAllGather(HitCom *issue) {
-
-	int ok;
-	ok = MPI_Allgather(issue->dataSend, issue->count, issue->typeSend, issue->dataRecv, issue->count, issue->typeSend, issue->comm);
-
-	hit_mpiTestError(ok,"Failed all-gather");
-}
-
-
 /* Hit DO COMMITED SparseUpdate for CSR shapes */
 void hit_comDoSparseUpdateCSR(HitCom *issue){
 
@@ -2527,9 +2446,6 @@ void hit_comDo(HitCom *issue) {
 		case HIT_ALLGATHERV:
 			hit_comDoAllGatherv(issue);
 			break;
-		case HIT_ALLGATHER:
-			hit_comDoAllGather(issue);
-			break;
 		default:
 			hit_errInternal("comDo", "Unknown type of communication object", "", __FILE__, __LINE__);
 			break;
@@ -2589,58 +2505,6 @@ void hit_comOpMinDoubleBasic(void * in, void * inout) {
 }
 
 /**
- * hit_comOpSumFloatBasic: basic sum double operation.
- * @param in Pointer to the first operator.
- * @param inout Pointer to the second and return operator.
- */
-void hit_comOpSumFloatBasic(void * in, void * inout) {
-	
-	float * din = (float *)in;
-	float * dinout = (float *)inout;
-
-	
-#ifdef DEBUG
-	printf("CTRL OpSumFloat: %f+=%f=%f \n",*dinout,*din,*dinout+*din);
-#endif
-	
-	*dinout+=*din;
-}
-
-/**
- * hit_comOpMaxFloatBasic: basic maximum double operation.
- * @param in Pointer to the first operator.
- * @param inout Pointer to the second and return operator.
- */
-void hit_comOpMaxFloatBasic(void * in, void * inout) {
-
-	float * din = (float *)in;
-	float * dinout = (float *)inout;
-
-#ifdef DEBUG
-	printf("CTRL OpMaxFloat: hit_max(%f,%f)=%f \n",*dinout,*din,hit_max(*dinout,*din));
-#endif
-
-	*dinout=hit_max(*dinout,*din);
-}
-
-/**
- * hit_comOpMinFloatBasic: basic minimum double operation.
- * @param in Pointer to the first operator.
- * @param inout Pointer to the second and return operator.
- */
-void hit_comOpMinFloatBasic(void * in, void * inout) {
-
-	float * din = (float *)in;
-	float * dinout = (float *)inout;
-
-#ifdef DEBUG
-	printf("CTRL OpMinFloat: hit_min(%f,%f)=%f \n",*dinout,*din,hit_min(*dinout,*din));
-#endif
-
-	*dinout=hit_min(*dinout,*din);
-}
-
-/**
  * hit_comOpSumIntBasic: basic sum integer operation.
  * @param in Pointer to the first operator.
  * @param inout Pointer to the second and return operator.
@@ -2692,7 +2556,7 @@ void hit_comOpGenericAnyType( void * in, void * inout, MPI_Datatype datatype, in
     MPI_Datatype *array_of_dtypes; 
     int num_ints, num_adds, num_dtypes, combiner; 
     int i,j,stride,jump,ac,ac2;
-    MPI_Aint ext, lb;
+	MPI_Aint ext;
 	
     MPI_Type_get_envelope( datatype,  
 						  &num_ints, &num_adds, &num_dtypes, &combiner ); 
@@ -2720,7 +2584,7 @@ void hit_comOpGenericAnyType( void * in, void * inout, MPI_Datatype datatype, in
 			//our blocklengths are always one: internal loop not tested
 			for (i=0; i<array_of_ints[0]; i++) { 
 				ac= (int) array_of_adds[i] + offset;
-				MPI_Type_get_extent(array_of_dtypes[i], &lb, &ext);
+				MPI_Type_extent(array_of_dtypes[i],&ext);
 				jump = (int) ext;
 				for(j=0;j<array_of_ints[i+1];j++) {
 					hit_comOpGenericAnyType( in, inout, array_of_dtypes[i],ac,tam,f);
@@ -2748,7 +2612,7 @@ void hit_comOpGenericAnyType( void * in, void * inout, MPI_Datatype datatype, in
 			MPI_Type_get_contents( datatype, num_ints, num_adds, num_dtypes, 
 								  array_of_ints, array_of_adds, array_of_dtypes ); 
 			//our blocklengths are always one: internal loop not tested
-			MPI_Type_get_extent(array_of_dtypes[0], &lb, &ext);
+			MPI_Type_extent(array_of_dtypes[0],&ext);
 			jump = (int) ext;
 			// @javfres ac2 does nothing
 			//ac=offset, ac2;
@@ -2781,7 +2645,7 @@ void hit_comOpGenericAnyType( void * in, void * inout, MPI_Datatype datatype, in
 
 			MPI_Type_get_contents( datatype, num_ints, num_adds, num_dtypes, 
 								  array_of_ints, array_of_adds, array_of_dtypes );
-			MPI_Type_get_extent(array_of_dtypes[0], &lb, &ext);
+			MPI_Type_extent(array_of_dtypes[0],&ext);
 			jump = (int) ext;
 			ac=offset;
 			for(i=0;i<array_of_ints[0];i++) {
@@ -2798,7 +2662,6 @@ void hit_comOpGenericAnyType( void * in, void * inout, MPI_Datatype datatype, in
 
 /* Hit OPERATION to add doubles in reductions */
 //@see decoding a datatype in mpi_forum.org
-/* Hit OPERATION to calculate the sum in reductions */
 void hit_comOpSumDouble (void * in, void * inout, int *len, HitType * type) {
 	HIT_NOT_USED(len);
 	hit_comOpGenericAnyType(in,inout,*type,0,sizeof(double),&hit_comOpSumDoubleBasic);
@@ -2814,24 +2677,6 @@ void hit_comOpMaxDouble (void * in, void * inout, int *len, HitType * type) {
 void hit_comOpMinDouble (void * in, void * inout, int *len, HitType * type) {
 	HIT_NOT_USED(len);
 	hit_comOpGenericAnyType(in,inout,*type,0,sizeof(double),&hit_comOpMinDoubleBasic);
-}
-
-/* Hit OPERATION to calculate the sum in reductions */
-void hit_comOpSumFloat (void * in, void * inout, int *len, HitType * type) {
-	HIT_NOT_USED(len);
-	hit_comOpGenericAnyType(in,inout,*type,0,sizeof(float),&hit_comOpSumFloatBasic);
-}
-
-/* Hit OPERATION to calculate the maximum in reductions */
-void hit_comOpMaxFloat (void * in, void * inout, int *len, HitType * type) {
-	HIT_NOT_USED(len);
-	hit_comOpGenericAnyType(in,inout,*type,0,sizeof(float),&hit_comOpMaxFloatBasic);
-}
-
-/* Hit OPERATION to calculate the minimum in reductions */
-void hit_comOpMinFloat (void * in, void * inout, int *len, HitType * type) {
-	HIT_NOT_USED(len);
-	hit_comOpGenericAnyType(in,inout,*type,0,sizeof(float),&hit_comOpMinFloatBasic);
 }
 
 

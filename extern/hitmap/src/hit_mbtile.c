@@ -2,7 +2,7 @@
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.2
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -22,7 +22,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2015, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -83,7 +83,7 @@ void hit_mbTileAllocInternal(void *newVarP, const char *name, const char *file, 
 }
 
 
-int hit_mbTileElemAtIndex(void * varP, int row, int column){
+int hit_mcTileElemAtIndex(void * varP, int row, int column){
 	
 	/* 1. Get the shape of the tile */
 	HitTile *var = (HitTile *)varP;
@@ -96,7 +96,7 @@ int hit_mbTileElemAtIndex(void * varP, int row, int column){
 }
 
 
-int hit_mbTileGraphElemAtIndex(void * varP, int pos1, int pos2){
+int hit_mcTileGraphElemAtIndex(void * varP, int pos1, int pos2){
 
 	/* 1. Get the shape of the tile */
 	HitTile *var = (HitTile *)varP;

@@ -13,7 +13,7 @@
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.2
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -33,7 +33,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2015, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -44,7 +44,6 @@
 #include <stdio.h>
 #include <math.h>
 
-#include <hit_topology.h>
 #include <hit_layout.h>
 #include <hit_layoutP.h>
 #include <hit_funcop.h>
@@ -129,7 +128,7 @@ void hit_sparseShapeBcastInternal(HitShape * shape, HitTopology topo){
 // @javfres 2015-10-05 I have been refactoring this function dropping out part
 // of the group support so it could work when there are more processes than
 // nodes. Now some processes will be inactive.
-HitLayout hit_layout_plug_layMetis(int freeTopo, HitTopology topo, HitShape * shapeP){
+HitLayout hit_layout_plug_layMetis(HitTopology topo, HitShape * shapeP){
 
 	int i;
 
@@ -172,10 +171,7 @@ HitLayout hit_layout_plug_layMetis(int freeTopo, HitTopology topo, HitShape * sh
 	}
 
 	// Exit if the layout is not active
-	if(lay.active == 0) {
-		if( freeTopo ) hit_topFree( topo );
-		return lay;
-	}
+	if(lay.active == 0) return lay;
 
 	// Create the groups
 	for(i=0;i<numParts;i++){
@@ -189,8 +185,6 @@ HitLayout hit_layout_plug_layMetis(int freeTopo, HitTopology topo, HitShape * sh
 	//int group = hit_lay_procGroup(lay,topo.linearRank);
 	int group = hit_lay_procGroup(lay, hit_topSelfRankInternal( topo ) );
 	lay.group = group;
-
-	if( freeTopo ) hit_topFree( topo );
 
 	// 3. Call the partition function
 	int wgtflag = 0;

@@ -1,35 +1,34 @@
-/** @cond INTERNAL */
+// @cond INTERNAL
 /**
  * Hierarchical tiling of multi-dimensional dense and sparse structures.
  * Private definitions and functions to manipulate HitTile types.
  *
  * @file hit_tileP.h
  * @ingroup Tiling
- * @version 1.8
+ * @version 1.7
  * @author Arturo Gonzalez-Escribano
  * @author Javier Fresno Bausela
  * @author Carlos de Blas Carton
  * @author Yuri Torres de la Sierra
- * @author Ana Moreton-Fernandez
- * @date Mar 2019
+ * @date Aug 2016
  */
-/** @endcond */
+// @endcond
 
 /*
  * <license>
- * 
- * Hitmap v1.3
- * 
+ *
+ * Hitmap v1.2
+ *
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
- * or use for commercial purpose, public redistribution, in source or binary forms, with or 
- * without modifications, is NOT ALLOWED without the previous authorization of the copyright 
+ * or use for commercial purpose, public redistribution, in source or binary forms, with or
+ * without modifications, is NOT ALLOWED without the previous authorization of the copyright
  * holder. The origin of this software must not be misrepresented; you must not claim that you
  * wrote the original software. If you use this software for any purpose (e.g. publication),
  * a reference to the software package and the authors must be included.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
  * THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
  * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
@@ -37,12 +36,12 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ *
+ * Copyright (c) 2007-2015, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
- * 
+ *
  * More information on http://trasgo.infor.uva.es/
- * 
+ *
  * </license>
 */
 
@@ -66,7 +65,7 @@
 #endif
 
 /* 0. TYPE CONSTANTS */
-/** @cond INTERNAL */
+// @cond INTERNAL
 #define HIT_TILE	0
 #define HIT_C_TILE	1
 #define HIT_M_TILE	2
@@ -74,38 +73,49 @@
 #define HIT_GB_TILE	4
 #define HIT_MC_TILE	5
 #define HIT_MB_TILE	6
-/** @endcond */
+// @endcond
 
 
 /* 1. ABSTRACT DATA-STRUCTURE DEFINITION */
 
+// TODO: created by ismael @ 2017-12-19 16:41:29
+// Add stream member to structure for cudaStream_t at GPU controllers
 /* 1.a. GENERIC ABSTRACT TYPE */
 typedef struct HitTile {
 /** @privatesection */
-	int			type;				/**< Type of the HitTile: Tile, cTile, mTile, gcTile, gbTile, mcTile, mbTile. */
-	size_t			baseExtent;			/**< Size of the variable type. */
-	HitShape		shape;				/**< Shape of the Tile. */
-	int			card[HIT_MAXDIMS];		/**< Dimension cardinalities. */
-	int			acumCard;			/**< Flattened cardinality. */
-	int			origAcumCard[HIT_MAXDIMS+1];	/**< Dimension accumulated cardinalities. */
-	int			qstride[HIT_MAXDIMS];		/**< Memory stride for stride subselections */
-	void			*data;				/**< Data pointer. It may be different to memPtr if it is a subselection tile. */
-	void			*dataVertices;			/**< Data pointer to store the vertices in a graph tile. */
-	void			*memPtr;			/**< Memory pointer. It keeps the original pointer to the allocated memory. */
-	void			*memPtrVertices;		/**< Memory pointer. It keeps the original pointer to the allocated memory. */
-	struct		 	HitTile	*ref;			/**< Pointer to the parent HitTile for hierarchical tiles. */
-	char			memStatus;			/**< Memory status. */
-	void			*ext;				/**< Extension for Controller model data */
-	void			*distributed;			/**< Extension for distributed tiles (Hitmap2) */
+	int				type;							/**< Type of the HitTile: Tile, cTile, mTile, gcTile, gbTile, mcTile, mbTile. */
+	size_t			baseExtent;						/**< Size of the variable type. */
+	HitShape		shape;							/**< Shape of the Tile. */
+	int				card[HIT_MAXDIMS];				/**< Dimension cardinalities. */
+	int				acumCard;						/**< Flattened cardinality. */
+	int				origAcumCard[HIT_MAXDIMS+1];	/**< Dimension accumulated cardinalities. */
+	int				qstride[HIT_MAXDIMS];			/**< Memory stride for stride subselections */
+	void			*data;							/**< Data pointer. It may be different to memPtr if it is a subselection tile. */
+	void			*dataVertices;					/**< Data pointer to store the vertices in a graph tile. */
+	void			*memPtr;						/**< Memory pointer. It keeps the original pointer to the allocated memory. */
+	void			*memPtrVertices;				/**< Memory pointer. It keeps the original pointer to the allocated memory. */
+	struct		 	HitTile	*ref;					/**< Pointer to the parent HitTile for hierarchical tiles. */
+	char			memStatus;						/**< Memory status. */
+/* ------------------------ CONTROLERS ---------------------------------------- */
+	void			*refCntrl;
+	void			*devData;
+	char			inCntrlType;
+	char			transferred;
+	char			recover;
+	void 			*handler;
+	int				hasPendingMoveTo;
+	int				hasPendingMoveFrom;
+	int				isCntrlBlocked;
+	unsigned int	cntrlKernelCount;
 /* ------------------------ MULTILEVEL TILES ---------------------------------------- */
-	char			hierDepth;			/**< Hierarchical depth status. */
-	struct		 	HitTile	*ancestor;		/**< Pointer to the ancestor in a multilevel hierarchy. */
-	struct		 	HitTile	*unpadded;		/**< Pointer to a selection without padding. */
-	int			childBegin[HIT_MAXDIMS];	/**< Starting array coordinate of first child in regular hierarchical structures, where all children have the same type and shape. */
-	int			childSize[HIT_MAXDIMS];		/**< Normalized sizes of children in regular hierarchical structures, where all children have the same type and shape. */
+	char			hierDepth;						/**< Hierarchical depth status. */
+	struct		 	HitTile	*ancestor;				/**< Pointer to the ancestor in a multilevel hierarchy. */
+	struct		 	HitTile	*unpadded;				/**< Pointer to a selection without padding. */
+	int				childBegin[HIT_MAXDIMS];		/**< Starting array coordinate of first child in regular hierarchical structures, where all children have the same type and shape. */
+	int				childSize[HIT_MAXDIMS];			/**< Normalized sizes of children in regular hierarchical structures, where all children have the same type and shape. */
 } HitTile ;
 
-/** @cond INTERNAL */
+// @cond INTERNAL
 /**
  * Shortcut for pointer to the \e struct \e HitTile type.
  */
@@ -127,28 +137,35 @@ typedef HitTile *HitPTile;
  */
  #define 	hit_tileNewTypeInternal(baseType) 					\
  typedef struct HitTile_##baseType {							\
- 	int			type;							\
+ 	int				type;						\
  	size_t			baseExtent;						\
  	HitShape		shape;							\
- 	int			card[HIT_MAXDIMS];					\
- 	int			acumCard;						\
- 	int			origAcumCard[HIT_MAXDIMS+1];				\
- 	int			qstride[HIT_MAXDIMS];					\
+ 	int				card[HIT_MAXDIMS];				\
+ 	int				acumCard;					\
+ 	int				origAcumCard[HIT_MAXDIMS+1];			\
+ 	int				qstride[HIT_MAXDIMS];				\
  	baseType		*data;							\
  	baseType		*dataVertices;						\
  	baseType		*memPtr;						\
  	baseType		*memPtrVertices;					\
  	struct HitTile_##baseType *ref;							\
  	char			memStatus;						\
-	void			*ext;							\
-	void			*distributed;						\
+ 	void			*refCntrl;						\
+ 	baseType		*devData;						\
+ 	char			inCntrlType;						\
+ 	char			transferred;						\
+ 	char			recover;						\
+ 	void			*handler;							\
+ 	int				hasPendingMoveTo;				\
+ 	int				hasPendingMoveFrom;				\
+ 	int				isCntrlBlocked;				\
+ 	unsigned int	cntrlKernelCount;						\
  	char			hierDepth;						\
- 	struct HitTile		*ancestor;						\
- 	struct HitTile		*unpadded;						\
- 	int			childBegin[HIT_MAXDIMS];				\
- 	int			childSize[HIT_MAXDIMS];					\
- } HitTile_##baseType
-//, *HitPTile_##baseType
+ 	struct HitTile	*ancestor;							\
+ 	struct HitTile	*unpadded;							\
+ 	int				childBegin[HIT_MAXDIMS];			\
+ 	int				childSize[HIT_MAXDIMS];				\
+ } HitTile_##baseType, *HitPTile_##baseType
 
 /* Declare the type for the hierarchical Tiles */
 hit_tileNewTypeInternal(HitTile);
@@ -157,7 +174,7 @@ hit_tileNewTypeInternal(HitTile);
 /**
  * Memory Status Constant
  */
-#define	HIT_MS_NULL		0	/**< Reserved for HIT_TILE_NULL. */
+#define	HIT_MS_NULL			0	/**< Reserved for HIT_TILE_NULL. */
 #define	HIT_MS_NOMEM		1	/**< Root array with no memory allocated. */
 #define	HIT_MS_OWNER		2	/**< Allocated array or tile. */
 #define	HIT_MS_NOT_OWNER	3	/**< Tile selection pointing to the memory of another tile. */
@@ -197,11 +214,14 @@ hit_tileNewTypeInternal(HitTile);
 #define	HIT_NO_OUTOFBOUNDS_CHECK	1
 
 
+// TODO: created by ismael @ 2017-12-19 16:40:12
+// Add initialization for stream member as NULL
 /**
  * Null value for HitPTile derived types.
  */
 extern HitPTile			HIT_TILE_NULL_POINTER;
-#define	HIT_TILE_NULL_STATIC	{ 0, 0, HIT_SHAPE_NULL_STATIC, { 0,0,0,0 }, 0, { 0,0,0,0,0 }, { 0,0,0,0 }, NULL, NULL, NULL, NULL, NULL, HIT_MS_NULL, NULL, NULL, HIT_NONHIERARCHICAL, NULL, NULL, HIT_MULTILEVEL_UNDEFINED_BEGINS, HIT_MULTILEVEL_UNDEFINED_SIZES }
+//#define	HIT_TILE_NULL_STATIC	{ 0, 0, HIT_SHAPE_NULL_STATIC, { 0,0,0,0 }, 0, { 0,0,0,0,0 }, { 0,0,0,0 }, NULL, NULL, NULL, NULL, NULL, HIT_MS_NULL, HIT_NONHIERARCHICAL, NULL, NULL, HIT_MULTILEVEL_UNDEFINED_BEGINS, HIT_MULTILEVEL_UNDEFINED_SIZES }
+#define	HIT_TILE_NULL_STATIC	{ 0, 0, HIT_SHAPE_NULL_STATIC, { 0,0,0,0 }, 0, { 0,0,0,0,0 }, { 0,0,0,0 }, NULL, NULL, NULL, NULL, NULL, HIT_MS_NULL, NULL, NULL, 0, 0, 0, NULL, 0, 0, 0, 0, HIT_NONHIERARCHICAL, NULL, NULL, HIT_MULTILEVEL_UNDEFINED_BEGINS, HIT_MULTILEVEL_UNDEFINED_SIZES }
 
 /**
  * Returns the class of the tile.
@@ -281,14 +301,14 @@ int hit_tileSelectInternal(void *newVar, const void *oldVar, HitShape sh, int ou
  */
 int hit_tileSelectArrayCoordsInternal(void *newVar, const void *oldVar, HitShape sh, int out);
 
-/** @endcond */
+// @endcond
 
 // @cond OLD
 /* 6. SELECTING IFOUT OF BOUNDS (Deprecated v1.0) */
 /* AVOID EVALUATION OF THE SECOND ARGUMENT IF POSSIBLE */
 /* GLOBAL TEMPORAL VARIABLE */
 #define hit_tileSelectOut(select1,select2) { if (!select1) select2; }
-/** @endcond */
+// @endcond
 
 
 /* 8.5. ACCESS DATA ELEMENTS WITH TILE COORDINATES */
@@ -349,10 +369,10 @@ int hit_tileSelectArrayCoordsInternal(void *newVar, const void *oldVar, HitShape
  * @param ...		A list of integer positive numbers defining the coordinate in each dimension.
  */
 #define hit_tileSetNoStride(var,ndims,val,...)	hit_tileElemAtNoStride(var,ndims,__VA_ARGS__) = (val)
-/** @endcond */
+// @endcond
 
 /* 8.8. INTERNAL: MACROS TO OBTAIN THE POSITION OF AN ELEMENT */
-/** @cond INTERNAL */
+// @cond INTERNAL
 /* 8.8.1. TILE COORDINATES */
 #define hit_tileElemAt1(var, pos)	((var).data[(pos)*(var).qstride[0]])
 
@@ -369,7 +389,7 @@ int hit_tileSelectArrayCoordsInternal(void *newVar, const void *oldVar, HitShape
 
 #define hit_tileElemAtArrayCoords3(var, pos1, pos2, pos3)	((var).data[ hit_tileArray2Tile((var),0,(pos1))*(var).origAcumCard[1] + hit_tileArray2Tile((var), 1, (pos2))*(var).origAcumCard[2] + hit_tileArray2Tile((var), 2, (pos3))])
 
-#define hit_tileElemAtArrayCoords4(var, pos1, pos2, pos3, pos4)	((var).data[ hit_tileArray2Tile((var),0,(pos1))*(var).origAcumCard[1] + hit_tileArray2Tile((var), 1, (pos2))*(var).origAcumCard[2] + hit_tileArray2Tile((var), 2, (pos3))*(var).origAcumCard[3] + hit_tileArray2Tile((var), 3, (pos4))])
+#define hit_tileElemAtArrayCoords4(var, pos1, pos2, pos3, pos4)	((var).data[ hit_tileArray2Tile((var),0,(pos1))*(var).origAcumCard[1] + hit_tileArray2Tile((var), 1, (pos2))*(var).origAcumCard[2] + hit_tileArray2Tile((var), 2, (pos3))*(var).origAcumCard[3] + hit_tileArray2Tile((var), 3, (pos3))])
 
 /* 8.8.3. TILE COORDINATES IN TILES WITH NO STRIDE */
 #define hit_tileElemAtNoStride1(var, pos)	((var).data[pos])
@@ -410,7 +430,7 @@ int hit_tileSelectArrayCoordsInternal(void *newVar, const void *oldVar, HitShape
 		((pos2-hit_tileDimBegin(var,2))%hit_tileDimStride(var,2) == 0) && \
 		((pos3-hit_tileDimBegin(var,3))%hit_tileDimStride(var,3) == 0) )
 
-/** @endcond */
+// @endcond
 
 #ifdef __cplusplus
 	}

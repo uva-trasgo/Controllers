@@ -10,7 +10,7 @@
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.2
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -30,7 +30,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2019, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2015, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -317,8 +317,8 @@ void parallelQuickSort( HitTile_double *data, HitLayout whole ) {
 	hit_tileDomainShapeAlloc( &newRight, double, hit_layShape( rightLayout ) );
 
 	/* 8.d. DATA REDISTRIBUTION */
-	hit_patternDoOnce( hit_patternRedistributeCom( whole, &left, &newLeft, HIT_DOUBLE, 1 ) );   
-	hit_patternDoOnce( hit_patternRedistributeCom( whole, &right, &newRight, HIT_DOUBLE, 1 ) );
+	hit_patternDoOnce( hit_patternRedistribute( whole, &left, &newLeft, HIT_DOUBLE, 1 ) );   
+	hit_patternDoOnce( hit_patternRedistribute( whole, &right, &newRight, HIT_DOUBLE, 1 ) );
 
 	/* 9. FREE MEMORY SPACE OF ORIGINAL DATA BEFORE RECURSION */
 	hit_tileFree( *data );
@@ -333,8 +333,8 @@ void parallelQuickSort( HitTile_double *data, HitLayout whole ) {
 		hit_tileSelectArrayCoords( &left, data, hit_shapeIntersect( hit_tileShape( *data ), leftGlobalShp ) );
 		hit_tileSelectArrayCoords( &right, data, hit_shapeIntersect( hit_tileShape( *data ), rightGlobalShp ) );
 
-		hit_patternDoOnce( hit_patternRedistributeCom( whole, &newLeft, &left, HIT_DOUBLE, 0 ) );   
-		hit_patternDoOnce( hit_patternRedistributeCom( whole, &newRight, &right, HIT_DOUBLE, 0 ) );
+		hit_patternDoOnce( hit_patternRedistribute( whole, &newLeft, &left, HIT_DOUBLE, 0 ) );   
+		hit_patternDoOnce( hit_patternRedistribute( whole, &newRight, &right, HIT_DOUBLE, 0 ) );
 		hit_tileFree( newLeft );
 		hit_tileFree( newRight );
 	}
