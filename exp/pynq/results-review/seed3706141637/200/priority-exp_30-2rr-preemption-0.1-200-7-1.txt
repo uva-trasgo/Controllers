@@ -1,0 +1,274 @@
+{ "op":"params", "n_tasks":30, "n_rr":2 }
+{ "op":"task_generation", "task_id":0, "task_priority":4, "time":0.002947 }
+{ "op":"task_generation", "task_id":1, "task_priority":1, "time":0.002573 }
+{ "op":"task_generation", "task_id":2, "task_priority":3, "time":0.030012 }
+{ "op":"task_generation", "task_id":3, "task_priority":2, "time":0.011533 }
+{ "op":"task_generation", "task_id":4, "task_priority":2, "time":0.073465 }
+{ "op":"task_generation", "task_id":5, "task_priority":1, "time":0.075876 }
+{ "op":"task_generation", "task_id":6, "task_priority":3, "time":0.000938 }
+{ "op":"task_generation", "task_id":7, "task_priority":0, "time":0.018848 }
+{ "op":"task_generation", "task_id":8, "task_priority":0, "time":0.019655 }
+{ "op":"task_generation", "task_id":9, "task_priority":4, "time":0.045703 }
+{ "op":"task_generation", "task_id":10, "task_priority":1, "time":0.008857 }
+{ "op":"task_generation", "task_id":11, "task_priority":4, "time":0.067184 }
+{ "op":"task_generation", "task_id":12, "task_priority":1, "time":0.018015 }
+{ "op":"task_generation", "task_id":13, "task_priority":3, "time":0.005404 }
+{ "op":"task_generation", "task_id":14, "task_priority":0, "time":0.186218 }
+{ "op":"task_generation", "task_id":15, "task_priority":2, "time":0.933272 }
+{ "op":"task_generation", "task_id":16, "task_priority":3, "time":0.123305 }
+{ "op":"task_generation", "task_id":17, "task_priority":4, "time":0.270569 }
+{ "op":"task_generation", "task_id":18, "task_priority":4, "time":0.360764 }
+{ "op":"task_generation", "task_id":19, "task_priority":4, "time":0.182365 }
+{ "op":"task_generation", "task_id":20, "task_priority":1, "time":0.234931 }
+{ "op":"task_generation", "task_id":21, "task_priority":1, "time":0.342249 }
+{ "op":"task_generation", "task_id":22, "task_priority":0, "time":0.090811 }
+{ "op":"task_generation", "task_id":23, "task_priority":3, "time":0.003365 }
+{ "op":"task_generation", "task_id":24, "task_priority":1, "time":0.093322 }
+{ "op":"task_generation", "task_id":25, "task_priority":0, "time":0.149428 }
+{ "op":"task_generation", "task_id":26, "task_priority":3, "time":0.598169 }
+{ "op":"task_generation", "task_id":27, "task_priority":4, "time":0.579527 }
+{ "op":"task_generation", "task_id":28, "task_priority":0, "time":0.111327 }
+{ "op":"task_generation", "task_id":29, "task_priority":2, "time":0.993667 }
+{ "op":"task_arrival", "task_id":0, "task_priority":4, "time":0.008977 }
+{ "op":"partial_swap", "bitstream_path":"/home/xilinx/Bitstreams-axi_firewall/MedianBlur-GaussianBlur_pblock_medianblur_0_partial.bit", "start_time":0.009593, "finish_time":0.179171, "rr": 0 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":0, "rr": 0, "start_time":0.208943 }
+{ "op": "queue_size", "size": 0 }
+{ "op":"task_arrival", "task_id":1, "task_priority":1, "time":0.222001 }
+{ "op":"partial_swap", "bitstream_path":"/home/xilinx/Bitstreams-axi_firewall/MedianBlur-MedianBlur_pblock_gaussianblur_0_partial.bit", "start_time":0.229623, "finish_time":0.397902, "rr": 1 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":1, "rr": 1, "start_time":0.438942 }
+{ "op": "queue_size", "size": 0 }
+{ "op":"launch_task", "task_id":0, "rr":0, "finish_time":0.451751 }
+{ "op": "queue_size", "size": 0 }
+{ "op":"task_arrival", "task_id":2, "task_priority":3, "time":0.457777 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":2, "rr": 0, "start_time":0.458954 }
+{ "op": "queue_size", "size": 0 }
+{ "op":"task_arrival", "task_id":3, "task_priority":2, "time":0.461066 }
+{ "op":"reset", "rr":0, "time":0.461352 }
+{ "op":"enqueue_task", "task_id":2, "priority":3 }
+{ "op":"evict_task", "running_task_id":2, "incoming_task_id":3, "rr":0, "time": 0.461521 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":3, "rr": 0, "start_time":0.498931 }
+{ "op": "queue_size", "size": 1 }
+{ "op":"task_arrival", "task_id":4, "task_priority":2, "time":0.508737 }
+{ "op":"enqueue_task", "task_id":4, "priority":2 }
+{ "op": "queue_size", "size": 2 }
+{ "op":"launch_task", "task_id":1, "rr":1, "finish_time":0.513992 }
+{ "op":"dequeue_task", "task_id":4, "priority":2 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":4, "rr": 1, "start_time":0.558923 }
+{ "op": "queue_size", "size": 1 }
+{ "op":"task_arrival", "task_id":5, "task_priority":1, "time":0.563872 }
+{ "op":"reset", "rr":0, "time":0.564132 }
+{ "op":"enqueue_task", "task_id":3, "priority":2 }
+{ "op":"evict_task", "running_task_id":3, "incoming_task_id":5, "rr":0, "time": 0.571890 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":5, "rr": 0, "start_time":0.578940 }
+{ "op": "queue_size", "size": 2 }
+{ "op":"task_arrival", "task_id":6, "task_priority":3, "time":0.591755 }
+{ "op":"enqueue_task", "task_id":6, "priority":3 }
+{ "op": "queue_size", "size": 3 }
+{ "op":"task_arrival", "task_id":7, "task_priority":0, "time":0.595996 }
+{ "op":"reset", "rr":0, "time":0.596252 }
+{ "op":"enqueue_task", "task_id":5, "priority":1 }
+{ "op":"evict_task", "running_task_id":5, "incoming_task_id":7, "rr":0, "time": 0.596403 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":7, "rr": 0, "start_time":0.618931 }
+{ "op": "queue_size", "size": 4 }
+{ "op":"task_arrival", "task_id":8, "task_priority":0, "time":0.623106 }
+{ "op":"reset", "rr":1, "time":0.623350 }
+{ "op":"enqueue_task", "task_id":4, "priority":2 }
+{ "op":"evict_task", "running_task_id":4, "incoming_task_id":8, "rr":1, "time": 0.623502 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":8, "rr": 1, "start_time":0.678929 }
+{ "op": "queue_size", "size": 5 }
+{ "op":"task_arrival", "task_id":9, "task_priority":4, "time":0.685766 }
+{ "op":"enqueue_task", "task_id":9, "priority":4 }
+{ "op": "queue_size", "size": 6 }
+{ "op":"task_arrival", "task_id":10, "task_priority":1, "time":0.687338 }
+{ "op":"enqueue_task", "task_id":10, "priority":1 }
+{ "op": "queue_size", "size": 7 }
+{ "op":"task_arrival", "task_id":11, "task_priority":4, "time":0.694204 }
+{ "op":"enqueue_task", "task_id":11, "priority":4 }
+{ "op": "queue_size", "size": 8 }
+{ "op":"task_arrival", "task_id":12, "task_priority":1, "time":0.696154 }
+{ "op":"enqueue_task", "task_id":12, "priority":1 }
+{ "op": "queue_size", "size": 9 }
+{ "op":"task_arrival", "task_id":13, "task_priority":3, "time":0.697723 }
+{ "op":"enqueue_task", "task_id":13, "priority":3 }
+{ "op": "queue_size", "size": 10 }
+{ "op":"task_arrival", "task_id":14, "task_priority":0, "time":0.716484 }
+{ "op":"enqueue_task", "task_id":14, "priority":0 }
+{ "op": "queue_size", "size": 11 }
+{ "op":"task_arrival", "task_id":15, "task_priority":2, "time":0.809996 }
+{ "op":"enqueue_task", "task_id":15, "priority":2 }
+{ "op": "queue_size", "size": 12 }
+{ "op":"task_arrival", "task_id":16, "task_priority":3, "time":0.822470 }
+{ "op":"enqueue_task", "task_id":16, "priority":3 }
+{ "op": "queue_size", "size": 13 }
+{ "op":"launch_task", "task_id":8, "rr":1, "finish_time":0.830636 }
+{ "op":"dequeue_task", "task_id":14, "priority":0 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":14, "rr": 1, "start_time":0.878922 }
+{ "op": "queue_size", "size": 12 }
+{ "op":"launch_task", "task_id":7, "rr":0, "finish_time":0.891112 }
+{ "op":"dequeue_task", "task_id":5, "priority":1 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":5, "rr": 0, "start_time":0.898937 }
+{ "op": "queue_size", "size": 11 }
+{ "op":"task_arrival", "task_id":17, "task_priority":4, "time":0.930135 }
+{ "op":"enqueue_task", "task_id":17, "priority":4 }
+{ "op": "queue_size", "size": 12 }
+{ "op":"launch_task", "task_id":14, "rr":1, "finish_time":0.953893 }
+{ "op":"dequeue_task", "task_id":10, "priority":1 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":10, "rr": 1, "start_time":0.998921 }
+{ "op": "queue_size", "size": 11 }
+{ "op":"launch_task", "task_id":5, "rr":0, "finish_time":1.001134 }
+{ "op":"dequeue_task", "task_id":12, "priority":1 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":12, "rr": 0, "start_time":1.018923 }
+{ "op": "queue_size", "size": 10 }
+{ "op":"task_arrival", "task_id":18, "task_priority":4, "time":1.033593 }
+{ "op":"enqueue_task", "task_id":18, "priority":4 }
+{ "op": "queue_size", "size": 11 }
+{ "op":"task_arrival", "task_id":19, "task_priority":4, "time":1.051968 }
+{ "op":"enqueue_task", "task_id":19, "priority":4 }
+{ "op": "queue_size", "size": 12 }
+{ "op":"launch_task", "task_id":10, "rr":1, "finish_time":1.073908 }
+{ "op":"dequeue_task", "task_id":3, "priority":2 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":3, "rr": 1, "start_time":1.078927 }
+{ "op": "queue_size", "size": 11 }
+{ "op":"task_arrival", "task_id":20, "task_priority":1, "time":1.083027 }
+{ "op":"reset", "rr":1, "time":1.083292 }
+{ "op":"enqueue_task", "task_id":3, "priority":2 }
+{ "op":"evict_task", "running_task_id":3, "incoming_task_id":20, "rr":1, "time": 1.090624 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":20, "rr": 1, "start_time":1.118931 }
+{ "op": "queue_size", "size": 12 }
+{ "op":"launch_task", "task_id":12, "rr":0, "finish_time":1.131168 }
+{ "op":"dequeue_task", "task_id":4, "priority":2 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":4, "rr": 0, "start_time":1.138931 }
+{ "op": "queue_size", "size": 11 }
+{ "op":"launch_task", "task_id":4, "rr":0, "finish_time":1.151175 }
+{ "op":"dequeue_task", "task_id":15, "priority":2 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":15, "rr": 0, "start_time":1.178924 }
+{ "op": "queue_size", "size": 10 }
+{ "op":"task_arrival", "task_id":21, "task_priority":1, "time":1.225437 }
+{ "op":"reset", "rr":0, "time":1.225698 }
+{ "op":"enqueue_task", "task_id":15, "priority":2 }
+{ "op":"evict_task", "running_task_id":15, "incoming_task_id":21, "rr":0, "time": 1.225848 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":21, "rr": 0, "start_time":1.258929 }
+{ "op": "queue_size", "size": 11 }
+{ "op":"launch_task", "task_id":20, "rr":1, "finish_time":1.271180 }
+{ "op":"dequeue_task", "task_id":3, "priority":2 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":3, "rr": 1, "start_time":1.278932 }
+{ "op": "queue_size", "size": 10 }
+{ "op":"launch_task", "task_id":3, "rr":1, "finish_time":1.291133 }
+{ "op":"dequeue_task", "task_id":15, "priority":2 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":15, "rr": 1, "start_time":1.318923 }
+{ "op": "queue_size", "size": 9 }
+{ "op":"launch_task", "task_id":21, "rr":0, "finish_time":1.333837 }
+{ "op":"dequeue_task", "task_id":2, "priority":3 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":2, "rr": 0, "start_time":1.338926 }
+{ "op": "queue_size", "size": 8 }
+{ "op":"task_arrival", "task_id":22, "task_priority":0, "time":1.347536 }
+{ "op":"reset", "rr":0, "time":1.347792 }
+{ "op":"enqueue_task", "task_id":2, "priority":3 }
+{ "op":"evict_task", "running_task_id":2, "incoming_task_id":22, "rr":0, "time": 1.347944 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":22, "rr": 0, "start_time":1.378937 }
+{ "op": "queue_size", "size": 9 }
+{ "op":"task_arrival", "task_id":23, "task_priority":3, "time":1.391467 }
+{ "op":"enqueue_task", "task_id":23, "priority":3 }
+{ "op": "queue_size", "size": 10 }
+{ "op":"task_arrival", "task_id":24, "task_priority":1, "time":1.403065 }
+{ "op":"reset", "rr":1, "time":1.403312 }
+{ "op":"enqueue_task", "task_id":15, "priority":2 }
+{ "op":"evict_task", "running_task_id":15, "incoming_task_id":24, "rr":1, "time": 1.403464 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":24, "rr": 1, "start_time":1.438931 }
+{ "op": "queue_size", "size": 11 }
+{ "op":"task_arrival", "task_id":25, "task_priority":0, "time":1.466094 }
+{ "op":"reset", "rr":1, "time":1.466340 }
+{ "op":"enqueue_task", "task_id":24, "priority":1 }
+{ "op":"evict_task", "running_task_id":24, "incoming_task_id":25, "rr":1, "time": 1.466491 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":25, "rr": 1, "start_time":1.518928 }
+{ "op": "queue_size", "size": 12 }
+{ "op":"task_arrival", "task_id":26, "task_priority":3, "time":1.590910 }
+{ "op":"enqueue_task", "task_id":26, "priority":3 }
+{ "op": "queue_size", "size": 13 }
+{ "op":"launch_task", "task_id":22, "rr":0, "finish_time":1.603998 }
+{ "op":"dequeue_task", "task_id":24, "priority":1 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":24, "rr": 0, "start_time":1.618924 }
+{ "op": "queue_size", "size": 12 }
+{ "op":"task_arrival", "task_id":27, "task_priority":4, "time":1.676141 }
+{ "op":"enqueue_task", "task_id":27, "priority":4 }
+{ "op": "queue_size", "size": 13 }
+{ "op":"task_arrival", "task_id":28, "task_priority":0, "time":1.687421 }
+{ "op":"reset", "rr":0, "time":1.687678 }
+{ "op":"enqueue_task", "task_id":24, "priority":1 }
+{ "op":"evict_task", "running_task_id":24, "incoming_task_id":28, "rr":0, "time": 1.687830 }
+{ "op":"partial_swap", "bitstream_path":"/home/xilinx/Bitstreams-axi_firewall/GaussianBlur-MedianBlur_pblock_medianblur_0_partial.bit", "start_time":1.699381, "finish_time":1.869287, "rr": 0 }
+{ "op":"launch_task", "task_name":"GaussianBlur", "task_id":28, "rr": 0, "start_time":1.918935 }
+{ "op": "queue_size", "size": 14 }
+{ "op":"launch_task", "task_id":25, "rr":1, "finish_time":1.931346 }
+{ "op":"dequeue_task", "task_id":24, "priority":1 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":24, "rr": 1, "start_time":1.948934 }
+{ "op": "queue_size", "size": 13 }
+{ "op":"launch_task", "task_id":28, "rr":0, "finish_time":2.049751 }
+{ "op":"dequeue_task", "task_id":15, "priority":2 }
+{ "op":"partial_swap", "bitstream_path":"/home/xilinx/Bitstreams-axi_firewall/MedianBlur-MedianBlur_pblock_medianblur_0_partial.bit", "start_time":2.079403, "finish_time":2.249605, "rr": 0 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":15, "rr": 0, "start_time":2.286269 }
+{ "op": "queue_size", "size": 12 }
+{ "op":"launch_task", "task_id":24, "rr":1, "finish_time":2.298610 }
+{ "op":"dequeue_task", "task_id":6, "priority":3 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":6, "rr": 1, "start_time":2.318929 }
+{ "op": "queue_size", "size": 11 }
+{ "op":"task_arrival", "task_id":29, "task_priority":2, "time":2.321974 }
+{ "op":"reset", "rr":1, "time":2.322236 }
+{ "op":"enqueue_task", "task_id":6, "priority":3 }
+{ "op":"evict_task", "running_task_id":6, "incoming_task_id":29, "rr":1, "time": 2.322386 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":29, "rr": 1, "start_time":2.358929 }
+{ "op": "queue_size", "size": 12 }
+{ "op":"launch_task", "task_id":29, "rr":1, "finish_time":2.433956 }
+{ "op":"dequeue_task", "task_id":13, "priority":3 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":13, "rr": 1, "start_time":2.478924 }
+{ "op": "queue_size", "size": 11 }
+{ "op":"launch_task", "task_id":15, "rr":0, "finish_time":2.481144 }
+{ "op":"dequeue_task", "task_id":16, "priority":3 }
+{ "op":"partial_swap", "bitstream_path":"/home/xilinx/Bitstreams-axi_firewall/GaussianBlur-MedianBlur_pblock_medianblur_0_partial.bit", "start_time":2.499396, "finish_time":2.669281, "rr": 0 }
+{ "op":"launch_task", "task_name":"GaussianBlur", "task_id":16, "rr": 0, "start_time":2.712747 }
+{ "op": "queue_size", "size": 10 }
+{ "op":"launch_task", "task_id":13, "rr":1, "finish_time":2.728999 }
+{ "op":"dequeue_task", "task_id":2, "priority":3 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":2, "rr": 1, "start_time":2.729054 }
+{ "op": "queue_size", "size": 9 }
+{ "op":"launch_task", "task_id":2, "rr":1, "finish_time":2.793085 }
+{ "op":"dequeue_task", "task_id":23, "priority":3 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":23, "rr": 1, "start_time":2.808923 }
+{ "op": "queue_size", "size": 8 }
+{ "op":"launch_task", "task_id":16, "rr":0, "finish_time":2.843517 }
+{ "op":"dequeue_task", "task_id":26, "priority":3 }
+{ "op":"partial_swap", "bitstream_path":"/home/xilinx/Bitstreams-axi_firewall/MedianBlur-MedianBlur_pblock_medianblur_0_partial.bit", "start_time":2.859406, "finish_time":3.029158, "rr": 0 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":26, "rr": 0, "start_time":3.048982 }
+{ "op": "queue_size", "size": 7 }
+{ "op":"launch_task", "task_id":23, "rr":1, "finish_time":3.079163 }
+{ "op":"dequeue_task", "task_id":6, "priority":3 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":6, "rr": 1, "start_time":3.109004 }
+{ "op": "queue_size", "size": 6 }
+{ "op":"launch_task", "task_id":26, "rr":0, "finish_time":3.124442 }
+{ "op":"dequeue_task", "task_id":9, "priority":4 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":9, "rr": 0, "start_time":3.128970 }
+{ "op": "queue_size", "size": 5 }
+{ "op":"launch_task", "task_id":6, "rr":1, "finish_time":3.334515 }
+{ "op":"dequeue_task", "task_id":11, "priority":4 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":11, "rr": 1, "start_time":3.388981 }
+{ "op": "queue_size", "size": 4 }
+{ "op":"launch_task", "task_id":9, "rr":0, "finish_time":3.406441 }
+{ "op":"dequeue_task", "task_id":17, "priority":4 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":17, "rr": 0, "start_time":3.408960 }
+{ "op": "queue_size", "size": 3 }
+{ "op":"launch_task", "task_id":11, "rr":1, "finish_time":3.464552 }
+{ "op":"dequeue_task", "task_id":18, "priority":4 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":18, "rr": 1, "start_time":3.508940 }
+{ "op": "queue_size", "size": 2 }
+{ "op":"launch_task", "task_id":17, "rr":0, "finish_time":3.559967 }
+{ "op":"dequeue_task", "task_id":19, "priority":4 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":19, "rr": 0, "start_time":3.568943 }
+{ "op": "queue_size", "size": 1 }
+{ "op":"launch_task", "task_id":18, "rr":1, "finish_time":3.589154 }
+{ "op":"dequeue_task", "task_id":27, "priority":4 }
+{ "op":"launch_task", "task_name":"MedianBlur", "task_id":27, "rr": 1, "start_time":3.628977 }
+{ "op": "queue_size", "size": 0 }
+{ "op":"launch_task", "task_id":19, "rr":0, "finish_time":3.720768 }
+{ "op": "queue_size", "size": 0 }
+{ "op":"launch_task", "task_id":27, "rr":1, "finish_time":3.855904 }
+{ "op":"end", "time":3.855928 }
