@@ -50,7 +50,7 @@
 /// \param[in]  y   y coord of the point to fetch value at
 /// \return fetched value
 ///////////////////////////////////////////////////////////////////////////////
-inline float Tex2D(const float *t, int w, int h, int s, float x, float y) {
+static inline float Tex2D(const float *t, int w, int h, int s, float x, float y) {
 	// integer parts in floating point format
 	float intPartX, intPartY;
 
@@ -101,7 +101,7 @@ inline float Tex2D(const float *t, int w, int h, int s, float x, float y) {
 /// \param[in]  y   y coord of the point to fetch value at
 /// \return fetched value
 ///////////////////////////////////////////////////////////////////////////////
-inline float Tex2Di(const float *src, int w, int h, int s, int x, int y) {
+static inline float Tex2Di(const float *src, int w, int h, int s, int x, int y) {
 	if (x < 0) x = abs(x + 1);
 
 	if (y < 0) y = abs(y + 1);

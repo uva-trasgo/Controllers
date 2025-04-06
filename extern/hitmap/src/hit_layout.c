@@ -314,7 +314,7 @@ HitLayout	hit_layout_plug_layCopy(int freeTopo, HitTopology topo, HitShape shape
 		if(  res.active  ){
 			group.rank[dim] = topo.self.rank[dim];
 		} else {
-			group.rank[dim] = -1;
+			group.rank[dim] = HIT_RANK_NULL;
 		}
 	}
 	res.group =  hit_layActiveRanksId( res, group );
@@ -436,7 +436,7 @@ HitLayout	hit_layout_plug_layBlocks(int freeTopo, HitTopology topo, HitShape sha
 		if(  res.active  ){
 			group.rank[dim] = topo.self.rank[dim];
 		} else {
-			group.rank[dim] = -1;
+			group.rank[dim] = HIT_RANK_NULL;
 		}
 	}
 	res.group =  hit_layActiveRanksId( res, group );
@@ -503,7 +503,7 @@ HitLayout	hit_layout_plug_layDimBlocks(int freeTopo, HitTopology topo, HitShape 
 		if(  res.active  ){
 			group.rank[dim] = topo.self.rank[dim];
 		} else {
-			group.rank[dim] = -1;
+			group.rank[dim] = HIT_RANK_NULL;
 		}
 	}
 	res.group =  hit_layActiveRanksId( res, group );
@@ -662,7 +662,7 @@ HitLayout	hit_layout_plug_layMinBlocks(int freeTopo, HitTopology topo, HitShape 
 		if(  res.active  ){
 			group.rank[dim] = topo.self.rank[dim];
 		} else {
-			group.rank[dim] = -1;
+			group.rank[dim] = HIT_RANK_NULL;
 		}
 	}
 	res.group =  hit_layActiveRanksId( res, group );
@@ -769,7 +769,7 @@ HitLayout	hit_layout_plug_layBlocksX(int freeTopo, HitTopology topo, HitShape sh
 		if(  res.active  ){
 			group.rank[dim] = topo.self.rank[dim];
 		} else {
-			group.rank[dim] = -1;
+			group.rank[dim] = HIT_RANK_NULL;
 		}
 	}
 
@@ -1524,7 +1524,7 @@ HitLayout hit_layout_plug_layDimWeighted_Copy(int freeTopo, HitTopology topo, Hi
 		}
 		else
 		{
-			group.rank[dim] = -1;
+			group.rank[dim] = HIT_RANK_NULL;
 		}
 	}
 	res.group = hit_layActiveRanksId(res, group);
@@ -1604,7 +1604,7 @@ HitLayout hit_layout_plug_layDimWeighted_Blocks(int freeTopo, HitTopology topo, 
 		}
 		else
 		{
-			group.rank[dim] = -1;
+			group.rank[dim] = HIT_RANK_NULL;
 		}
 	}
 	res.group = hit_layActiveRanksId(res, group);
@@ -1819,7 +1819,7 @@ HitLayout	hit_layout_plug_layBlocksBalance(int freeTopo, HitTopology topo, HitSh
 		if( res.active ){
 			group.rank[dim] = topo.self.rank[dim];
 		} else {
-			group.rank[dim] = -1;
+			group.rank[dim] = HIT_RANK_NULL;
 		}
 	}
 	res.group =  hit_layActiveRanksId(res,group);
@@ -2105,7 +2105,7 @@ HitLayout       hit_layout_plug_layDimWeighted(int freeTopo, HitTopology topo, H
 		if( res.active ){
 			group.rank[dim] = topo.self.rank[dim];
 		} else {
-			group.rank[dim] = -1;
+			group.rank[dim] = HIT_RANK_NULL;
 		}
 	}
 	res.group =  hit_layActiveRanksId(res,group);
@@ -2166,7 +2166,7 @@ HitLayout       hit_layout_plug_layWeighted(int freeTopo, HitTopology topo, HitS
 		if( res.active ){
 			group.rank[dim] = topo.self.rank[dim];
 		} else {
-			group.rank[dim] = -1;
+			group.rank[dim] = HIT_RANK_NULL;
 		}
 	}
 	res.group =  hit_layActiveRanksId(res,group);

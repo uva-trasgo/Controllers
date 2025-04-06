@@ -10,11 +10,11 @@
 #define _EPSILOD_EXT_TYPES_H_
 
 /* Default empty user type for extra parameters */
-#ifndef CTRL_USER_TYPES
-#define CTRL_USER_TYPES \
-	typedef struct {    \
-		int foo;        \
-	} Epsilod_ext;
+#ifndef EPSILOD_USER_TYPES
+	#define EPSILOD_USER_TYPES \
+		typedef struct {       \
+			int kw;            \
+		} Epsilod_ext;
 #endif
 
 #endif // EPSILOD_EXT_TYPES_H

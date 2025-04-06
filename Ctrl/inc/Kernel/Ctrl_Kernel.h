@@ -8,11 +8,9 @@
  * The relevant license, warranty and copyright notice is available in the Controller project repository.
  */
 
-#ifndef CTRL_FPGA_KERNEL_FILE
 #include "Kernel/Ctrl_ImplType.h"
 #include "Kernel/Ctrl_KernelArgs.h"
 #include "Kernel/Ctrl_Thread.h"
-#endif // CTRL_FPGA_KERNEL_FILE
 
 #include "Kernel/Ctrl_KernelProto.h"
 

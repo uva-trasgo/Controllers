@@ -9,6 +9,8 @@
 #include "kernels_params.h"
 
 /* Defining kernel prototypes */
-CTRL_KERNEL_PROTO(Add, 1,
+CTRL_KERNEL_PROTO(Add, 3,
 				  GENERIC, DEFAULT,
+				  FPGA, NDRANGE,
+				  FPGA, TASK,
 				  madd_params);

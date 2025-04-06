@@ -6,15 +6,14 @@
  * The relevant license, warranty and copyright notice is available in the Controller project repository.
  */
 
-#include "epsilod_ext_type.h"
+#include "epsilod_kernels.h"
 
-#include "Ctrl.h"
-
-Ctrl_NewType(float);
-
+#if EPSILOD_IS_FLOAT(EPSILOD_BASE_TYPE)
 /* 1D CELL UPDATE DEFAULT STENCIL */
-CTRL_KERNEL(updateCell_default_1D, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const KHitTile_float weight, const int begin_x, const int end_x, const float factor, const Epsilod_ext ext_params, {
-	int x = thr_i;
+CTRL_KERNEL(updateCell_default_1D, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, EpsilodCoords global_coords, const KHitTile_float weight, const float factor, const Epsilod_ext ext_params, {
+	int x       = thr_i;
+	int begin_x = -global_coords.borders.low[0];
+	int end_x   = global_coords.borders.high[0];
 
 	float sum = 0;
 
@@ -27,9 +26,13 @@ CTRL_KERNEL(updateCell_default_1D, GENERIC, DEFAULT, KHitTile_float matrix, cons
 });
 
 /* 2D CELL UPDATE DEFAULT STENCIL */
-CTRL_KERNEL(updateCell_default_2D, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const KHitTile_float weight, const int begin_x, const int begin_y, const int end_x, const int end_y, const float factor, const Epsilod_ext ext_params, {
-	int x = thr_i;
-	int y = thr_j;
+CTRL_KERNEL(updateCell_default_2D, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, EpsilodCoords global_coords, const KHitTile_float weight, const float factor, const Epsilod_ext ext_params, {
+	int x       = thr_i;
+	int y       = thr_j;
+	int begin_x = -global_coords.borders.low[0];
+	int end_x   = global_coords.borders.high[0];
+	int begin_y = -global_coords.borders.low[1];
+	int end_y   = global_coords.borders.high[1];
 
 	float sum = 0;
 
@@ -44,10 +47,16 @@ CTRL_KERNEL(updateCell_default_2D, GENERIC, DEFAULT, KHitTile_float matrix, cons
 });
 
 /* 3D CELL UPDATE DEFAULT STENCIL */
-CTRL_KERNEL(updateCell_default_3D, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const KHitTile_float weight, const int begin_x, const int begin_y, const int begin_z, const int end_x, const int end_y, const int end_z, const float factor, const Epsilod_ext ext_params, {
-	int x = thr_i;
-	int y = thr_j;
-	int z = thr_k;
+CTRL_KERNEL(updateCell_default_3D, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, EpsilodCoords global_coords, const KHitTile_float weight, const float factor, const Epsilod_ext ext_params, {
+	int x       = thr_i;
+	int y       = thr_j;
+	int z       = thr_k;
+	int begin_x = -global_coords.borders.low[0];
+	int end_x   = global_coords.borders.high[0];
+	int begin_y = -global_coords.borders.low[1];
+	int end_y   = global_coords.borders.high[1];
+	int begin_z = -global_coords.borders.low[2];
+	int end_z   = global_coords.borders.high[2];
 
 	float sum = 0;
 
@@ -62,3 +71,12 @@ CTRL_KERNEL(updateCell_default_3D, GENERIC, DEFAULT, KHitTile_float matrix, cons
 			}
 	hit(matrix, x, y, z) = sum / factor;
 });
+#endif
+
+/* COPY KERNEL FOR DEVICE INITIALIZATION */
+CTRL_KERNEL(epsilod_dev_copy, GENERIC, DEFAULT, KHitTile(EPSILOD_BASE_TYPE) matrix, const KHitTile(EPSILOD_BASE_TYPE) matrix_out, {
+	hit(matrix_out, thr_i) = hit(matrix, thr_i);
+});
+
+/* EMPTY KERNEL: TO SIGNAL SUBSELECTION AND ROOT TILES AS MODIFIED TO TRACK DEPENDENCIES */
+CTRL_KERNEL(epsilod_dev_touch, GENERIC, DEFAULT, KHitTile(EPSILOD_BASE_TYPE) matrix, { ; });

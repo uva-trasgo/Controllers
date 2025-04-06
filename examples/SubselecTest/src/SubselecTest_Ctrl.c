@@ -6,7 +6,6 @@
  * The relevant license, warranty and copyright notice is available in the Controller project repository.
  */
 
-#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -53,8 +52,8 @@ CTRL_HOST_TASK(print_matrix, HitTile_long tile) {
 	fflush(stdout);
 }
 
-CTRL_KERNEL_PROTO(some_kernel, 2, GENERIC, DEFAULT, FPGA, DEFAULT, some_kernel_params);
-CTRL_KERNEL_PROTO(big_kernel, 2, GENERIC, DEFAULT, FPGA, DEFAULT, big_kernel_params);
+CTRL_KERNEL_PROTO(some_kernel, 2, GENERIC, DEFAULT, FPGA, NDRANGE, some_kernel_params);
+CTRL_KERNEL_PROTO(big_kernel, 2, GENERIC, DEFAULT, FPGA, NDRANGE, big_kernel_params);
 
 CTRL_HOST_TASK_PROTO(init_tile, 1, OUT, HitTile_long, tile);
 CTRL_HOST_TASK_PROTO(print_matrix, 1, IN, HitTile_long, tile);
@@ -249,6 +248,7 @@ int main(int argc, char *argv[]) {
 		Ctrl_HostTask(init_tile, subselec_phantom_matrix1);
 		Ctrl_HostTask(init_tile, subselec_phantom_matrix2);
 
+		// Big Kernel test: A kernel that takes many parameters
 		HitTile_long subselec_phantom_matrix11, subselec_phantom_matrix12, subselec_phantom_matrix21, subselec_phantom_matrix22;
 
 		subselec_phantom_matrix11 = Ctrl_Select(long, subselec_phantom_matrix1, hitShapeSize(1, SIZE), CTRL_SELECT_DEFAULT);
@@ -278,6 +278,7 @@ int main(int argc, char *argv[]) {
 
 		Ctrl_Free(NULL, matrix, subselec_whole, subselec_rows, subselec_cols, subselec_submatrix);
 		Ctrl_Free(NULL, phantom_matrix, subselec_phantom_matrix1, subselec_phantom_matrix2);
+		Ctrl_Free(NULL, subselec_phantom_matrix11, subselec_phantom_matrix12, subselec_phantom_matrix21, subselec_phantom_matrix22);
 		Ctrl_EndBlock();
 	}
 	Ctrl_Finalize();

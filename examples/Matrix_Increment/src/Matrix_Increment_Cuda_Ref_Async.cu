@@ -230,7 +230,8 @@ int main(int argc, char const *argv[]) {
 		CUDA_CHECK();
 		cudaSetDevice(CU_DEV1);
 		#else // CUDA_DEV2DEV
-		//         DTH m2 d0
+
+		// DTH m2 d0
 		cudaStreamWaitEvent(stream_DtH_d0, event_kernel_d0);
 		cudaStreamWaitEvent(stream_DtH_d0, event_HtD_m2);
 		cudaMemcpyAsync(h_m2, d0_m2, MATRIX_SIZE, cudaMemcpyDeviceToHost, stream_DtH_d0);

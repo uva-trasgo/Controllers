@@ -35,32 +35,7 @@
 #include "Architectures/FPGA/Ctrl_FPGA_Helper.h"
 #include "Architectures/FPGA/Ctrl_FPGA_Request.h"
 
-#define FPGA_EMULATION 1
-#define FPGA_PROFILING 2
-
 #define AOCL_ALIGNMENT 64
-
-/**
- * Launch a kernel to the ctrl queue
- * @hideinitializer
- *
- * @param p_ctrl pointer to the ctrl to launch the kernel.
- * @param name name of the kernel to be launched.
- * @param threads thread block to launch the kernel with. (Ctrl_Thread).
- * @param group block sizes for this kernel execution.
- * 		Optional, if a block with 0 dimensions is passed (such as CTRL_THREAD_NULL), default characterization is used instead.
- * @param ... arguments passed to the kernel.
- *
- * @see Ctrl_Launch, Ctrl_Thread
- */
-#define CTRL_FPGA_LAUNCH(p_ctrl, name, threads, group, ...)                                                                                                 \
-	case CTRL_TYPE_FPGA:                                                                                                                                    \
-		if (group.dims == 0) {                                                                                                                              \
-			Ctrl_LaunchKernel(p_ctrl, Ctrl_KernelTaskCreate_##name(p_ctrl, threads, local_size_FPGA_##name, 0, CTRL_KERNEL_ARGS_TO_POINTERS(__VA_ARGS__))); \
-		} else {                                                                                                                                            \
-			Ctrl_LaunchKernel(p_ctrl, Ctrl_KernelTaskCreate_##name(p_ctrl, threads, group, 0, CTRL_KERNEL_ARGS_TO_POINTERS(__VA_ARGS__)));                  \
-		}                                                                                                                                                   \
-		break;
 
 /**
  * Launch a kernel to a specific stream of the ctrl queue
@@ -95,7 +70,6 @@ typedef struct Ctrl_FPGA {
 	cl_device_id                device_id;               /**< Index of the OpenCL device to be used to create the context */
 	Ctrl_GenericEvent           host_seq_event;          /**< Host event used for sync policy */
 	Ctrl_GenericEvent           dev_seq_event;           /**< Device event used for sync policy */
-	cl_event                    default_event;           /**< Event used to create all events initially */
 	cl_context                  context;                 /**< OpenCL context used to create and launch everything related to OpenCL*/
 	cl_command_queue_properties queue_properties;        /**< Properties to use when creating OpenCL queues */
 	struct Ctrl_Tile_List      *p_tile_list_head;        /**< Head of the list of tiles associate to this ctrl */
@@ -109,9 +83,8 @@ typedef struct Ctrl_FPGA {
 	Ctrl_TaskQueue             *p_htd_host_stream;       /**< Host queue for HTD memory transfers */
 	cl_command_queue            dth_driver_stream;       /**< OpenCL queue for DTH memory transfers */
 	Ctrl_TaskQueue             *p_dth_host_stream;       /**< Host queue for DTH memory transfers */
-	int                         exec_mode;               /**< Execution mode */
 
-	#ifdef _CTRL_OPENCL_GPU_PROFILING_
+	#ifdef _CTRL_FPGA_PROFILING_
 	int platform;
 	int device;
 
@@ -141,11 +114,11 @@ typedef struct Ctrl_FPGA {
 	cl_ulong profiling_start;
 	cl_ulong profiling_end;
 
-	#ifdef _CTRL_OPENCL_GPU_PROFILING_VERBOSE_
+	#ifdef _CTRL_FPGA_PROFILING_VERBOSE_
 	visual_event *profiling_visual_events;
 	int           i_visual_task;
-	#endif // _CTRL_OPENCL_GPU_PROFILING_VERBOSE_
-	#endif // _CTRL_EXAMPLES_OPENCL_GPU_PROFILING_
+	#endif // _CTRL_FPGA_PROFILING_VERBOSE_
+	#endif // _CTRL_FPGA_PROFILING_
 } Ctrl_FPGA;
 
 #ifdef __cplusplus

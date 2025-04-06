@@ -75,7 +75,6 @@ if (SUPPORT_OPENCL)
 	target_link_libraries(Matrix_Add_OpenCL_Gpu_Ref ${CTRL_LIBS})
 endif (SUPPORT_OPENCL)
 
-
 # Executables: With lib kernels
 add_executable(Matrix_Add_Ctrl_KLibs ${CTRL_SOURCE_FILES})
 target_link_libraries(Matrix_Add_Ctrl_KLibs ${CTRL_LIBS})
@@ -84,3 +83,12 @@ target_link_libraries(Matrix_Add_Ctrl_KLibs ${CTRL_LIBS})
 add_executable(Matrix_Add_Ctrl_KGeneric ${CTRL_SOURCE_FILES})
 set_target_properties(Matrix_Add_Ctrl_KGeneric PROPERTIES COMPILE_FLAGS -D_CTRL_MATRIX_ADD_GENERIC_KERNEL_) 
 target_link_libraries(Matrix_Add_Ctrl_KGeneric ${CTRL_LIBS})
+
+# FPGA
+if (SUPPORT_FPGA)
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels_fpga.aocx
+        COMMAND aoc ${AOC_CTRL_DEFS} ${AOC_CTRL_INCLUDES} ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels_fpga.cl -o ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels_fpga.aocx ${FPGA_AOC_FLAGS}
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels_fpga.cl)
+	add_custom_target(Matrix_Add_Kernels_FPGA DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels_fpga.aocx ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels_fpga.cl)
+	add_dependencies(Matrix_Add_Ctrl_KGeneric Matrix_Add_Kernels_FPGA)
+endif (SUPPORT_FPGA)

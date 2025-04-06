@@ -9,8 +9,6 @@ if (SUPPORT_OPENCL)
 endif (SUPPORT_OPENCL)
 
 if (SUPPORT_FPGA)
-	set(CTRL_EXAMPLES_FPGA_PROFILING OFF) # Profiling with this
-	set(CTRL_EXAMPLES_FPGA_GENERATE_VISUAL_PROFILER OFF) # Complete ifo about events
 	set(CTRL_EXAMPLES_FPGA_LOCAL_SIZE_0 "16") # Localsize x j
 	set(CTRL_EXAMPLES_FPGA_LOCAL_SIZE_1 "16") # Localsize y i
 endif (SUPPORT_FPGA)
@@ -45,16 +43,6 @@ if (SUPPORT_OPENCL)
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DLOCAL_SIZE_0=${CTRL_EXAMPLES_OPENCL_GPU_LOCAL_SIZE_0} -DLOCAL_SIZE_1=${CTRL_EXAMPLES_OPENCL_GPU_LOCAL_SIZE_1} ")
 	set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DLOCAL_SIZE_0=${CTRL_EXAMPLES_OPENCL_GPU_LOCAL_SIZE_0} -DLOCAL_SIZE_1=${CTRL_EXAMPLES_OPENCL_GPU_LOCAL_SIZE_1} ")
 endif(SUPPORT_OPENCL)
-
-if (CTRL_EXAMPLES_FPGA_PROFILING)
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_CTRL_EXAMPLES_FPGA_PROFILING_ ")
-	set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -D_CTRL_EXAMPLES_FPGA_PROFILING_ ")
-endif (CTRL_EXAMPLES_FPGA_PROFILING)
-
-if (CTRL_EXAMPLES_FPGA_GENERATE_VISUAL_PROFILER)
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_CTRL_EXAMPLES_FPGA_GENERATE_VISUAL_PROFILER_ ")
-	set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -D_CTRL_EXAMPLES_FPGA_GENERATE_VISUAL_PROFILER_ ")
-endif (CTRL_EXAMPLES_FPGA_GENERATE_VISUAL_PROFILER)
 
 if (SUPPORT_FPGA)
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DLOCAL_SIZE_0=${CTRL_EXAMPLES_FPGA_LOCAL_SIZE_0} -DLOCAL_SIZE_1=${CTRL_EXAMPLES_FPGA_LOCAL_SIZE_1} -DKERNELTYPE=TASK -DCTRL_KERNEL_PATH=${CTRL_KERNELS_PATH_FPGA} -DREF_KERNEL_PATH=${REF_KERNELS_PATH_FPGA}")
@@ -102,28 +90,27 @@ endif (SUPPORT_OPENCL)
 
 #FPGA
 if (SUPPORT_FPGA)
-	if(COMPILE_KERNELS)
-		option(COMPILE_KERNEL_HOTSPOT "COMPILE_KERNEL_HOTSPOT" ON)
-	else(COMPILE_KERNELS)
-		option(COMPILE_KERNEL_HOTSPOT "COMPILE_KERNEL_HOTSPOT" OFF)
-	endif(COMPILE_KERNELS)
-	
-	execute_process(COMMAND ${CMAKE_C_COMPILER} ${KERNELS_PATH}/FPGA/parser_ctrlkernel.c -o ${KERNELS_PATH}/FPGA/parser_ctrlkernel)
-
-	execute_process(COMMAND ${KERNELS_PATH}/FPGA/parser_ctrlkernel host ${CTRL_KERNELS_PATH_FPGA}/Hotspot/Hotspot_Ctrl.cl ${CTRL_KERNELS_PATH_FPGA}/Hotspot/Hotspot_Ctrl.c)
-
-	execute_process(COMMAND rm ${KERNELS_PATH}/FPGA/parser_ctrlkernel)
-
-	include_directories(src/ ${KERNELS_PATH})
-	add_executable(Hotspot_FPGA_Ctrl ${CTRL_KERNELS_PATH_FPGA}/Hotspot/Hotspot_Ctrl.c src/Hotspot_FPGA_Ctrl.c)
+	add_executable(Hotspot_FPGA_Ctrl src/Hotspot_FPGA_Ctrl.c)
 	target_link_libraries(Hotspot_FPGA_Ctrl ${CTRL_LIBS})
-	
+
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/src/Hotspot_Ctrl.aocx
+        COMMAND aoc ${AOC_CTRL_DEFS} ${AOC_CTRL_INCLUDES} ${CMAKE_CURRENT_SOURCE_DIR}/src/Hotspot_FPGA_Ctrl.cl -o ${CMAKE_CURRENT_SOURCE_DIR}/src/Hotspot_Ctrl.aocx ${FPGA_AOC_FLAGS}
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/Hotspot_FPGA_Ctrl.cl)
+    add_custom_target(Hotspot_FPGA_Ctrl_kernel DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/Hotspot_Ctrl.aocx ${CMAKE_CURRENT_SOURCE_DIR}/src/Hotspot_FPGA_Ctrl.cl)
+    add_dependencies(Hotspot_FPGA_Ctrl Hotspot_FPGA_Ctrl_kernel)
 
 	add_executable(Hotspot_FPGA_Ref_Async src/Hotspot_FPGA_Ref_Async.c)
 	add_executable(Hotspot_FPGA_Ref_Sync src/Hotspot_FPGA_Ref_Sync.c)
 
 	target_link_libraries(Hotspot_FPGA_Ref_Async ${CTRL_LIBS})
 	target_link_libraries(Hotspot_FPGA_Ref_Sync ${CTRL_LIBS})
+
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/src/Hotspot_Ref.aocx
+        COMMAND aoc ${CMAKE_CURRENT_SOURCE_DIR}/src/Hotspot_FPGA_Ref.cl -o ${CMAKE_CURRENT_SOURCE_DIR}/src/Hotspot_Ref.aocx ${FPGA_AOC_FLAGS}
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/Hotspot_FPGA_Ref.cl)
+    add_custom_target(Hotspot_FPGA_Ref_kernel DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/Hotspot_Ref.aocx ${CMAKE_CURRENT_SOURCE_DIR}/src/Hotspot_FPGA_Ref.cl)
+	add_dependencies(Hotspot_FPGA_Ref_Async Hotspot_FPGA_Ref_kernel)
+	add_dependencies(Hotspot_FPGA_Ref_Sync Hotspot_FPGA_Ref_kernel)
 endif (SUPPORT_FPGA)
 
 # Cuda

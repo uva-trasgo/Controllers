@@ -119,20 +119,14 @@ void hit_patternDoUnordered( HitPattern pattern ) {
 	MPI_Request allRequest[ pattern.numComm * 2 ];
 	int cont;
 
-	// @arturo: TEST WITH THE WAIT HANDLERS IN SPLITTED ARRAYS
-	//MPI_Request sendRequest[ pattern.numComm ];
-	////MPI_Request recvRequest[ pattern.numComm ];
-
-	/* 1. START ISENDs FOR ALL SPECIFICACIONS */
+	/* 1. START ISENDs AND IRECVs FOR ALL SEND-RECV SPECIFICACIONS */
 	cont = 0;
 	for (elem = pattern.first; elem != NULL; elem=elem->next ) {
 		if(elem->commSpec.commType == HIT_SENDRECV){
 			hit_comStartSend( &(elem->commSpec) );
 			allRequest[ cont*2 ] = elem->commSpec.requestSend;
-	//		sendRequest[ cont ] = elem->commSpec.requestSend;
 			hit_comStartRecv( &(elem->commSpec) );
 			allRequest[ cont*2+1 ] = elem->commSpec.requestRecv;
-	//		recvRequest[ cont ] = elem->commSpec.requestRecv;
 			cont++;
 		}
 	}
@@ -167,19 +161,9 @@ void hit_patternDoUnordered( HitPattern pattern ) {
 		}
 	}
 
-	/* 3. WAIT FOR COUPLED ISEND TO COMPLETE */
-#ifdef DEBUG
-		printf("CTRL %d - Waiting sends and recvs\n", hit_Rank);
-#endif
+	/* 3. WAIT FOR COUPLED ISEND/IRECV TO COMPLETE */
 	int ok = MPI_Waitall( cont*2, allRequest, MPI_STATUSES_IGNORE );
 	hit_mpiTestError(ok,"Failed wait all");
-#ifdef DEBUG
-		printf("CTRL %d - End waiting sends and recvs\n", hit_Rank);
-#endif
-	//int ok = MPI_Waitall( cont, recvRequest, MPI_STATUSES_IGNORE );
-	////hit_mpiTestError(ok,"Failed wait all");
-	//ok = MPI_Waitall( cont, sendRequest, MPI_STATUSES_IGNORE );
-	//hit_mpiTestError(ok,"Failed wait all");
 }
 
 
@@ -243,13 +227,81 @@ void hit_patternEndAsync( HitPattern pattern ) {
 	}
 
 	/* 3. WAIT FOR COUPLED ISEND/IRECV TO COMPLETE */
-#ifdef DEBUG
-		printf("CTRL %d - Waiting sends and recvs\n", hit_Rank);
-#endif
 	int ok = MPI_Waitall( cont*2, allRequest, MPI_STATUSES_IGNORE );
 	hit_mpiTestError(ok,"Failed wait all");
 }
 
+
+/* Hit EXECUTE PATTERN: STEP ASYNC */
+int hit_patternStepAsync( HitPattern pattern ) {
+	HitPatS	*elem;
+	MPI_Request allRequest[ pattern.numComm * 2 ];
+	MPI_Request *allRequestP[ pattern.numComm * 2 ];
+	int indexes[ pattern.numComm * 2 ];
+	int cont, index;
+
+	/* 1. COLLECT NON-NULL REQUEST OBJECTS IN AN ARRAY */
+	index = cont = 0;
+	for (elem = pattern.first; elem != NULL; elem=elem->next ) {
+		if(elem->commSpec.commType == HIT_SENDRECV){
+			if( elem->commSpec.requestSend != MPI_REQUEST_NULL ) {
+				allRequest[ cont ] = elem->commSpec.requestSend;
+				allRequestP[ cont ] = &(elem->commSpec.requestSend);
+				indexes[ cont ] = index * 2;
+				cont++;
+			}
+			if( elem->commSpec.requestRecv != MPI_REQUEST_NULL ) {
+				allRequest[ cont ] = elem->commSpec.requestRecv;
+				allRequestP[ cont ] = &(elem->commSpec.requestRecv);
+				indexes[ cont ] = index * 2 + 1;
+				cont++;
+			}
+		}
+		index++;
+	}
+
+	/* 2. WAIT FOR NEXT ISEND/IRECV TO COMPLETE */
+	int result;
+	int ok = MPI_Waitany( cont, allRequest, &result, MPI_STATUSES_IGNORE );
+	hit_mpiTestError(ok,"Failed wait any");
+
+	if ( result == MPI_UNDEFINED ) return HIT_PAT_END;
+	*allRequestP[ result ] = MPI_REQUEST_NULL;
+	return indexes[ result ];
+}
+
+
+/* Hit EXECUTE PATTERN: STEP ASYNC RECV */
+int hit_patternStepAsyncRecv( HitPattern pattern ) {
+	HitPatS	*elem;
+	MPI_Request allRequest[ pattern.numComm ];
+	MPI_Request *allRequestP[ pattern.numComm ];
+	int indexes[ pattern.numComm ];
+	int cont, index;
+
+	/* 1. COLLECT NON-NULL REQUEST OBJECTS IN AN ARRAY */
+	index = cont = 0;
+	for (elem = pattern.first; elem != NULL; elem=elem->next ) {
+		if(elem->commSpec.commType == HIT_SENDRECV){
+			if( elem->commSpec.requestRecv != MPI_REQUEST_NULL ) {
+				allRequest[ cont ] = elem->commSpec.requestRecv;
+				allRequestP[ cont ] = &(elem->commSpec.requestRecv);
+				indexes[ cont ] = index;
+				cont++;
+			}
+		}
+		index++;
+	}
+
+	/* 2. WAIT FOR NEXT ISEND/IRECV TO COMPLETE */
+	int result;
+	int ok = MPI_Waitany( cont, allRequest, &result, MPI_STATUSES_IGNORE );
+	hit_mpiTestError(ok,"Failed wait any recv");
+
+	if ( result == MPI_UNDEFINED ) return HIT_PAT_END;
+	*allRequestP[ result ] = MPI_REQUEST_NULL;
+	return indexes[ result ];
+}
 
 
 /* Hit PATTERN: SPECIFIC PATTERNS FOR SPECIAL COMPLEX COMMUNICATIONS */

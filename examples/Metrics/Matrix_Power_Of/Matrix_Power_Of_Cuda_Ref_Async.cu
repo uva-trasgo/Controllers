@@ -10,8 +10,7 @@
 double main_clock;
 double exec_clock;
 
-int GPU   = 0;
-
+int GPU = 0;
 
 /*
  * function name: gpu_square_matrix_mult
@@ -71,11 +70,11 @@ void Init_Tiles(void *args) {
 	for (int j = 0; j < columns; j++) {
 		float col_sum_a = 0;
 		for (int i = 0; i < rows; i++) {
-			float min = -(1 - col_sum_a) + EPSILON;
-			float max = 1 - col_sum_a - EPSILON;
-			float random = ((float)rand()) / (float)RAND_MAX;
-			float range  = max - min;
-			float value = (random * range) + min;
+			float min                 = -(1 - col_sum_a) + EPSILON;
+			float max                 = 1 - col_sum_a - EPSILON;
+			float random              = ((float)rand()) / (float)RAND_MAX;
+			float range               = max - min;
+			float value               = (random * range) + min;
 			matrix_a[i * columns + j] = value;
 			matrix_b[i * columns + j] = value;
 			matrix_c[i * columns + j] = 0;
@@ -97,13 +96,13 @@ typedef struct Host_Compute_Args {
 void Host_Compute(void *args) {
 	Host_Compute_Args_t *tmp = (Host_Compute_Args_t *)args;
 
-	int       ITER        = tmp->ITER;
-	double    *p_sum      = tmp->p_sum;
-	double    *p_res      = tmp->p_res;
-	float     *matrix     = tmp->matrix;
-	float     *matrix_res = tmp->matrix_res;
-	int        rows       = tmp->rows;
-	int        columns    = tmp->columns;
+	int     ITER       = tmp->ITER;
+	double *p_sum      = tmp->p_sum;
+	double *p_res      = tmp->p_res;
+	float  *matrix     = tmp->matrix;
+	float  *matrix_res = tmp->matrix_res;
+	int     rows       = tmp->rows;
+	int     columns    = tmp->columns;
 
 	double minimum = matrix[0 * columns + 0];
 	double maximum = matrix[0 * columns + 0];
@@ -193,7 +192,6 @@ int main(int argc, char **argv) {
 	cudaEventCreateWithFlags(&event_DtH_B, cudaEventDisableTiming);
 	cudaEventCreateWithFlags(&event_host_C, cudaEventDisableTiming);
 	cudaEventCreateWithFlags(&event_host_B, cudaEventDisableTiming);
-
 
 	/*Initialize variables*/
 	Init_Tiles_Args_t init_args = (Init_Tiles_Args_t){.matrix_a = A,

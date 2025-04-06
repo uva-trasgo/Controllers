@@ -7,9 +7,7 @@
  * @copyright This software is part of the Controller project by Trasgo Group, UVa.
  * The relevant license, warranty and copyright notice is available in the Controller project repository.
  */
-#ifndef CTRL_FPGA_KERNEL_FILE
 #include "hitmap2.h"
-#endif
 
 #include "Core/Ctrl_Core.h"
 #include "Core/Ctrl_KHitTile.h"

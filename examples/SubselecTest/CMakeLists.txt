@@ -24,25 +24,14 @@ else (SUPPORT_CUDA)
 endif(SUPPORT_CUDA)
 
 if (SUPPORT_FPGA)
-	if(COMPILE_KERNELS)
-		option(COMPILE_KERNEL_SUBSELECT "COMPILE_KERNEL_SUBSELECT" ON)
-	else(COMPILE_KERNELS)
-		option(COMPILE_KERNEL_SUBSELECT "COMPILE_KERNEL_SUBSELECT" OFF)
-	endif(COMPILE_KERNELS)
-
-	execute_process(COMMAND ${CMAKE_C_COMPILER} ${KERNELS_PATH}/FPGA/parser_ctrlkernel.c -o ${KERNELS_PATH}/FPGA/parser_ctrlkernel)
-
-	execute_process(COMMAND ${KERNELS_PATH}/FPGA/parser_ctrlkernel host ${CTRL_KERNELS_PATH_FPGA}/Some_Kernel/Some_Kernel_Ctrl.cl ${CTRL_KERNELS_PATH_FPGA}/Some_Kernel/Some_Kernel_Ctrl.c)
-	execute_process(COMMAND ${KERNELS_PATH}/FPGA/parser_ctrlkernel host ${CTRL_KERNELS_PATH_FPGA}/Big_Kernel/Big_Kernel_Ctrl.cl ${CTRL_KERNELS_PATH_FPGA}/Big_Kernel/Big_Kernel_Ctrl.c)
-
-	execute_process(COMMAND rm ${KERNELS_PATH}/FPGA/parser_ctrlkernel)
-
-	include_directories(src/ ${KERNELS_PATH})
-
-	target_sources(SubselecTest_Ctrl PRIVATE ${CTRL_KERNELS_PATH_FPGA}/Some_Kernel/Some_Kernel_Ctrl.c ${CTRL_KERNELS_PATH_FPGA}/Big_Kernel/Big_Kernel_Ctrl.c)
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels_fpga.aocx
+        COMMAND aoc ${AOC_CTRL_DEFS} ${AOC_CTRL_INCLUDES} ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels_fpga.cl -o ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels_fpga.aocx ${FPGA_AOC_FLAGS}
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels_fpga.cl)
+	add_custom_target(SubselecTest_Kernels_FPGA DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels_fpga.aocx ${CMAKE_CURRENT_SOURCE_DIR}/src/kernels_fpga.cl)
+	add_dependencies(SubselecTest_Ctrl SubselecTest_Kernels_FPGA)
 endif(SUPPORT_FPGA)
 target_link_libraries(SubselecTest_Ctrl ${CTRL_LIBS})
 
 
-add_executable(SubselectTest_Ref src/SubselecTest_Ref.c)
-target_link_libraries(SubselectTest_Ref ${CTRL_LIBS})
+add_executable(SubselecTest_Ref src/SubselecTest_Ref.c)
+target_link_libraries(SubselecTest_Ref ${CTRL_LIBS})

@@ -24,7 +24,7 @@ include_directories(${CTRL_INCLUDE_DIRS})
 if(SUPPORT_CPU)
 	# Compilation dependences
 	# Main code
-	set(CTRL_SOURCE_FILES src/Matrix_Increment_Multidev_Ctrl.c)
+	set(CTRL_SOURCE_FILES src/Matrix_Increment_Ctrl.c)
 	# kernels
 	if (SUPPORT_CUDA)
 		set(CTRL_SOURCE_FILES ${CTRL_SOURCE_FILES} src/Matrix_Increment_Ctrl_Kernels.cu)
@@ -32,8 +32,16 @@ if(SUPPORT_CPU)
 		set(CTRL_SOURCE_FILES ${CTRL_SOURCE_FILES} src/Matrix_Increment_Ctrl_Kernels.c)
 	endif(SUPPORT_CUDA)
 
-	add_executable(Matrix_Increment_Multidev_Ctrl ${CTRL_SOURCE_FILES})
-	target_link_libraries(Matrix_Increment_Multidev_Ctrl ${CTRL_LIBS})
+	add_executable(Matrix_Increment_Ctrl ${CTRL_SOURCE_FILES})
+	target_link_libraries(Matrix_Increment_Ctrl ${CTRL_LIBS})
+
+	if(SUPPORT_FPGA)
+		add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/src/Matrix_Increment_Ctrl_FPGA_Kernels.aocx
+			COMMAND aoc ${AOC_CTRL_DEFS} ${AOC_CTRL_INCLUDES} ${CMAKE_CURRENT_SOURCE_DIR}/src/Matrix_Increment_Ctrl_FPGA_Kernels.cl -o ${CMAKE_CURRENT_SOURCE_DIR}/src/Matrix_Increment_Ctrl_FPGA_Kernels.aocx ${FPGA_AOC_FLAGS}
+			DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/Matrix_Increment_Ctrl_FPGA_Kernels.cl)
+		add_custom_target(Matrix_Increment_Kernels_FPGA DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/Matrix_Increment_Ctrl_FPGA_Kernels.aocx ${CMAKE_CURRENT_SOURCE_DIR}/src/Matrix_Increment_Ctrl_FPGA_Kernels.cl)
+		add_dependencies(Matrix_Increment_Ctrl Matrix_Increment_Kernels_FPGA)
+	endif(SUPPORT_FPGA)
 endif(SUPPORT_CPU)
 	
 if(SUPPORT_CUDA)

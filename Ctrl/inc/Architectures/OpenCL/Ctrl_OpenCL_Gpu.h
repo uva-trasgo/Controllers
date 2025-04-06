@@ -36,28 +36,6 @@
 #include "Architectures/OpenCL/Ctrl_OpenCL_Request.h"
 
 /**
- * Launch a kernel to the ctrl queue
- * @hideinitializer
- *
- * @param p_ctrl pointer to the ctrl to launch the kernel.
- * @param name name of the kernel to be launched.
- * @param threads thread block to launch the kernel with. (Ctrl_Thread).
- * @param group block sizes for this kernel execution.
- * 		Optional, if a block with 0 dimensions is passed (such as CTRL_THREAD_NULL), default characterization is used instead.
- * @param ... arguments passed to the kernel.
- *
- * @see Ctrl_Launch, Ctrl_Thread
- */
-#define CTRL_OPENCL_GPU_LAUNCH(p_ctrl, name, threads, group, ...)                                                                                                 \
-	case CTRL_TYPE_OPENCL_GPU:                                                                                                                                    \
-		if (group.dims == 0) {                                                                                                                                    \
-			Ctrl_LaunchKernel(p_ctrl, Ctrl_KernelTaskCreate_##name(p_ctrl, threads, local_size_OPENCL_GPU_##name, 0, CTRL_KERNEL_ARGS_TO_POINTERS(__VA_ARGS__))); \
-		} else {                                                                                                                                                  \
-			Ctrl_LaunchKernel(p_ctrl, Ctrl_KernelTaskCreate_##name(p_ctrl, threads, group, 0, CTRL_KERNEL_ARGS_TO_POINTERS(__VA_ARGS__)));                        \
-		}                                                                                                                                                         \
-		break;
-
-/**
  * Launch a kernel to a specific stream of the ctrl queue
  * @hideinitializer
  *
@@ -90,7 +68,6 @@ typedef struct Ctrl_OpenCLGpu {
 	cl_device_id                device_id;               /**< Index of the OpenCL device to be used to create the context */
 	Ctrl_GenericEvent           host_seq_event;          /**< Host event used for sync policy */
 	Ctrl_GenericEvent           dev_seq_event;           /**< Device event used for sync policy */
-	cl_event                    default_event;           /**< Event used to create dev events initially */
 	int                         default_alloc_mode;      /**< Default allocation mode depending on platform, on Nvidia platforms memory will be reserved as pinned, on AMD it will be reserved normally */
 	cl_context                  context;                 /**< OpenCL context used to create and launch everything related to OpenCL*/
 	cl_command_queue_properties queue_properties;        /**< Properties to use when creating OpenCL queues */

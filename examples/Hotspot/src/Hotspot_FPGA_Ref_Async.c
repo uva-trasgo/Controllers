@@ -120,15 +120,6 @@ int compute_tran_temp(cl_mem MatrixPower, cl_mem MatrixTemp[2], int col,
 	cl_event aux_event;
 	cl_event host_event;
 
-	size_t local_size[2];
-	size_t global_size[2];
-
-	local_size[0] = LOCAL_SIZE_0;
-	local_size[1] = LOCAL_SIZE_1;
-
-	global_size[0] = blockCols * local_size[0];
-	global_size[1] = blockRows * local_size[1];
-
 	float grid_height = chip_height / row;
 	float grid_width  = chip_width / col;
 
@@ -140,9 +131,8 @@ int compute_tran_temp(cl_mem MatrixPower, cl_mem MatrixTemp[2], int col,
 	float max_slope = MAX_PD / (FACTOR_CHIP * t_chip * SPEC_HEAT_SI);
 	float step      = PRECISION / max_slope / 1000.0;
 
-	int real_iter = 1;
-	int src       = 1;
-	int dst       = 0;
+	int src = 1;
+	int dst = 0;
 	int aux_index;
 
 	int BLOCK_X = LOCAL_SIZE_0;
@@ -183,7 +173,7 @@ int compute_tran_temp(cl_mem MatrixPower, cl_mem MatrixTemp[2], int col,
 		clFlush(queues[STREAM_KERNEL]);
 		clReleaseEvent(aux_event);
 
-		if ((real_iter % iters_per_copy) == 0) {
+		if ((t % iters_per_copy) == 0) {
 
 			wait_event[0] = MatrixTemp_event[dst];
 			wait_event[1] = FilesavingTemp_event[dst];
@@ -213,7 +203,6 @@ int compute_tran_temp(cl_mem MatrixPower, cl_mem MatrixTemp[2], int col,
 				clSetUserEventStatus(host_event, CL_COMPLETE);
 			}
 		}
-		real_iter++;
 
 		MatrixTemp_aux = MatrixTemp[0];
 		MatrixTemp[0]  = MatrixTemp[1];
@@ -322,19 +311,13 @@ void run(int argc, char *argv[]) {
 	kernel_path[0]    = '\0';
 	strcat(kernel_path, STRINGIFY(REF_KERNEL_PATH));
 	strcat(kernel_path, HOTSPOT_KERNEL_NAME);
-	strcat(kernel_path, "/");
-	strcat(kernel_path, HOTSPOT_KERNEL_NAME);
 	if (EXEC_MODE == FPGA_PROFILING)
 		strcat(kernel_path, "_profiling");
 	else if (EXEC_MODE == FPGA_EMULATION)
 		strcat(kernel_path, "_emu");
-	#ifdef _INTEL_KERNELS
 	strcat(kernel_path, "_Ref.aocx");
-	#elif _XILINX_KERNELS
-	strcat(kernel_path, "_Ref.xclbin");
-	#endif
 	if (!(binary_file = fopen(kernel_path, "rb"))) {
-		printf("Kernel file not found.\n");
+		printf("Kernel file %s not found.\n", kernel_path);
 		exit(ERR_NOT_FOUND);
 	}
 	fseek(binary_file, 0, SEEK_END);

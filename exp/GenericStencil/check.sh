@@ -12,9 +12,9 @@ EXE_NAMES="../../build/ParallelStencilSkeleton/test_parallelStencilSkeleton"
 DEVICE_FILE_PATH="../../examples/Device_Selection_Files/dev_epsilod_exp"
 
 # 1.2. APP/EXPERIMENT SPECIFIC PARAMETERS
-PROCS="1 2 3 4"
-SIZES="100"
-ITERATIONS="1 10 100"
+PROCS="1 4"
+SIZES="32 100"
+ITERATIONS="1 100"
 STENCILS="1dc2 1dnc4 2d4 2d9 2dnc9 2df5 3d27"
 
 # 1.3. DIRECTORY WITH THE FILES CONTAINING THE EXPECTED RESULTS
@@ -25,7 +25,7 @@ RESULT_FILE="Matrix.out.txt"
 
 # 1.5. MPI RUN COMMAND
 if [ -z "$MPI_RUN" ]; then
-	MPI_RUN="srun --mpi=pmi2 -w gorgon -Q --exclusive -t 3"
+	MPI_RUN="srun -K --mpi=pmi2 -w gorgon -Q --exclusive -t 3 --cpus-per-task=8"
 fi
 
 # 2. WRITE HEADER
@@ -34,24 +34,14 @@ echo TESTING SCRIPT
 echo --------------
 echo "APPLICATION: $APP_NAME"
 
-# 3. CHECK PARAMETERS
-# 3.1. HELP
-#if [ $# -lt 1 ]
-#then
-#	echo
-#	echo -e "\tUsage: $0 [all | <executable_names>]"
-#	echo
-#	exit 1
-#fi
-
-# 3.2. TEST SPECIFIC EXECUTABLES INSTEAD OF THE PREDEFINED LIST
+# 3.1. TEST SPECIFIC EXECUTABLES INSTEAD OF THE PREDEFINED LIST
 if [ $# -gt 0 ] && [ $1 != all ]; then
 	EXE_NAMES=$@
 fi
 echo "EXECUTABLES: $EXE_NAMES"
 echo
 
-# 3.3. CHECK THAT EXECUTABLES HAVE BEEN GENERATED
+# 3.2. CHECK THAT EXECUTABLES HAVE BEEN GENERATED
 for name in $EXE_NAMES; do
 	OK=y
 	if [ ! -x $name ]; then
@@ -68,46 +58,50 @@ fi
 
 # 4. TESTING EXPERIMENT
 function doTest() {
-	echo -e -n "Test $5 $2 $3 $4:\t"
+	echo -e "\e[1mTest $5 $2 $3 $4:\e[0m"
 
 	# EXECUTE PROGRAM
 	rm -f $RESULT_FILE
 	dims=$(echo $5 | cut -c1)
-	if [ $dims == "1" ]; then
-		$MPI_RUN -n $2 ./$1 $5 $3 $4 $DEVICE_FILE_PATH >/dev/null 2>check.err
-		echo "$MPI_RUN -n $2 ./$1 $5 $3 $4 $DEVICE_FILE_PATH 2>check.err"
-	elif [ $dims == "2" ]; then
-		$MPI_RUN -n $2 ./$1 $5 $3 $3 $4 $DEVICE_FILE_PATH >/dev/null 2>check.err
-		echo "$MPI_RUN -n $2 ./$1 $5 $3 $3 $4 $DEVICE_FILE_PATH 2>check.err"
-	elif [ $dims == "3" ]; then
-		$MPI_RUN -n $2 ./$1 $5 $3 $3 $3 $4 $DEVICE_FILE_PATH >/dev/null 2>check.err
-		echo "$MPI_RUN -n $2 ./$1 $5 $3 $3 $3 $4 $DEVICE_FILE_PATH 2>check.err"
-	fi
-
-	# EXECUTION ERRORS, SKIP TESTING RESULT FILE
-	if [ 0 != $? ]; then
-		echo ERROR EXECUTING: $(cat check.err)
-		continue
-	fi
-
-	# NOTE @segioalo workaround nfs system in trasgo cluster not detecting the file immediately
-	ls &>/dev/null
-
-	# IF THE RESULTS FILE HAS NOT BEEN GENERATED
-	if [ ! -r $RESULT_FILE ]; then
-		echo "Error: The executable \"$exe\" does no generate an ouput file. Try cleaning and recompiling"
-		echo
-		exit -1
-	# CHECK THE CONTENTS OF THE RESULTS FILE
-	else
-		CHECK=""
-		diff $RESULT_FILE $RESULT_DIR/Result.$5.$3.$4 >/dev/null || CHECK=Result
-		if [ "$CHECK" != "" ]; then
-			echo ERROR: $CHECK
-		else
-			echo OK
+	for dim in $(seq 1 $dims) ; do
+		partition="EPSILOD_PARTITION=r$dim"
+		export $partition
+		if [ $dims == "1" ]; then
+			$MPI_RUN -n $2 ./$1 $5 $3 $4 $DEVICE_FILE_PATH >/dev/null 2>check.err
+			echo -e "\t$MPI_RUN -n $2 ./$1 $5 $3 $4 $DEVICE_FILE_PATH 2>check.err"
+		elif [ $dims == "2" ]; then
+			$MPI_RUN -n $2 ./$1 $5 $3 $3 $4 $DEVICE_FILE_PATH >/dev/null 2>check.err
+			echo -e "\t$partition $MPI_RUN -n $2 ./$1 $5 $3 $3 $4 $DEVICE_FILE_PATH 2>check.err"
+		elif [ $dims == "3" ]; then
+			$MPI_RUN -n $2 ./$1 $5 $3 $3 $3 $4 $DEVICE_FILE_PATH >/dev/null 2>check.err
+			echo -e "\t$partition $MPI_RUN -n $2 ./$1 $5 $3 $3 $3 $4 $DEVICE_FILE_PATH 2>check.err"
 		fi
-	fi
+
+		# EXECUTION ERRORS, SKIP TESTING RESULT FILE
+		if [ 0 != $? ]; then
+			echo ERROR EXECUTING: $(cat check.err)
+			continue
+		fi
+
+		# NOTE @segioalo workaround nfs system in trasgo cluster not detecting the file immediately
+		ls &>/dev/null
+
+		# IF THE RESULTS FILE HAS NOT BEEN GENERATED
+		if [ ! -r $RESULT_FILE ]; then
+			echo "Error: The executable \"$exe\" does no generate an ouput file. Try cleaning and recompiling"
+			echo
+			exit -1
+		# CHECK THE CONTENTS OF THE RESULTS FILE
+		else
+			CHECK=""
+			diff $RESULT_FILE $RESULT_DIR/Result.$5.$3.$4 >/dev/null || CHECK=Result
+			if [ "$CHECK" != "" ]; then
+				echo -e "\e[31mERROR\e[0m: $CHECK"
+			else
+				echo -e "\e[32mOK\e[0m"
+			fi
+		fi
+	done
 }
 
 # EXTRA. UNCOMPRESS TEST RESULTS

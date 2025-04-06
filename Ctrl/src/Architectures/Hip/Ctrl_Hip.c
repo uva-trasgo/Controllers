@@ -24,6 +24,16 @@
 void Ctrl_Hip_InitTile(Ctrl_Hip *p_ctrl, Ctrl_Task *p_task);
 
 /**
+ * Waits for all the work from \p p_ctrl related to \p p_tile_data .
+ *
+ * @param p_ctrl Pointer to the ctrl attached to the tile.
+ * @param p_tile_data Pointer to the ctrl tile.
+ *
+ * @see Ctrl_Hip_EvalTaskWaitTile, Ctrl_Hip_EvalTaskGlobalSync
+ */
+void Ctrl_Hip_WaitTileInner(Ctrl_Hip *p_ctrl, Ctrl_Tile *p_tile_data);
+
+/**
  * Perform memory transfer from host to device.
  *
  * @param p_ctrl Pointer to the ctrl attached to the tile to be moved.
@@ -215,7 +225,7 @@ void Ctrl_Hip_Create(Ctrl_Hip *p_ctrl, Ctrl_Policy policy, char *args) {
 	}
 
 	p_ctrl->host_seq_event = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CPU, p_ctrl->global_id);
-	p_ctrl->dev_seq_event  = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_HIP, p_ctrl->global_id);
+	p_ctrl->dev_seq_event  = CTRL_GENERIC_EVENT_NULL;
 
 	#ifdef _CTRL_HIPBLAS_
 	hipblasCreate(&(p_ctrl->hipblas_handle));
@@ -271,21 +281,33 @@ void Ctrl_Hip_ExecTask(Ctrl_Task *p_task, Ctrl_Hip *p_ctrl) {
 	switch (p_task->task_type) {
 		case CTRL_TASK_TYPE_KERNEL:
 			p_task->pfn_kernel_wrapper(p_task->request, p_task->device_id, CTRL_TYPE_HIP, p_task->threads, p_task->blocksize, p_task->p_arguments);
-			HIP_OP(hipEventRecord(p_task->event.event.event_hip, stream));
-			Ctrl_GenericEvent_Release(p_task->event);
+			// skip creating/recording event if this is the last reference to it
+			if (Ctrl_GenericEvent_GetRefCount(p_task->event) > 1) {
+				HIP_OP(hipEventCreateWithFlags(p_task->event.event.p_event_hip, hipEventDisableTiming));
+				HIP_OP(hipEventRecord(*p_task->event.event.p_event_hip, stream));
+				Ctrl_GenericEvent_Release(p_task->event);
+			}
 			break;
 		case CTRL_TASK_TYPE_MOVETO:
 			Ctrl_Hip_ExecTaskMoveTo(p_task, p_ctrl);
-			HIP_OP(hipEventRecord(p_task->event.event.event_hip, stream));
-			Ctrl_GenericEvent_Release(p_task->event);
+			// skip creating/recording event if this is the last reference to it
+			if (Ctrl_GenericEvent_GetRefCount(p_task->event) > 1) {
+				HIP_OP(hipEventCreateWithFlags(p_task->event.event.p_event_hip, hipEventDisableTiming));
+				HIP_OP(hipEventRecord(*p_task->event.event.p_event_hip, stream));
+				Ctrl_GenericEvent_Release(p_task->event);
+			}
 			break;
 		case CTRL_TASK_TYPE_MOVEFROM:
 			Ctrl_Hip_ExecTaskMoveFrom(p_task, p_ctrl);
-			HIP_OP(hipEventRecord(p_task->event.event.event_hip, stream));
-			Ctrl_GenericEvent_Release(p_task->event);
+			// skip creating/recording event if this is the last reference to it
+			if (Ctrl_GenericEvent_GetRefCount(p_task->event) > 1) {
+				HIP_OP(hipEventCreateWithFlags(p_task->event.event.p_event_hip, hipEventDisableTiming));
+				HIP_OP(hipEventRecord(*p_task->event.event.p_event_hip, stream));
+				Ctrl_GenericEvent_Release(p_task->event);
+			}
 			break;
 		case CTRL_TASK_TYPE_WAITEVENT:
-			HIP_OP(hipStreamWaitEvent(stream, p_task->event.event.event_hip, 0));
+			HIP_OP(hipStreamWaitEvent(stream, *p_task->event.event.p_event_hip, 0));
 			break;
 		default:
 			fprintf(stderr, "[Ctrl_Hip] ExecTask: task type %d should not get here\n", p_task->task_type);
@@ -380,6 +402,16 @@ void Ctrl_Hip_CreateTex(Ctrl_Hip *p_ctrl, HitTile *p_tile, Ctrl_TexDesc tex_desc
 	HIP_OP(hipCreateTextureObject(&p_tile_data_hip->texture, &resDesc, &texDesc, NULL));
 }
 
+void *Ctrl_Hip_GetDevPtr(Ctrl_Hip *p_ctrl, HitTile *p_tile) {
+	Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)(p_tile->ext);
+	Ctrl_Tile_Impl *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
+	Ctrl_Hip_Tile  *p_tile_data_hip  = p_tile_data_impl->tile.p_hip;
+
+	if (p_tile_data_hip == NULL || p_tile_data_impl->device_status == CTRL_TILE_UNALLOC) return NULL;
+
+	return p_tile_data_hip->p_device_data;
+}
+
 /*********************************
  ******* Private functions *******
  *********************************/
@@ -411,15 +443,43 @@ void Ctrl_Hip_InitTile(Ctrl_Hip *p_ctrl, Ctrl_Task *p_task) {
 		p_ctrl->p_tile_list_head = p_ctrl->p_tile_list_tail = p_list_node;
 	}
 
-	// TODO @sergioalo these creates are redundant, could create one of each type and then call retain as in ocl
 	p_tile_data_impl_hip->host_last_kernel_read_event  = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CPU, p_ctrl->global_id);
 	p_tile_data_impl_hip->host_last_kernel_write_event = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CPU, p_ctrl->global_id);
 	p_tile_data_impl_hip->host_last_dth_event          = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CPU, p_ctrl->global_id);
 	p_tile_data_impl_hip->host_last_htd_event          = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CPU, p_ctrl->global_id);
-	p_tile_data_impl_hip->dev_last_kernel_read_event   = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_HIP, p_ctrl->global_id);
-	p_tile_data_impl_hip->dev_last_kernel_write_event  = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_HIP, p_ctrl->global_id);
-	p_tile_data_impl_hip->dev_last_dth_event           = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_HIP, p_ctrl->global_id);
-	p_tile_data_impl_hip->dev_last_htd_event           = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_HIP, p_ctrl->global_id);
+	p_tile_data_impl_hip->dev_last_kernel_read_event   = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_impl_hip->dev_last_kernel_write_event  = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_impl_hip->dev_last_dth_event           = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_impl_hip->dev_last_htd_event           = CTRL_GENERIC_EVENT_NULL;
+
+	p_tile_data_impl_hip->streamid_last_kr = 0;
+	p_tile_data_impl_hip->streamid_last_kw = 0;
+}
+
+void Ctrl_Hip_WaitTileInner(Ctrl_Hip *p_ctrl, Ctrl_Tile *p_tile_data) {
+	Ctrl_Hip_Tile *p_tile_data_hip = p_tile_data->p_impls[p_ctrl->global_id].tile.p_hip;
+
+	// Wait for all work related to this tile to finish
+	Ctrl_GenericEvent_Wait(p_tile_data->last_host_read_event);
+	Ctrl_GenericEvent_Wait(p_tile_data->last_host_write_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_hip->host_last_kernel_read_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_hip->host_last_kernel_write_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_hip->host_last_dth_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_hip->host_last_htd_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_hip->dev_last_kernel_read_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_hip->dev_last_kernel_write_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_hip->dev_last_dth_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_hip->dev_last_htd_event);
+
+	Ctrl_GenericEvent_Release(p_tile_data_hip->dev_last_kernel_read_event);
+	Ctrl_GenericEvent_Release(p_tile_data_hip->dev_last_kernel_write_event);
+	Ctrl_GenericEvent_Release(p_tile_data_hip->dev_last_dth_event);
+	Ctrl_GenericEvent_Release(p_tile_data_hip->dev_last_htd_event);
+
+	p_tile_data_hip->dev_last_kernel_read_event  = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_hip->dev_last_kernel_write_event = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_hip->dev_last_dth_event          = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_hip->dev_last_htd_event          = CTRL_GENERIC_EVENT_NULL;
 }
 
 void Ctrl_Hip_EvalTaskMoveToInner(Ctrl_Hip *p_ctrl, HitTile *p_tile) {
@@ -431,6 +491,8 @@ void Ctrl_Hip_EvalTaskMoveToInner(Ctrl_Hip *p_ctrl, HitTile *p_tile) {
 	HIP_OP(hipSetDevice(p_ctrl->device));
 
 	for (int i = 0; i < Ctrl_GetNCtrls(); i++) {
+		if (i == p_ctrl->global_id) continue;
+
 		Ctrl_MoveToWait(&p_tile_data->p_impls[i], p_ctrl->p_htd_host_stream);
 	}
 
@@ -532,6 +594,8 @@ void Ctrl_Hip_EvalTaskMoveFromInner(Ctrl_Hip *p_ctrl, HitTile *p_tile) {
 	HIP_OP(hipSetDevice(p_ctrl->device));
 
 	for (int i = 0; i < Ctrl_GetNCtrls(); i++) {
+		if (i == p_ctrl->global_id) continue;
+
 		Ctrl_MoveFromWait(&p_tile_data->p_impls[i], p_ctrl->p_dth_host_stream);
 	}
 
@@ -557,7 +621,7 @@ void Ctrl_Hip_EvalTaskMoveFromInner(Ctrl_Hip *p_ctrl, HitTile *p_tile) {
 	if (p_ctrl->policy == CTRL_POLICY_SYNC) {
 		Ctrl_CpuEvent_Record(&p_ctrl->host_seq_event.event.event_cpu, p_ctrl->p_htd_host_stream);
 		Ctrl_GenericEvent_Release(p_ctrl->dev_seq_event);
-		p_ctrl->dev_seq_event = p_tile_data_hip->dev_last_htd_event;
+		p_ctrl->dev_seq_event = p_tile_data_hip->dev_last_dth_event;
 		Ctrl_GenericEvent_Retain(p_ctrl->dev_seq_event);
 	}
 
@@ -637,13 +701,6 @@ void Ctrl_Hip_Destroy(Ctrl_Hip *p_ctrl, Ctrl_Task *p_task) {
 	p_ctrl->p_tile_list_head = NULL;
 	p_ctrl->p_tile_list_tail = NULL;
 
-	// send destroy signal to queue manager thread
-	if (p_task->flags) {
-		Ctrl_Task task = CTRL_TASK_NULL;
-		task.task_type = CTRL_TASK_TYPE_DESTROYCTRL;
-		Ctrl_TaskQueue_Push(p_ctrl->p_htd_host_stream, task);
-	}
-
 	for (int i = 0; i < p_ctrl->n_kernel_streams; i++) {
 		HIP_OP(hipStreamDestroy(p_ctrl->p_kernel_driver_streams[i]));
 	}
@@ -663,19 +720,7 @@ void Ctrl_Hip_Destroy(Ctrl_Hip *p_ctrl, Ctrl_Task *p_task) {
 
 void Ctrl_Hip_EvalTaskGlobalSync(Ctrl_Hip *p_ctrl, Ctrl_Task *p_task) {
 	for (Ctrl_Tile_List *p_aux = p_ctrl->p_tile_list_head; p_aux != NULL; p_aux = p_aux->p_next) {
-		Ctrl_Tile     *p_tile_data     = (Ctrl_Tile *)(p_aux->p_tile_ext);
-		Ctrl_Hip_Tile *p_tile_data_hip = p_tile_data->p_impls[p_ctrl->global_id].tile.p_hip;
-
-		Ctrl_GenericEvent_Wait(p_tile_data->last_host_read_event);
-		Ctrl_GenericEvent_Wait(p_tile_data->last_host_write_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_hip->host_last_kernel_read_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_hip->host_last_kernel_write_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_hip->host_last_dth_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_hip->host_last_htd_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_hip->dev_last_kernel_read_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_hip->dev_last_kernel_write_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_hip->dev_last_dth_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_hip->dev_last_htd_event);
+		Ctrl_Hip_WaitTileInner(p_ctrl, (Ctrl_Tile *)(p_aux->p_tile_ext));
 	}
 }
 
@@ -774,7 +819,8 @@ void Ctrl_Hip_EvalTaskKernelLaunch(Ctrl_Hip *p_ctrl, Ctrl_Task *p_task) {
 				fflush(stderr);
 			}
 
-			if (p_ctrl->n_kernel_streams != 1) { // no need to wait for other kernels of this dev if we only have 1 driver kernel stream
+			// no need to wait for kw if last kw op was on the same stream
+			if (p_tile_data_hip->streamid_last_kw != p_task->stream) {
 				Ctrl_GenericEvent_StreamWait(p_tile_data_hip->host_last_kernel_write_event, p_host_kernel_queue);
 				Ctrl_GenericEvent_StreamWait(p_tile_data_hip->dev_last_kernel_write_event, p_host_kernel_queue);
 			}
@@ -785,7 +831,8 @@ void Ctrl_Hip_EvalTaskKernelLaunch(Ctrl_Hip *p_ctrl, Ctrl_Task *p_task) {
 			}
 
 			if (p_task->p_roles[i] != KERNEL_IN) {
-				if (p_ctrl->n_kernel_streams != 1) { // no need to wait for other kernels of this dev if we only have 1 driver kernel stream
+				// no need to wait for kw if last kw op was on the same stream
+				if (p_tile_data_hip->streamid_last_kw != p_task->stream) {
 					Ctrl_GenericEvent_StreamWait(p_tile_data_hip->host_last_kernel_read_event, p_host_kernel_queue);
 					Ctrl_GenericEvent_StreamWait(p_tile_data_hip->dev_last_kernel_read_event, p_host_kernel_queue);
 				}
@@ -839,6 +886,7 @@ void Ctrl_Hip_EvalTaskKernelLaunch(Ctrl_Hip *p_ctrl, Ctrl_Task *p_task) {
 				Ctrl_GenericEvent_Release(p_tile_data_hip->dev_last_kernel_write_event);
 				p_tile_data_hip->dev_last_kernel_write_event = kernel_event;
 				Ctrl_GenericEvent_Retain(p_tile_data_hip->dev_last_kernel_write_event);
+				p_tile_data_hip->streamid_last_kw = p_task->stream;
 			}
 
 			if (p_task->p_roles[i] != KERNEL_OUT) {
@@ -846,6 +894,7 @@ void Ctrl_Hip_EvalTaskKernelLaunch(Ctrl_Hip *p_ctrl, Ctrl_Task *p_task) {
 				Ctrl_GenericEvent_Release(p_tile_data_hip->dev_last_kernel_read_event);
 				p_tile_data_hip->dev_last_kernel_read_event = kernel_event;
 				Ctrl_GenericEvent_Retain(p_tile_data_hip->dev_last_kernel_read_event);
+				p_tile_data_hip->streamid_last_kr = p_task->stream;
 			}
 		}
 	}
@@ -960,18 +1009,8 @@ void Ctrl_Hip_EvalTaskFreeTile(Ctrl_Hip *p_ctrl, Ctrl_Task *p_task) {
 
 	p_tile_data->valid_impls--;
 
-	// TODO @sergioalo if host stuff is not freed, should we wait for host task events?
 	// Wait for all work related to this tile to finish
-	Ctrl_GenericEvent_Wait(p_tile_data->last_host_read_event);
-	Ctrl_GenericEvent_Wait(p_tile_data->last_host_write_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_hip->host_last_kernel_read_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_hip->host_last_kernel_write_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_hip->host_last_dth_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_hip->host_last_htd_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_hip->dev_last_kernel_read_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_hip->dev_last_kernel_write_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_hip->dev_last_dth_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_hip->dev_last_htd_event);
+	Ctrl_Hip_WaitTileInner(p_ctrl, p_tile_data);
 
 	// destroy events inside the tile
 	Ctrl_GenericEvent_Release(p_tile_data_hip->host_last_kernel_read_event);
@@ -1087,23 +1126,11 @@ void Ctrl_Hip_EvalTaskMoveFrom(Ctrl_Hip *p_ctrl, Ctrl_Task *p_task) {
 }
 
 void Ctrl_Hip_EvalTaskWaitTile(Ctrl_Hip *p_ctrl, Ctrl_Task *p_task) {
-	HitTile       *p_tile          = p_task->p_tile;
-	Ctrl_Tile     *p_tile_data     = (Ctrl_Tile *)(p_tile->ext);
-	Ctrl_Hip_Tile *p_tile_data_hip = p_tile_data->p_impls[p_ctrl->global_id].tile.p_hip;
+	HitTile *p_tile = p_task->p_tile;
 
 	if (hit_tileIsNull(*p_tile)) return;
 
-	// Wait for all work related to this tile to finish
-	Ctrl_GenericEvent_Wait(p_tile_data->last_host_read_event);
-	Ctrl_GenericEvent_Wait(p_tile_data->last_host_write_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_hip->host_last_kernel_read_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_hip->host_last_kernel_write_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_hip->host_last_dth_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_hip->host_last_htd_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_hip->dev_last_kernel_read_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_hip->dev_last_kernel_write_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_hip->dev_last_dth_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_hip->dev_last_htd_event);
+	Ctrl_Hip_WaitTileInner(p_ctrl, (Ctrl_Tile *)(p_tile->ext));
 }
 
 void Ctrl_Hip_EvalTaskSetDependanceMode(Ctrl_Hip *p_ctrl, Ctrl_Task *p_task) {

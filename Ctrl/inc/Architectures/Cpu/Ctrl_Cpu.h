@@ -33,28 +33,6 @@
 #endif // _CTRL_MKL_
 
 /**
- * Launch a kernel to the ctrl queue
- * @hideinitializer
- *
- * @param p_ctrl pointer to the ctrl to launch the kernel.
- * @param name name of the kernel to be launched.
- * @param threads thread block to launch the kernel with. (Ctrl_Thread).
- * @param group block sizes for this kernel execution.
- * 		Optional, if a block with 0 dimensions is passed (such as CTRL_THREAD_NULL), default characterization is used instead.
- * @param ... arguments passed to the kernel.
- *
- * @see Ctrl_Launch, Ctrl_Thread
- */
-#define CTRL_CPU_LAUNCH(p_ctrl, name, threads, group, ...)                                                                                                \
-	case CTRL_TYPE_CPU:                                                                                                                                   \
-		if (group.dims == 0) {                                                                                                                            \
-			Ctrl_LaunchKernel(p_ctrl, Ctrl_KernelTaskCreate_##name(p_ctrl, threads, blocksize_CPU_##name, 0, CTRL_KERNEL_ARGS_TO_POINTERS(__VA_ARGS__))); \
-		} else {                                                                                                                                          \
-			Ctrl_LaunchKernel(p_ctrl, Ctrl_KernelTaskCreate_##name(p_ctrl, threads, group, 0, CTRL_KERNEL_ARGS_TO_POINTERS(__VA_ARGS__)));                \
-		}                                                                                                                                                 \
-		break;
-
-/**
  * Launch a kernel to a specific stream of the ctrl queue. On CPU Ctrls \p stream is ignored as there is only one kernel queue.
  * @hideinitializer
  *
@@ -68,7 +46,14 @@
  *
  * @see Ctrl_LaunchToStream, Ctrl_Thread
  */
-#define CTRL_CPU_LAUNCH_STREAM(p_ctrl, name, threads, group, stream, ...) CTRL_CPU_LAUNCH(p_ctrl, name, threads, group, __VA_ARGS__)
+#define CTRL_CPU_LAUNCH_STREAM(p_ctrl, name, threads, group, stream, ...)                                                                                 \
+	case CTRL_TYPE_CPU:                                                                                                                                   \
+		if (group.dims == 0) {                                                                                                                            \
+			Ctrl_LaunchKernel(p_ctrl, Ctrl_KernelTaskCreate_##name(p_ctrl, threads, blocksize_CPU_##name, 0, CTRL_KERNEL_ARGS_TO_POINTERS(__VA_ARGS__))); \
+		} else {                                                                                                                                          \
+			Ctrl_LaunchKernel(p_ctrl, Ctrl_KernelTaskCreate_##name(p_ctrl, threads, group, 0, CTRL_KERNEL_ARGS_TO_POINTERS(__VA_ARGS__)));                \
+		}                                                                                                                                                 \
+		break;
 
 /**
  * CPU implementation of abstract ctrl
@@ -213,6 +198,17 @@ void Ctrl_Cpu_GetInfo(Ctrl_Cpu *p_ctrl, Ctrl_Info *p_info);
  * @note NOT IMPLEMENTED
  */
 void Ctrl_Cpu_CreateTex(Ctrl_Cpu *p_ctrl, HitTile *p_tile, Ctrl_TexDesc tex_desc);
+
+/**
+ * Get the device ptr of tile \p p_tile on ctrl \p p_ctrl.
+ *
+ * If \p tile is not attached to \p ctrl or has no device memory allocated NULL is returned.
+ *
+ * @param p_ctrl pointer to ctrl.
+ * @param p_tile tile to get de device ptr from.
+ * @return pointer to device memory for \p tile on device \p ctrl
+ */
+void *Ctrl_Cpu_GetDevPtr(Ctrl_Cpu *p_ctrl, HitTile *p_tile);
 #ifdef __cplusplus
 }
 #endif

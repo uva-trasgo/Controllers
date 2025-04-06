@@ -236,9 +236,9 @@
  * @param subtype Subtype of the kernel.
  * @param ... Parameters to the kernel.
  *
- * @see Ctrl_ImplType, CTRL_KERNEL_FUNCTION, CTRL_KERNEL_WRAP_OPENCLGPULIB
+ * @see Ctrl_ImplType, CTRL_KERNEL_FN, CTRL_KERNEL_WRAP_OPENCLGPULIB
  */
-#define CTRL_KERNEL_FUNCTION_OPENCLGPULIB(name, type, subtype, ...) CTRL_KERNEL_FUNCTION_OPENCLGPULIB_##subtype(name, type, subtype, __VA_ARGS__)
+#define CTRL_KERNEL_FN_OPENCLGPULIB(name, type, subtype, ...) CTRL_KERNEL_FN_OPENCLGPULIB_##subtype(name, type, subtype, __VA_ARGS__)
 
 /**
  * Defines the function containing the user provided code for a \e OPENCLGPULIB type kernel
@@ -249,7 +249,7 @@
  * @param subtype Subtype of the kernel.
  * @param ... Parameters to the kernel.
  *
- * @see Ctrl_ImplType, CTRL_KERNEL_FUNCTION, CTRL_KERNEL_WRAP_OPENCLGPULIB
+ * @see Ctrl_ImplType, CTRL_KERNEL_FN, CTRL_KERNEL_WRAP_OPENCLGPULIB
  */
 #define CTRL_KERNEL_OPENCLGPULIB(name, type, subtype, ...) CTRL_KERNEL_OPENCLGPULIB_##subtype(name, type, subtype, __VA_ARGS__)
 
@@ -265,8 +265,8 @@
  * @see Ctrl_ImplType, CTRL_KERNEL, CTRL_KERNEL_WRAP_OPENCLGPU_LIB
  * @todo opencl lib kernels are not fully implemented
  */
-#define CTRL_KERNEL_FUNCTION_OPENCLGPULIB_DEFAULT(name, type, subtype, ...) \
-	C_GUARD                                                                 \
+#define CTRL_KERNEL_FN_OPENCLGPULIB_DEFAULT(name, type, subtype, ...) \
+	C_GUARD                                                           \
 	void Ctrl_Kernel_OpenCLGPU_##type##_##subtype##_##name(cl_command_queue queue, CTRL_KERNEL_EXTRACT_ARGS(__VA_ARGS__))
 
 /**
@@ -299,70 +299,64 @@
  *
  * @see CTRL_KERNEL_OPENCLGPU
  */
-#define CTRL_KERNEL_WRAP_OPENCLGPU(name, args_list, type, subtype, ...)                                                                                                                               \
-	{                                                                                                                                                                                                 \
-		int arg_pos = 0;                                                                                                                                                                              \
-		for (int i = 0; i < request.opencl.n_arguments; i++) {                                                                                                                                        \
-			if (request.opencl.p_roles[i] == KERNEL_INVAL) {                                                                                                                                          \
-				OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos,                                                          \
-												request.opencl.p_displacements[i + 1] - request.opencl.p_displacements[i],                                                                            \
-												((uint8_t *)args_list + request.opencl.p_displacements[i])));                                                                                         \
-				arg_pos++;                                                                                                                                                                            \
-			} else {                                                                                                                                                                                  \
-				KHitTile *p_ktile = (KHitTile *)((uint8_t *)args_list + request.opencl.p_displacements[i]);                                                                                           \
-                                                                                                                                                                                                      \
-				KHitTile_opencl_wrapper ktile_opencl_wraper = {.origAcumCard = {p_ktile->origAcumCard[0],                                                                                             \
-																				p_ktile->origAcumCard[1],                                                                                             \
-																				p_ktile->origAcumCard[2],                                                                                             \
-																				p_ktile->origAcumCard[3]},                                                                                            \
-															   .card         = {p_ktile->card[0], p_ktile->card[1], p_ktile->card[2]},                                                                \
-															   .offset       = p_ktile->offset};                                                                                                            \
-                                                                                                                                                                                                      \
-				OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos, sizeof(KHitTile_opencl_wrapper), &ktile_opencl_wraper)); \
-				arg_pos++;                                                                                                                                                                            \
-				OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos, sizeof(cl_mem), (cl_mem *)(p_ktile->data)));             \
-				arg_pos++;                                                                                                                                                                            \
-				OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos, sizeof(cl_mem), &p_ktile->ext.ocl.tex));                 \
-				arg_pos++;                                                                                                                                                                            \
-				OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos, sizeof(cl_sampler), &p_ktile->ext.ocl.smp));             \
-				arg_pos++;                                                                                                                                                                            \
-			}                                                                                                                                                                                         \
-		}                                                                                                                                                                                             \
-		OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos, sizeof(Ctrl_Thread), &threads));                                 \
-		arg_pos++;                                                                                                                                                                                    \
-		if (threads.dims != blocksize.dims) {                                                                                                                                                         \
-			fprintf(stderr, "[CTRL_KERNEL_WRAP_OPENCLGPU] WARNING: Thread space dims (%d) and blocksize dims (%d) don't match on launch of kernel %s\n", threads.dims, blocksize.dims, #name);        \
-			fflush(stderr);                                                                                                                                                                           \
-		}                                                                                                                                                                                             \
-		size_t global_size[3] = {1, 1, 1};                                                                                                                                                            \
-		size_t local_size[3]  = {1, 1, 1};                                                                                                                                                            \
-		switch (threads.dims) {                                                                                                                                                                       \
-			case 3:                                                                                                                                                                                   \
-				global_size[0] = ((threads.k + blocksize.k - 1) / blocksize.k) * blocksize.k;                                                                                                         \
-				global_size[1] = ((threads.j + blocksize.j - 1) / blocksize.j) * blocksize.j;                                                                                                         \
-				global_size[2] = ((threads.i + blocksize.i - 1) / blocksize.i) * blocksize.i;                                                                                                         \
-				local_size[0]  = blocksize.k;                                                                                                                                                         \
-				local_size[1]  = blocksize.j;                                                                                                                                                         \
-				local_size[2]  = blocksize.i;                                                                                                                                                         \
-				break;                                                                                                                                                                                \
-			case 2:                                                                                                                                                                                   \
-				global_size[0] = ((threads.j + blocksize.j - 1) / blocksize.j) * blocksize.j;                                                                                                         \
-				global_size[1] = ((threads.i + blocksize.i - 1) / blocksize.i) * blocksize.i;                                                                                                         \
-				local_size[0]  = blocksize.j;                                                                                                                                                         \
-				local_size[1]  = blocksize.i;                                                                                                                                                         \
-				break;                                                                                                                                                                                \
-			case 1:                                                                                                                                                                                   \
-				global_size[0] = ((threads.i + blocksize.i - 1) / blocksize.i) * blocksize.i;                                                                                                         \
-				local_size[0]  = blocksize.i;                                                                                                                                                         \
-				break;                                                                                                                                                                                \
-			default:                                                                                                                                                                                  \
-				fprintf(stderr, "[CTRL_KERNEL_WRAP_OPENCLGPU] ERROR: Invalid number of dimensions for thread space on kernel %s: %d\n", #name, threads.dims);                                         \
-				exit(EXIT_FAILURE);                                                                                                                                                                   \
-		}                                                                                                                                                                                             \
-		OPENCL_ASSERT_OP(clEnqueueNDRangeKernel(*(request.opencl.queue), ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id],                                          \
-												threads.dims, NULL, global_size, local_size,                                                                                                          \
-												0, NULL, request.opencl.p_last_kernel_event));                                                                                                        \
-		OPENCL_ASSERT_OP(clFlush(*(request.opencl.queue)));                                                                                                                                           \
+#define CTRL_KERNEL_WRAP_OPENCLGPU(name, args_list, type, subtype, ...)                                                                                                                                 \
+	{                                                                                                                                                                                                   \
+		int arg_pos = 0;                                                                                                                                                                                \
+		for (int i = 0; i < request.opencl.n_arguments; i++) {                                                                                                                                          \
+			if (request.opencl.p_roles[i] == KERNEL_INVAL) {                                                                                                                                            \
+				OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos++,                                                          \
+												request.opencl.p_displacements[i + 1] - request.opencl.p_displacements[i],                                                                              \
+												((uint8_t *)args_list + request.opencl.p_displacements[i])));                                                                                           \
+			} else {                                                                                                                                                                                    \
+				KHitTile *p_ktile = (KHitTile *)((uint8_t *)args_list + request.opencl.p_displacements[i]);                                                                                             \
+                                                                                                                                                                                                        \
+				KHitTile_opencl_wrapper ktile_opencl_wraper = {.origAcumCard = {p_ktile->origAcumCard[0],                                                                                               \
+																				p_ktile->origAcumCard[1],                                                                                               \
+																				p_ktile->origAcumCard[2],                                                                                               \
+																				p_ktile->origAcumCard[3]},                                                                                              \
+															   .card         = {p_ktile->card[0], p_ktile->card[1], p_ktile->card[2]},                                                                  \
+															   .offset       = p_ktile->offset};                                                                                                              \
+                                                                                                                                                                                                        \
+				OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos++, sizeof(KHitTile_opencl_wrapper), &ktile_opencl_wraper)); \
+				OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos++, sizeof(cl_mem), (cl_mem *)(p_ktile->data)));             \
+				OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos++, sizeof(cl_mem), &p_ktile->ext.ocl.tex));                 \
+				OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos++, sizeof(cl_sampler), &p_ktile->ext.ocl.smp));             \
+			}                                                                                                                                                                                           \
+		}                                                                                                                                                                                               \
+		OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos++, sizeof(Ctrl_Thread), &threads));                                 \
+		if (threads.dims != blocksize.dims) {                                                                                                                                                           \
+			fprintf(stderr, "[CTRL_KERNEL_WRAP_OPENCLGPU] WARNING: Thread space dims (%d) and blocksize dims (%d) don't match on launch of kernel %s  \n", threads.dims, blocksize.dims, #name);        \
+			fflush(stderr);                                                                                                                                                                             \
+		}                                                                                                                                                                                               \
+		size_t global_size[3] = {1, 1, 1};                                                                                                                                                              \
+		size_t local_size[3]  = {1, 1, 1};                                                                                                                                                              \
+		switch (threads.dims) {                                                                                                                                                                         \
+			case 3:                                                                                                                                                                                     \
+				global_size[0] = ((threads.k + blocksize.k - 1) / blocksize.k) * blocksize.k;                                                                                                           \
+				global_size[1] = ((threads.j + blocksize.j - 1) / blocksize.j) * blocksize.j;                                                                                                           \
+				global_size[2] = ((threads.i + blocksize.i - 1) / blocksize.i) * blocksize.i;                                                                                                           \
+				local_size[0]  = blocksize.k;                                                                                                                                                           \
+				local_size[1]  = blocksize.j;                                                                                                                                                           \
+				local_size[2]  = blocksize.i;                                                                                                                                                           \
+				break;                                                                                                                                                                                  \
+			case 2:                                                                                                                                                                                     \
+				global_size[0] = ((threads.j + blocksize.j - 1) / blocksize.j) * blocksize.j;                                                                                                           \
+				global_size[1] = ((threads.i + blocksize.i - 1) / blocksize.i) * blocksize.i;                                                                                                           \
+				local_size[0]  = blocksize.j;                                                                                                                                                           \
+				local_size[1]  = blocksize.i;                                                                                                                                                           \
+				break;                                                                                                                                                                                  \
+			case 1:                                                                                                                                                                                     \
+				global_size[0] = ((threads.i + blocksize.i - 1) / blocksize.i) * blocksize.i;                                                                                                           \
+				local_size[0]  = blocksize.i;                                                                                                                                                           \
+				break;                                                                                                                                                                                  \
+			default:                                                                                                                                                                                    \
+				fprintf(stderr, "[CTRL_KERNEL_WRAP_OPENCLGPU] ERROR: Invalid number of dimensions for thread space on kernel %s: %d  \n", #name, threads.dims);                                         \
+				exit(EXIT_FAILURE);                                                                                                                                                                     \
+		}                                                                                                                                                                                               \
+		OPENCL_ASSERT_OP(clEnqueueNDRangeKernel(*(request.opencl.queue), ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id],                                            \
+												threads.dims, NULL, global_size, local_size,                                                                                                            \
+												0, NULL, request.opencl.p_last_kernel_event));                                                                                                          \
+		OPENCL_ASSERT_OP(clFlush(*(request.opencl.queue)));                                                                                                                                             \
 	}
 
 /**
@@ -390,7 +384,7 @@
  * @param subtype Subtype of the kernel.
  * @param ... Parameters to the kernel.
  *
- * @pre A kernel of type \p type and subtype \p subtype must have been defined via \e CTRL_KERNEL or \e CTRL_KERNEL_FUNCTION.
+ * @pre A kernel of type \p type and subtype \p subtype must have been defined via \e CTRL_KERNEL or \e CTRL_KERNEL_FN.
  * @see CTRL_KERNEL_OPENCLGPULIB
  */
 #define CTRL_KERNEL_WRAP_OPENCLGPULIB(name, argsList, type, subtype, ...) CTRL_KERNEL_WRAP_OPENCLGPULIB_##subtype(name, argsList, type, subtype, __VA_ARGS__)
@@ -405,7 +399,7 @@
  * @param subtype Subtype of the kernel.
  * @param ... Parameters to the kernel and kernel body.
  *
- * @pre A kernel of type \p type and subtype \p subtype must have been defined via \e CTRL_KERNEL or \e CTRL_KERNEL_FUNCTION.
+ * @pre A kernel of type \p type and subtype \p subtype must have been defined via \e CTRL_KERNEL or \e CTRL_KERNEL_FN.
  * @see CTRL_KERNEL_OPENCLGPULIB
  */
 #define CTRL_KERNEL_WRAP_OPENCLGPULIB_DEFAULT(name, args_list, type, subtype, ...)                                                                                        \
@@ -428,7 +422,7 @@
 	extern const char                 *p_ctrl_kernel_string_##type##_##subtype##_##name;                                                                                                                                             \
 	extern Ctrl_OpenCLGpu_KernelParams ctrl_kernel_openclgpu_##type##_##subtype##_##name;                                                                                                                                            \
                                                                                                                                                                                                                                      \
-	__attribute__((constructor)) static void Ctrl_InitKernel_##type##_##subtype##_##name() {                                                                                                                                         \
+	__attribute__((constructor)) static void Ctrl_OpenCLGPU_InitKernel_##type##_##subtype##_##name() {                                                                                                                               \
 		/* kernel prototype, list of strings {"__kernel void ", <name>, "(", args[], */                                                                                                                                              \
 		const char *pp_args_names[]                                       = {" __kernel void ", CTRL_MACRO_STRINGIFY(ctrl_kernel_openclgpu_##type##_##subtype##_##name), " ( ", CTRL_KERNEL_OPENCL_PARSE_ARGS(n_args, __VA_ARGS__)}; \
 		ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel_raw    = (char *)malloc(CTRL_KERNEL_OPENCL_MAX_CODE_SIZE * sizeof(char));                                                                                         \

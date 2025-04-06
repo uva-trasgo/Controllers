@@ -58,10 +58,10 @@ int grid_cols;
 
 Ctrl_NewType(float);
 
-CTRL_KERNEL_CHAR(Hotspot, MANUAL, LOCAL_SIZE_1, LOCAL_SIZE_0);
+CTRL_KERNEL_CHAR(Hotspot, MANUAL, 1);
 
 CTRL_KERNEL_PROTO(Hotspot,
-				  1, FPGA, DEFAULT, 10,
+				  1, FPGA, TASK, 10,
 				  IN, HitTile_float, pwr_in,
 				  IN, HitTile_float, src,
 				  OUT, HitTile_float, dst,
@@ -149,11 +149,6 @@ int main(int argc, char *argv[]) {
 	Ctrl_SetPolicy(policy);
 	char *ctrl_conf_file = argv[6];
 
-	int smallBlockCol = LOCAL_SIZE_0 - (pyramid_height)*EXPAND_RATE;
-	int smallBlockRow = LOCAL_SIZE_1 - (pyramid_height)*EXPAND_RATE;
-	int blockCols     = grid_cols / smallBlockCol + ((grid_cols % smallBlockCol == 0) ? 0 : 1);
-	int blockRows     = grid_rows / smallBlockRow + ((grid_rows % smallBlockRow == 0) ? 0 : 1);
-
 	float grid_height = chip_height / grid_rows;
 	float grid_width  = chip_width / grid_cols;
 
@@ -170,11 +165,8 @@ int main(int argc, char *argv[]) {
 	float Ry_1         = 1 / Ry;
 	float Rz_1         = 1 / Rz;
 
-	Ctrl_Thread threads;
-	Ctrl_ThreadInit(threads, LOCAL_SIZE_1 * blockRows, LOCAL_SIZE_0 * blockCols);
-
-	Ctrl_Thread group;
-	Ctrl_ThreadInit(group, 1);
+	Ctrl_Thread threads = CTRL_THREAD_NULL;
+	Ctrl_Thread group   = CTRL_THREAD_NULL;
 
 	__ctrl_block__(ctrl_conf_file) {
 		PCtrl ctrl = Ctrl_Get(0);
@@ -211,10 +203,8 @@ int main(int argc, char *argv[]) {
 		Ctrl_GlobalSync(ctrl);
 		exec_clock = omp_get_wtime();
 
-		int real_iter = 1;
-		int src       = 1;
-		int dst       = 0;
-
+		int src = 1;
+		int dst = 0;
 		for (int i = 0; i < total_iterations; i += 1) {
 			int temp = src;
 			src      = dst;
@@ -223,10 +213,9 @@ int main(int argc, char *argv[]) {
 			Ctrl_Launch(ctrl, Hotspot, threads, group, MatrixPower, MatrixTemp[src], MatrixTemp[dst], grid_cols,
 						grid_rows, step_div_Cap, Rx_1, Ry_1, Rz_1, comp_exit);
 
-			if ((real_iter % iters_per_copy) == 0) {
+			if ((i % iters_per_copy) == 0) {
 				Ctrl_HostTask(Host_Compute, MatrixCopy, MatrixTemp[dst]);
 			}
-			real_iter++;
 		}
 
 		Ctrl_HostTask(Host_Compute, MatrixCopy, MatrixTemp[dst]);

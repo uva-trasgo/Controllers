@@ -10,8 +10,7 @@
 double main_clock;
 double exec_clock;
 
-int GPU   = 0;
-
+int GPU = 0;
 
 /*
  * function name: gpu_square_matrix_mult
@@ -59,11 +58,11 @@ void Init_Tiles(float *matrix_a, float *matrix_b, float *matrix_c, int rows, int
 	for (int j = 0; j < columns; j++) {
 		float col_sum_a = 0;
 		for (int i = 0; i < rows; i++) {
-			float min = -(1 - col_sum_a) + EPSILON;
-			float max = 1 - col_sum_a - EPSILON;
-			float random = ((float)rand()) / (float)RAND_MAX;
-			float range  = max - min;
-			float value = (random * range) + min;
+			float min                 = -(1 - col_sum_a) + EPSILON;
+			float max                 = 1 - col_sum_a - EPSILON;
+			float random              = ((float)rand()) / (float)RAND_MAX;
+			float range               = max - min;
+			float value               = (random * range) + min;
 			matrix_a[i * columns + j] = value;
 			matrix_b[i * columns + j] = value;
 			matrix_c[i * columns + j] = 0;
@@ -72,7 +71,7 @@ void Init_Tiles(float *matrix_a, float *matrix_b, float *matrix_c, int rows, int
 	}
 }
 
-void Host_Compute( int ITER, double *p_sum, double *p_res, float  *matrix, float  *matrix_res, int rows, int columns) {
+void Host_Compute(int ITER, double *p_sum, double *p_res, float *matrix, float *matrix_res, int rows, int columns) {
 	double minimum = matrix[0 * columns + 0];
 	double maximum = matrix[0 * columns + 0];
 
@@ -165,11 +164,11 @@ int main(int argc, char **argv) {
 		float *dmatrix1;
 		float *dmatrix2;
 		if ((i % 2) == 0) {
-			matrix1 = C;
+			matrix1  = C;
 			dmatrix1 = d_C;
 			dmatrix2 = d_B;
 		} else {
-			matrix1 = B;
+			matrix1  = B;
 			dmatrix1 = d_B;
 			dmatrix2 = d_C;
 		}

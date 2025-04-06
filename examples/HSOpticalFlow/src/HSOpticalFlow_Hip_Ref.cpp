@@ -372,7 +372,7 @@ int main(int argc, char **argv) {
 	hipDeviceProp_t hip_dev_prop;
 	HIP_OP(hipGetDeviceProperties(&hip_dev_prop, GPU));
 	#ifdef _CTRL_EXAMPLES_EXP_MODE_
-	printf("HIP_%s, ", hip_dev_prop.name);
+	printf("HIP-%s, ", hip_dev_prop.name);
 	#else // _CTRL_EXAMPLES_EXP_MODE_
 	printf("\n ----------------------- ARGS ------------------------- \n");
 	printf("\n ALPHA: %g", alpha);

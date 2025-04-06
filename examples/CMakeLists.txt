@@ -47,13 +47,6 @@ endif(SUPPORT_FPGA)
 
 set(CTRL_LIBS ${CTRL_LIBS} Ctrl)
 
-if(SUPPORT_FPGA)
-    #final '/' in the path must be kept in order for the compilation to work (strcat in Ctrl_FPGA_KernelProto.h)
-    set(KERNELS_PATH ${PROJECT_SOURCE_DIR}/kernels)
-    set(CTRL_KERNELS_PATH_FPGA ${PROJECT_SOURCE_DIR}/kernels/FPGA/Ctrl/)
-    set(REF_KERNELS_PATH_FPGA ${PROJECT_SOURCE_DIR}/kernels/FPGA/Ref/)
-endif(SUPPORT_FPGA)
-
 if (PROFILING_ENABLED)
 	if (SUPPORT_OPENCL OR SUPPORT_HIP)
 		set(CTRL_INCLUDE_DIRS ${CTRL_INCLUDE_DIRS} ${ROCM_PATH}/include)

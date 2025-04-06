@@ -7,22 +7,15 @@
  * @copyright This software is part of the Controller project by Trasgo Group, UVa.
  * The relevant license, warranty and copyright notice is available in the Controller project repository.
  */
-#ifndef CTRL_FPGA_KERNEL_FILE
 #include <hwloc.h>
 #include <omp.h>
-#endif //CTRL_FPGA_KERNEL_FILE
 
 #ifdef _CTRL_DEBUG_
 #include <stdio.h>
-#endif
+#endif // _CTRL_DEBUG_
 
-#ifndef CTRL_FPGA_KERNEL_FILE
 #include "hitmap2.h"
-#else
-#include "hit_kernel.h"
-#endif
 
-#ifndef CTRL_FPGA_KERNEL_FILE
 #include "Core/Ctrl_Info.h"
 #include "Core/Ctrl_KHParams.h"
 #include "Core/Ctrl_Policy.h"
@@ -31,7 +24,6 @@
 #include "Core/Ctrl_Type.h"
 
 #include "Kernel/Ctrl_KernelArgs.h"
-#endif //CTRL_FPGA_KERNEL_FILE
 
 #ifdef _CTRL_ARCH_CPU_
 #include "Architectures/Cpu/Ctrl_Cpu.h"
@@ -62,9 +54,7 @@
 #endif // _CTRL_ARCH_OPENCL_GPU_
 
 #ifdef _CTRL_ARCH_FPGA_
-#ifndef CTRL_FPGA_KERNEL_FILE
 #include "Architectures/FPGA/Ctrl_FPGA.h"
-#endif
 #else
 #define CTRL_FPGA_LAUNCH(...)
 #define CTRL_FPGA_LAUNCH_STREAM(...)
@@ -79,15 +69,20 @@ extern "C" {
  * @param int *argc	Pointer to the number of program arguments
  * @param char **argv[]	Pointer to the list of program arguments
  */
-#define Ctrl_Init(pargc, pargv) hit_comInit(pargc, pargv)
+void Ctrl_Init(int *pargc, char ***pargv);
 
 /**
  * Ctrl finalization to use Controllers in distributed environments
  */
 #define Ctrl_Finalize() hit_comFinalize()
 
-#ifndef CTRL_FPGA_KERNEL_FILE
+/**
+ * Path to the FPGA kernel binaies.
+ */
+extern char *Ctrl_FPGA_kernels_path;
+
 #define MAX_BLOCK_SIZE 256
+
 /**
  * @brief Contains specific architecture ctrl structures.
  */
@@ -128,7 +123,7 @@ typedef struct {
 typedef Ctrl *PCtrl;
 
 /**
- * Launch a kernel to the ctrl queue.
+ * Launch a kernel to the ctrl queue to the default ctrl stream.
  * This call is always asynchronous.
  *
  * @hideinitializer
@@ -142,17 +137,7 @@ typedef Ctrl *PCtrl;
  *
  * @see CTRL_KERNEL, CTRL_KERNEL_PROTO, Ctrl_LaunchToStream
  */
-#define Ctrl_Launch(p_ctrl, name, threads, group, ...)                                                                                  \
-	switch ((p_ctrl)->type) {                                                                                                           \
-		CTRL_CPU_LAUNCH(p_ctrl, name, threads, group, __VA_ARGS__)                                                                      \
-		CTRL_CUDA_LAUNCH(p_ctrl, name, threads, group, __VA_ARGS__)                                                                     \
-		CTRL_HIP_LAUNCH(p_ctrl, name, threads, group, __VA_ARGS__)                                                                      \
-		CTRL_OPENCL_GPU_LAUNCH(p_ctrl, name, threads, group, __VA_ARGS__)                                                               \
-		CTRL_FPGA_LAUNCH(p_ctrl, name, threads, group, __VA_ARGS__)                                                                     \
-		default:                                                                                                                        \
-			fprintf(stderr, "[Ctrl_Launch] Unsupported Ctrl type: %d. Recompile the library with the proper support.\n", p_ctrl->type); \
-			exit(EXIT_FAILURE);                                                                                                         \
-	}
+#define Ctrl_Launch(p_ctrl, name, threads, group, ...) Ctrl_LaunchToStream(p_ctrl, name, threads, group, 0, __VA_ARGS__)
 
 /**
  * Launch a kernel to the ctrl queue, and to a given stream.
@@ -255,20 +240,6 @@ typedef Ctrl *PCtrl;
 		Ctrl_SelectInner(((HitTile *)(&new_tile)), flags);                                                                 \
 		return new_tile;                                                                                                   \
 	}
-#else
-#ifndef CTRL_HOST_COMPILE
-#ifndef CTRL_FPGA_BIN_NAME
-#define Ctrl_NewType(type) \
-	hit_ktileNewType(type);
-#else //CTRL_FPGA_BIN_NAME
-#define Ctrl_NewType(type)
-#endif //CTRL_FPGA_BIN_NAME
-#else //CTRL_HOST_COMPILE
-#define Ctrl_NewType(type)
-#endif //CTRL_HOST_COMPILE
-#endif
-
-#ifndef CTRL_FPGA_KERNEL_FILE
 
 #ifdef DOXYGEN
 /**
@@ -292,9 +263,9 @@ typedef Ctrl *PCtrl;
  * 		will apply.
  */
 #define Ctrl_Alloc(ctrl, tile, flags)
-#else //DOXYGEN
+#else // DOXYGEN
 #define Ctrl_Alloc(...) Ctrl_AllocMacro(__VA_ARGS__, WithFlags, NoFlags)(__VA_ARGS__)
-#endif //DOXYGEN
+#endif // DOXYGEN
 
 #define Ctrl_AllocMacro(_1, _2, _3, AllocType, ...) Ctrl_Alloc##AllocType
 #define Ctrl_AllocWithFlags(p_ctrl, tile, flags)    Ctrl_AllocInner(p_ctrl, (HitTile *)&tile, flags)
@@ -543,6 +514,22 @@ int Ctrl_GetNCtrls();
  */
 Ctrl_Info Ctrl_GetInfo(Ctrl *p_ctrl);
 
+/**
+ * Get the device ptr of tile \p tile on ctrl \p ctrl.
+ *
+ * If \p ctrl is of type OpenCL GPU or FPGA NULL is returned.
+ * If \p tile is not attached to \p ctrl or has no device memory allocated NULL is returned.
+ * This is always a synchronous call.
+ *
+ * @hideinitializer
+ *
+ * @param ctrl pointer to ctrl.
+ * @param tile tile to get de device ptr from.
+ * @return pointer to device memory for \p tile on device \p ctrl
+ */
+#define Ctrl_GetDevPtr(p_ctrl, tile) Ctrl_GetDevPtrInner(p_ctrl, (HitTile *)&tile)
+void *Ctrl_GetDevPtrInner(Ctrl *p_ctrl, HitTile *p_tile);
+
 /// @cond INTERNAL
 /**
  * Push \p task to \p p_ctrl queue to execute.
@@ -666,6 +653,4 @@ void Ctrl_PinToHostNuma();
 #endif
 
 ///@endcond
-#endif // CTRL_FPGA_KERNEL_FILE
-
 #endif /* _CTRL_CORE_H_ */

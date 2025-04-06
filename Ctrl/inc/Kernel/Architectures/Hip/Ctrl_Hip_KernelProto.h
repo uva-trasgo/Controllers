@@ -55,9 +55,9 @@
  * @param subtype Subtype of the kernel.
  * @param ... Parameters to the kernel.
  *
- * @see Ctrl_ImplType, CTRL_KERNEL_FUNCTION, CTRL_KERNEL_WRAP_HIP
+ * @see Ctrl_ImplType, CTRL_KERNEL_FN, CTRL_KERNEL_WRAP_HIP
  */
-#define CTRL_KERNEL_FUNCTION_HIP(name, type, subtype, ...)                                               \
+#define CTRL_KERNEL_FN_HIP(name, type, subtype, ...)                                                     \
 	C_GUARD                                                                                              \
 	__global__ void Ctrl_Kernel_Hip_##type##_##subtype##_##name(Ctrl_Thread ctrl_threads, __VA_ARGS__) { \
 		unsigned int thr_i = 0;                                                                          \
@@ -141,9 +141,9 @@ If the program doesn't use HIP Controllers, you can ignore this message.\")")
  * @param subtype Subtype of the kernel.
  * @param ... Parameters to the kernel.
  *
- * @see Ctrl_ImplType, CTRL_KERNEL_FUNCTION, CTRL_KERNEL_WRAP_HIPLIB
+ * @see Ctrl_ImplType, CTRL_KERNEL_FN, CTRL_KERNEL_WRAP_HIPLIB
  */
-#define CTRL_KERNEL_FUNCTION_HIPLIB(name, type, subtype, ...) CTRL_KERNEL_FUNCTION_HIPLIB_##subtype(name, type, subtype, __VA_ARGS__)
+#define CTRL_KERNEL_FN_HIPLIB(name, type, subtype, ...) CTRL_KERNEL_FN_HIPLIB_##subtype(name, type, subtype, __VA_ARGS__)
 
 /**
  * Defines the function containing the user provided code for a \e HIPLIB_DEFAULT type kernel
@@ -171,10 +171,10 @@ If the program doesn't use HIP Controllers, you can ignore this message.\")")
  * @param subtype Subtype of the kernel.
  * @param ... Parameters to the kernel.
  *
- * @see Ctrl_ImplType, CTRL_KERNEL_FUNCTION, CTRL_KERNEL_WRAP_HIPLIB, CTRL_KERNEL_HIPLIB
+ * @see Ctrl_ImplType, CTRL_KERNEL_FN, CTRL_KERNEL_WRAP_HIPLIB, CTRL_KERNEL_HIPLIB
  */
-#define CTRL_KERNEL_FUNCTION_HIPLIB_DEFAULT(name, type, subtype, ...) \
-	C_GUARD                                                           \
+#define CTRL_KERNEL_FN_HIPLIB_DEFAULT(name, type, subtype, ...) \
+	C_GUARD                                                     \
 	void Ctrl_Kernel_Hip_##type##_##subtype##_##name(hipStream_t stream, __VA_ARGS__)
 
 #ifdef _CTRL_HIPBLAS_
@@ -204,19 +204,19 @@ If the program doesn't use HIP Controllers, you can ignore this message.\")")
  * @param subtype Subtype of the kernel.
  * @param ... Parameters to the kernel.
  *
- * @see Ctrl_ImplType, CTRL_KERNEL_FUNCTION, CTRL_KERNEL_WRAP_HIPLIB, CTRL_KERNEL_HIPLIB
+ * @see Ctrl_ImplType, CTRL_KERNEL_FN, CTRL_KERNEL_WRAP_HIPLIB, CTRL_KERNEL_HIPLIB
  */
-#define CTRL_KERNEL_FUNCTION_HIPLIB_HIPBLAS(name, type, subtype, ...) \
-	C_GUARD                                                           \
+#define CTRL_KERNEL_FN_HIPLIB_HIPBLAS(name, type, subtype, ...) \
+	C_GUARD                                                     \
 	void Ctrl_Kernel_Hip_##type##_##subtype##_##name(hipblasHandle_t handle, __VA_ARGS__)
 #else // _CTRL_HIPBLAS_
 #define CTRL_KERNEL_HIPLIB_HIPBLAS(...)
-#define CTRL_KERNEL_FUNCTION_HIPLIB_HIPBLAS(...)
+#define CTRL_KERNEL_FN_HIPLIB_HIPBLAS(...)
 #endif // _CTRL_HIPBLAS_
 
 /**
  * Block of code that launches a \e HIP kernel, this calls to the kernel function defined on either \e CTRL_KERNEL_HIP or
- * \e CTRL_KERNEL_FUNCTION_HIP with the appropiate characterization.
+ * \e CTRL_KERNEL_FN_CHIP with the appropiate characterization.
  * @hideinitializer
  *
  * @param name kernel name.
@@ -226,7 +226,7 @@ If the program doesn't use HIP Controllers, you can ignore this message.\")")
  * @param ... Parameters to the kernel.
  *
  * @pre A kernel of type \p type and subtype \p subtype must have been defined via \e CTRL_KERNEL.
- * @see CTRL_KERNEL_HIP, CTRL_KERNEL_FUNCTION_HIP
+ * @see CTRL_KERNEL_HIP, CTRL_KERNEL_FN_HIP
  */
 #define CTRL_KERNEL_WRAP_HIP(name, argsList, type, subtype, ...)                                                                                                                         \
 	{                                                                                                                                                                                    \
@@ -307,7 +307,7 @@ If the program doesn't use HIP Controllers, you can ignore this message.\")")
  * @param subtype Subtype of the kernel.
  * @param ... Parameters to the kernel.
  *
- * @pre A kernel of type \p type and subtype \p subtype must have been defined via \e CTRL_KERNEL or \e CTRL_KERNEL_FUNCTION.
+ * @pre A kernel of type \p type and subtype \p subtype must have been defined via \e CTRL_KERNEL or \e CTRL_KERNEL_FN.
  * @see CTRL_KERNEL_HIPLIB
  */
 #define CTRL_KERNEL_WRAP_HIPLIB_DEFAULT(name, argsList, type, subtype, ...)                                                             \

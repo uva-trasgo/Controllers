@@ -8,9 +8,11 @@
  * The relevant license, warranty and copyright notice is available in the Controller project repository.
  */
 
-#define CTRL_FPGA_STRUCT_ALIGNMENT 16
 ///@cond INTERNAL
-#ifndef CTRL_FPGA_KERNEL_FILE
+#ifdef __cplusplus
+#define restrict
+#endif // __cplusplus
+#define ALIGNED __attribute__((aligned))
 
 // TODO @sergioalo probably we should avoid dependencies from here to cuda/ocl headers
 #ifdef _CTRL_ARCH_CUDA_
@@ -45,36 +47,48 @@ typedef union Ctrl_KHitTile_Ext {
 		cl_sampler smp; /**< For texture use */
 	} ocl;
 	#endif // _CTRL_ARCH_OPENCL_GPU_
+	#ifdef _CTRL_ARCH_FPGA_
+	char dummy; // Needed so that the struct is not zero-sized in FPGA compilation
+
+	#endif // _CTRL_ARCH_FPGA_
 } Ctrl_KHitTile_Ext;
 
 /**
  * Stripped down version of an abstract \e HitTile so it`s more suitable for use in kernels
  */
-typedef struct {
+typedef struct ALIGNED {
 	void             *data;            /**< Pointer to the data held by the tile. */
 	int               origAcumCard[4]; /**< Dimension accumulated cardinalities. */
 	int               card[3];         /**< Dimension cardinalities. */
 	int               offset;          /**< Offset to original data. For hierarchical subselections. */
 	Ctrl_KHitTile_Ext ext;             /**< Backend specific extra fields  */
 } KHitTile;
-#endif
+
+typedef struct ALIGNED {
+	void *restrict data;               /**< Pointer to the data held by the tile, with a restrict qualifier to improve performance. */
+	int               origAcumCard[4]; /**< Dimension accumulated cardinalities. */
+	int               card[3];         /**< Dimension cardinalities. */
+	int               offset;          /**< Offset to original data. For hierarchical subselections. */
+	Ctrl_KHitTile_Ext ext;             /**< Backend specific extra fields  */
+} KHitTileR;
 
 /* @author: Gabriel Rodriguez-Canal
    @brief: KHitTile wrapper to isolate tile coordinates and offset from data, as structures with pointers cannot be passed as arguments */
 #ifdef _CTRL_ARCH_FPGA_
-typedef struct __attribute__((packed)) __attribute__((aligned(CTRL_FPGA_STRUCT_ALIGNMENT))) {
+typedef struct ALIGNED {
 	int origAcumCard[4];
 	int card[3];
 	int offset;
 } KHitTile_fpga_wrapper;
-#endif
+#endif // _CTRL_ARCH_FPGA_
+
 #ifdef _CTRL_ARCH_OPENCL_GPU_
 typedef struct {
 	int origAcumCard[4];
 	int card[3];
 	int offset;
 } KHitTile_opencl_wrapper;
-#endif
+#endif // _CTRL_ARCH_OPENCL_GPU_
 
 #ifndef CTRL_FPGA_KERNEL_FILE
 /**
@@ -86,7 +100,7 @@ typedef struct {
  * @see Ctrl_NewType, KHitTile
  */
 #define hit_ktileNewType(type)             \
-	typedef struct {                       \
+	typedef struct ALIGNED {               \
 		type             *data;            \
 		int               origAcumCard[4]; \
 		int               card[3];         \
@@ -122,23 +136,31 @@ typedef struct {
 
 #else // CTRL_FPGA_KERNEL_FILE
 
-#if !defined( CTRL_HOST_COMPILE ) && !defined( CTRL_FPGA_BIN_NAME )
-#define hit_ktileNewType(type)                                                                    \
-	typedef struct __attribute__((packed)) __attribute__((aligned(CTRL_FPGA_STRUCT_ALIGNMENT))) { \
-		__global type *data;                                                                      \
-		int            origAcumCard[4];                                                           \
-		int            card[3];                                                                   \
-		int            offset;                                                                    \
-	} KHitTile_##type;                                                                            \
-                                                                                                  \
-	typedef struct {                                                                              \
-		int origAcumCard[4];                                                                      \
-		int card[3];                                                                              \
-		int offset;                                                                               \
-	} fpga_wrapper_KHitTile_##type;                                                               \
-                                                                                                  \
-	typedef __global void *restrict data_KHitTile_##type;
-#endif // !CTRL_HOST_COMPILE && !CTRL_FPGA_BIN_NAME
+#define hit_ktileNewType(type)                   \
+	typedef struct ALIGNED {                     \
+		__global type    *data;                  \
+		int               origAcumCard[4];       \
+		int               card[3];               \
+		int               offset;                \
+		Ctrl_KHitTile_Ext ext;                   \
+	} KHitTile_##type;                           \
+                                                 \
+	typedef struct ALIGNED {                     \
+		__global type *restrict data;            \
+		int               origAcumCard[4];       \
+		int               card[3];               \
+		int               offset;                \
+		Ctrl_KHitTile_Ext ext;                   \
+	} KHitTileR_##type;                          \
+                                                 \
+	typedef struct {                             \
+		int origAcumCard[4];                     \
+		int card[3];                             \
+		int offset;                              \
+	} fpga_wrapper_KHitTile_##type;              \
+                                                 \
+	typedef __global type *data_KHitTile_##type; \
+	typedef __global type *restrict data_KHitTileR_##type;
 
 #endif // CTRL_FPGA_KERNEL_FILE
 

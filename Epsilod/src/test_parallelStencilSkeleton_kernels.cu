@@ -6,14 +6,13 @@
  * The relevant license, warranty and copyright notice is available in the Controller project repository.
  */
 
-#include "epsilod_ext_type.h"
-
+#include "epsilod_types.h"
 #include "Ctrl.h"
 
 Ctrl_NewType(float);
 
 /* A.1. 1D NON-COMPACT RADIUS 2 */
-CTRL_KERNEL(updateCell_1dNC4, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const Epsilod_ext ext_params, {
+CTRL_KERNEL(updateCell_1dNC4, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
 	int x = thr_i;
 
 	hit(matrix, x) = (0.5 * (hit(matrixCopy, x - 2) + hit(matrixCopy, x + 2)) +
@@ -22,14 +21,14 @@ CTRL_KERNEL(updateCell_1dNC4, GENERIC, DEFAULT, KHitTile_float matrix, const KHi
 });
 
 /* A.1. 1D COMPACT RADIUS 1 */
-CTRL_KERNEL(updateCell_1dC2, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const Epsilod_ext ext_params, {
+CTRL_KERNEL(updateCell_1dC2, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
 	int x = thr_i;
 
 	hit(matrix, x) = (hit(matrixCopy, x - 1) + hit(matrixCopy, x + 1)) / 2;
 });
 
 /* B.1. 2D COMPACT, RADIUS 1: 4-POINT STAR, NO CORNERS */
-CTRL_KERNEL(updateCell_4, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const Epsilod_ext ext_params, {
+CTRL_KERNEL(updateCell_4, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
 	int x = thr_i;
 	int y = thr_j;
 
@@ -41,7 +40,7 @@ CTRL_KERNEL(updateCell_4, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTil
 });
 
 /* B.2. 2D COMPACT, RADIUS 1: 9-POINT STAR, CORNERS INCLUDED */
-CTRL_KERNEL(updateCell_9, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const Epsilod_ext ext_params, {
+CTRL_KERNEL(updateCell_9, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
 	int x = thr_i;
 	int y = thr_j;
 
@@ -51,7 +50,7 @@ CTRL_KERNEL(updateCell_9, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTil
 });
 
 /* B.3. 2D NON-COMPACT, RADIUS 2: 9-POINT STAR, NO CORNERS */
-CTRL_KERNEL(updateCell_NC9, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const Epsilod_ext ext_params, {
+CTRL_KERNEL(updateCell_NC9, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
 	int x = thr_i;
 	int y = thr_j;
 
@@ -62,7 +61,7 @@ CTRL_KERNEL(updateCell_NC9, GENERIC, DEFAULT, KHitTile_float matrix, const KHitT
 
 /* B.3. 2D NON-COMPACT, NON-SYMMETRIC. RADIUS 2: 5-POINT STAR
  * FORWARD-DOWN WITH ONE CORNER ELEMENT */
-CTRL_KERNEL(updateCell_F5, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const Epsilod_ext ext_params, {
+CTRL_KERNEL(updateCell_F5, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
 	int x = thr_i;
 	int y = thr_j;
 
@@ -73,7 +72,7 @@ CTRL_KERNEL(updateCell_F5, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTi
 });
 
 /* C.1. 3D COMPACT. RADIUS 1: 27-POINT STAR */
-CTRL_KERNEL(updateCell_3d27, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const Epsilod_ext ext_params, {
+CTRL_KERNEL(updateCell_3d27, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
 	int x = thr_i;
 	int y = thr_j;
 	int z = thr_k;

@@ -58,6 +58,12 @@ def format_devname(devname: str) -> str:
 			return "RTX4500"
 		case ["CUDA", "NVIDIA", "A100", "SXM", "64GB"]:
 			return "A100"
+		case ["OpenCL", "GPU", "Tesla", "V100", "PCIE", "32GB", "NVIDIA", "CUDA"]:
+			return "V100"
+		case ["OpenCL", "GPU", "NVIDIA", "A100", "80GB", "PCIe", "NVIDIA", "CUDA"]:
+			return "A100"
+		case ["OpenCL", "GPU", "NVIDIA", "RTX", "4500", "Ada", "Generation", "NVIDIA", "CUDA"]:
+			return "RTX4500"
 		case ["OpenCL", "GPU", "gfx900:xnack", "", "AMD", "Accelerated", "Parallel", "Processing"]:
 			return "WX9100"
 		case ["OpenCL", "GPU", "gfx1100", "AMD", "Accelerated", "Parallel", "Processing"]:

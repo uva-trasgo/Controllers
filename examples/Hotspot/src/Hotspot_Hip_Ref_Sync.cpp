@@ -298,7 +298,7 @@ int main(int argc, char **argv) {
 	hipDeviceProp_t hip_dev_prop;
 	hipGetDeviceProperties(&hip_dev_prop, device);
 	#ifdef _CTRL_EXAMPLES_EXP_MODE_
-	printf("HIP_%s, ", hip_dev_prop.name);
+	printf("HIP-%s, ", hip_dev_prop.name);
 	#else
 	printf("\n ----------------------- ARGS ----------------------- \n");
 	printf("\n SIZE (SIZE x SIZE): %d, %d, %d", grid_rows * grid_cols, grid_rows, grid_cols);

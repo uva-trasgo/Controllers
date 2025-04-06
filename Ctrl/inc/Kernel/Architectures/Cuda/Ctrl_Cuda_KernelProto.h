@@ -55,9 +55,9 @@
  * @param subtype Subtype of the kernel.
  * @param ... Parameters to the kernel.
  *
- * @see Ctrl_ImplType, CTRL_KERNEL_FUNCTION, CTRL_KERNEL_WRAP_CUDA
+ * @see Ctrl_ImplType, CTRL_KERNEL_FN, CTRL_KERNEL_WRAP_CUDA
  */
-#define CTRL_KERNEL_FUNCTION_CUDA(name, type, subtype, ...)                                               \
+#define CTRL_KERNEL_FN_CUDA(name, type, subtype, ...)                                                     \
 	C_GUARD                                                                                               \
 	__global__ void Ctrl_Kernel_Cuda_##type##_##subtype##_##name(Ctrl_Thread ctrl_threads, __VA_ARGS__) { \
 		unsigned int thr_i = 0;                                                                           \
@@ -141,9 +141,9 @@ If the program doesn't use CUDA Controllers, you can ignore this message.\")")
  * @param subtype Subtype of the kernel.
  * @param ... Parameters to the kernel.
  *
- * @see Ctrl_ImplType, CTRL_KERNEL_FUNCTION, CTRL_KERNEL_WRAP_CUDALIB
+ * @see Ctrl_ImplType, CTRL_KERNEL_FN, CTRL_KERNEL_WRAP_CUDALIB
  */
-#define CTRL_KERNEL_FUNCTION_CUDALIB(name, type, subtype, ...) CTRL_KERNEL_FUNCTION_CUDALIB_##subtype(name, type, subtype, __VA_ARGS__)
+#define CTRL_KERNEL_FN_CUDALIB(name, type, subtype, ...) CTRL_KERNEL_FN_CUDALIB_##subtype(name, type, subtype, __VA_ARGS__)
 
 /**
  * Defines the function containing the user provided code for a \e CUDALIB_DEFAULT type kernel
@@ -171,10 +171,10 @@ If the program doesn't use CUDA Controllers, you can ignore this message.\")")
  * @param subtype Subtype of the kernel.
  * @param ... Parameters to the kernel.
  *
- * @see Ctrl_ImplType, CTRL_KERNEL_FUNCTION, CTRL_KERNEL_WRAP_CUDALIB, CTRL_KERNEL_CUDALIB
+ * @see Ctrl_ImplType, CTRL_KERNEL_FN, CTRL_KERNEL_WRAP_CUDALIB, CTRL_KERNEL_CUDALIB
  */
-#define CTRL_KERNEL_FUNCTION_CUDALIB_DEFAULT(name, type, subtype, ...) \
-	C_GUARD                                                            \
+#define CTRL_KERNEL_FN_CUDALIB_DEFAULT(name, type, subtype, ...) \
+	C_GUARD                                                      \
 	void Ctrl_Kernel_Cuda_##type##_##subtype##_##name(cudaStream_t stream, __VA_ARGS__)
 
 #ifdef _CTRL_CUBLAS_
@@ -204,14 +204,14 @@ If the program doesn't use CUDA Controllers, you can ignore this message.\")")
  * @param subtype Subtype of the kernel.
  * @param ... Parameters to the kernel.
  *
- * @see Ctrl_ImplType, CTRL_KERNEL_FUNCTION, CTRL_KERNEL_WRAP_CUDALIB, CTRL_KERNEL_CUDALIB
+ * @see Ctrl_ImplType, CTRL_KERNEL_FN, CTRL_KERNEL_WRAP_CUDALIB, CTRL_KERNEL_CUDALIB
  */
-#define CTRL_KERNEL_FUNCTION_CUDALIB_CUBLAS(name, type, subtype, ...) \
-	C_GUARD                                                           \
+#define CTRL_KERNEL_FN_CUDALIB_CUBLAS(name, type, subtype, ...) \
+	C_GUARD                                                     \
 	void Ctrl_Kernel_Cuda_##type##_##subtype##_##name(cublasHandle_t handle, __VA_ARGS__)
 #else // _CTRL_CUBLAS_
 #define CTRL_KERNEL_CUDALIB_CUBLAS(...)
-#define CTRL_KERNEL_FUNCTION_CUDALIB_CUBLAS(...)
+#define CTRL_KERNEL_FN_CUDALIB_CUBLAS(...)
 #endif // _CTRL_CUBLAS_
 
 #ifdef _CTRL_MAGMA_
@@ -241,19 +241,19 @@ If the program doesn't use CUDA Controllers, you can ignore this message.\")")
  * @param subtype Subtype of the kernel.
  * @param ... Parameters to the kernel.
  *
- * @see Ctrl_ImplType, CTRL_KERNEL_FUNCTION, CTRL_KERNEL_WRAP_CUDALIB, CTRL_KERNEL_CUDALIB
+ * @see Ctrl_ImplType, CTRL_KERNEL_FN, CTRL_KERNEL_WRAP_CUDALIB, CTRL_KERNEL_CUDALIB
  */
-#define CTRL_KERNEL_FUNCTION_CUDALIB_MAGMA(name, type, subtype, ...) \
-	C_GUARD                                                          \
+#define CTRL_KERNEL_FN_CUDALIB_MAGMA(name, type, subtype, ...) \
+	C_GUARD                                                    \
 	void Ctrl_Kernel_Cuda_##type##_##subtype##_##name(magma_queue_t queue, __VA_ARGS__)
 #else // _CTRL_MAGMA_
 #define CTRL_KERNEL_CUDALIB_MAGMA(...)
-#define CTRL_KERNEL_FUNCTION_CUDALIB_MAGMA(...)
+#define CTRL_KERNEL_FN_CUDALIB_MAGMA(...)
 #endif // _CTRL_MAGMA_
 
 /**
  * Block of code that launches a \e CUDA kernel, this calls to the kernel function defined on either \e CTRL_KERNEL_CUDA or
- * \e CTRL_KERNEL_FUNCTION_CUDA with the appropiate characterization.
+ * \e CTRL_KERNEL_FN_CUDA with the appropiate characterization.
  * @hideinitializer
  *
  * @param name kernel name.
@@ -263,7 +263,7 @@ If the program doesn't use CUDA Controllers, you can ignore this message.\")")
  * @param ... Parameters to the kernel.
  *
  * @pre A kernel of type \p type and subtype \p subtype must have been defined via \e CTRL_KERNEL.
- * @see CTRL_KERNEL_CUDA, CTRL_KERNEL_FUNCTION_CUDA
+ * @see CTRL_KERNEL_CUDA, CTRL_KERNEL_FN_CUDA
  */
 #define CTRL_KERNEL_WRAP_CUDA(name, argsList, type, subtype, ...)                                                                                                                         \
 	{                                                                                                                                                                                     \
@@ -344,7 +344,7 @@ If the program doesn't use CUDA Controllers, you can ignore this message.\")")
  * @param subtype Subtype of the kernel.
  * @param ... Parameters to the kernel.
  *
- * @pre A kernel of type \p type and subtype \p subtype must have been defined via \e CTRL_KERNEL or \e CTRL_KERNEL_FUNCTION.
+ * @pre A kernel of type \p type and subtype \p subtype must have been defined via \e CTRL_KERNEL or \e CTRL_KERNEL_FN.
  * @see CTRL_KERNEL_CUDALIB
  */
 #define CTRL_KERNEL_WRAP_CUDALIB_DEFAULT(name, argsList, type, subtype, ...)                                                              \
