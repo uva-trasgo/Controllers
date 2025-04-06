@@ -52,6 +52,14 @@
 	#define CTRL_KERNEL_CUDA_KERNEL_CHAR(...)
 #endif // _CTRL_ARCH_CUDA_
 
+#ifdef _CTRL_ARCH_HIP_
+	#include "Kernel/Architectures/Hip/Ctrl_Hip_KernelArgs.h"
+	#include "Kernel/Architectures/Hip/Ctrl_Hip_KernelChar.h"
+#else
+	#define CTRL_KERNEL_HIP_KTILE_DEVICE_DATA(...)
+	#define CTRL_KERNEL_HIP_KERNEL_CHAR(...)
+#endif // _CTRL_ARCH_HIP_
+
 #ifdef _CTRL_ARCH_OPENCL_GPU_
 	#include "Kernel/Architectures/OpenCL/Ctrl_OpenCL_KernelArgs.h"
 	#include "Kernel/Architectures/OpenCL/Ctrl_OpenCL_Gpu_KernelChar.h"
@@ -89,6 +97,7 @@
 #define CTRL_KERNEL_CHARN2(name, type, dims, ...)                      \
 	CTRL_KERNEL_CPU_KERNEL_CHAR(name, type, dims, __VA_ARGS__);        \
 	CTRL_KERNEL_CUDA_KERNEL_CHAR(name, type, dims, __VA_ARGS__);       \
+	CTRL_KERNEL_HIP_KERNEL_CHAR(name, type, dims, __VA_ARGS__);        \
 	CTRL_KERNEL_OPENCL_GPU_KERNEL_CHAR(name, type, dims, __VA_ARGS__); \
 	CTRL_KERNEL_FPGA_KERNEL_CHAR(name, type, dims, __VA_ARGS__);
 
@@ -104,7 +113,11 @@
 #define C_GUARD
 #endif // __cplusplus
 
-#define CTRL_KERNEL_STRINGIFY(arg) #arg
+#define CTRL_MACRO_STRINGIFY(a)  CTRL_MACRO_STRINGIFY2(a)
+#define CTRL_MACRO_STRINGIFY2(a) #a
+
+#define CTRL_COUNTPARAM(...) CTRL_COUNTPARAM_N(__VA_ARGS__, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
+#define CTRL_COUNTPARAM_N(n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, num, ...) num
 
 /* Copy parameter types and names */
 #define CTRL_KERNEL_TYPED(list, numArgs, ...) CTRL_KERNEL_TYPED_##numArgs(__VA_ARGS__)
@@ -202,9 +215,6 @@
 			CTRL_KERNEL_ARGS_POINTERS_2,                                              \
 			CTRL_KERNEL_ARGS_POINTERS_1,                                              \
 		)(__VA_ARGS__)
-
-#define CTRL_COUNTPARAM(...) CTRL_COUNTPARAM_N(__VA_ARGS__, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
-#define CTRL_COUNTPARAM_N(n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, num, ...) num
 
 /*
  * Arguments list size (sum of the type sizes of all the arguments)
@@ -387,6 +397,7 @@
 	switch (ctrl_type) {                                                                                                                 \
 		CTRL_KERNEL_CPU_KTILE_DEVICE_DATA(name)                                                                                          \
 		CTRL_KERNEL_CUDA_KTILE_DEVICE_DATA(name)                                                                                         \
+		CTRL_KERNEL_HIP_KTILE_DEVICE_DATA(name)                                                                                          \
 		CTRL_KERNEL_OPENCL_KTILE_DEVICE_DATA(name)                                                                                       \
 		CTRL_KERNEL_FPGA_KTILE_DEVICE_DATA(name)                                                                                         \
 		default:                                                                                                                         \
@@ -809,7 +820,7 @@
 #define CTRL_KERNEL_DISPLACEMENTS_TILES_19(displacementsList, numArgs, role, type, name, ...) displacementsList[numArgs - 18] = displacementsList[numArgs - 19] + CTRL_KERNEL_LIST_SIZE_KTILE(INVAL, type, name); CTRL_KERNEL_DISPLACEMENTS_TILES_18(displacementsList, numArgs, __VA_ARGS__);
 #define CTRL_KERNEL_DISPLACEMENTS_TILES_20(displacementsList, numArgs, role, type, name, ...) displacementsList[numArgs - 19] = displacementsList[numArgs - 20] + CTRL_KERNEL_LIST_SIZE_KTILE(INVAL, type, name); CTRL_KERNEL_DISPLACEMENTS_TILES_19(displacementsList, numArgs, __VA_ARGS__);
 
-#define CTRL_KERNEL_EXTRACT_KERNEL_1(kernel)    CTRL_KERNEL_STRINGIFY(kernel);
+#define CTRL_KERNEL_EXTRACT_KERNEL_1(kernel)    CTRL_MACRO_STRINGIFY(kernel);
 #define CTRL_KERNEL_EXTRACT_KERNEL_2(arg, ...)  CTRL_KERNEL_EXTRACT_KERNEL_1(__VA_ARGS__)
 #define CTRL_KERNEL_EXTRACT_KERNEL_3(arg, ...)  CTRL_KERNEL_EXTRACT_KERNEL_2(__VA_ARGS__)
 #define CTRL_KERNEL_EXTRACT_KERNEL_4(arg, ...)  CTRL_KERNEL_EXTRACT_KERNEL_3(__VA_ARGS__)

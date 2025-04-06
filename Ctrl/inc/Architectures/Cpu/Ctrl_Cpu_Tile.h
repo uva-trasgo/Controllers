@@ -50,6 +50,7 @@ typedef struct Ctrl_Cpu_Tile {
 	Ctrl_CpuEvent              offloading_last_write_event; /**< Event to sincronyze tasks, represents last HTD comunication*/
 	Ctrl_CpuEvent              host_last_read_event;        /**< Event to sincronyze tasks, represents last write operation on host*/
 	Ctrl_CpuEvent              host_last_write_event;       /**< Event to sincronyze tasks, represents last read operation on host*/
+	double                    *p_last_op_duration;          /**< Duration of the last task performed of this tile, must be read or written to atomically */
 	bool                       is_initialized;              /**< Flag to check if tile has been initialized */
 	struct Ctrl_Cpu_Tile      *p_parent_ext;                /**< Pointer to parent's ext field in hierarchical subselections */
 } Ctrl_Cpu_Tile;

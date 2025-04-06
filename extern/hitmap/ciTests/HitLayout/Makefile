@@ -67,4 +67,4 @@ layBasics.test: layBasicsTest.c
 layProcGroup.test: layProcGroupTest.c
 
 debugmode:
-	make APP_FLAGS='-I.. -DDEBUG -lm -g'
+	$(MAKE) APP_FLAGS='-I.. -DDEBUG -lm -g'

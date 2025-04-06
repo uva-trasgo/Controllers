@@ -1,55 +1,100 @@
+/**
+ * @file Hotspot_Cpu_Ctrl.c
+ * @author Trasgo Group
+ * @brief Hotspot: Ctrl CPU version
+ * @version 4.0
+ * @date 2021-07-31
+ *
+ * @copyright This software is provided to enhance knowledge and encourage progress in the scientific
+ * community. It should be used only for research and educational purposes. Any reproduction
+ * or use for commercial purpose, public redistribution, in source or binary forms, with or
+ * without modifications, is NOT ALLOWED without the previous authorization of the copyright
+ * holder. The origin of this software must not be misrepresented; you must not claim that you
+ * wrote the original software. If you use this software for any purpose (e.g. publication),
+ * a reference to the software package and the authors must be included.
+ *
+ * @copyright THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+ * THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * @copyright Copyright (c) 2007-2020, Trasgo Group, Universidad de Valladolid.
+ * All rights reserved.
+ *
+ * @copyright More information on http://trasgo.infor.uva.es/
+ */
+
 #include "Ctrl.h"
 #include "Hotspot_Constants.h"
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 double main_clock;
 double exec_clock;
 
+int grid_rows;
+int grid_cols;
+
 Ctrl_NewType(float);
 
-CTRL_KERNEL_CHAR(Hotspot, MANUAL, BLOCKSIZE_0, BLOCKSIZE_1);
+CTRL_KERNEL_CHAR(Hotspot, MANUAL, BLOCKSIZE_1, BLOCKSIZE_0);
 
-CTRL_KERNEL(Hotspot, CPU, DEFAULT, KHitTile_float power, KHitTile_float temp_src, KHitTile_float temp_dst, float Cap_1, float Rx_1, float Ry_1, float Rz_1, float step, {
-	int N = thread_id_x - 1;
-	int S = thread_id_x + 1;
-	int W = thread_id_y - 1;
-	int E = thread_id_y + 1;
+#define hotspot_params 8, IN, HitTile_float, power, IN, HitTile_float, temp_src, OUT, HitTile_float, temp_dst, INVAL, float, Cap_1, INVAL, float, Rx_1, INVAL, float, Ry_1, INVAL, float, Rz_1, INVAL, float, step
+#define init_params    2, OUT, HitTile_float, matrix_temp, OUT, HitTile_float, matrix_power
+#define compute_params 2, INVAL, HitTile_float, matrix_dst, IN, HitTile_float, matrix_src
+
+CTRL_KERNEL(Hotspot, CPU, DEFAULT, CTRL_KPARAMS(hotspot_params), {
+	const float amb_temp = 80.0;
+
+	int N = thr_i - 1;
+	int S = thr_i + 1;
+	int W = thr_j - 1;
+	int E = thr_j + 1;
 
 	N = (N < 0) ? 0 : N;
 	S = (S > hit_tileDimCard(power, 0) - 1) ? hit_tileDimCard(power, 0) - 1 : S;
 	W = (W < 0) ? 0 : W;
 	E = (E > hit_tileDimCard(power, 1) - 1) ? hit_tileDimCard(power, 1) - 1 : E;
 
-	hit(temp_dst, thread_id_x, thread_id_y) = hit(temp_src, thread_id_x, thread_id_y) +
-											  (Cap_1 * (hit(power, thread_id_x, thread_id_y) +
-														(hit(temp_src, S, thread_id_y) + hit(temp_src, N, thread_id_y) - 2.f * hit(temp_src, thread_id_x, thread_id_y)) * Ry_1 +
-														(hit(temp_src, thread_id_x, E) + hit(temp_src, thread_id_x, W) - 2.f * hit(temp_src, thread_id_x, thread_id_y)) * Rx_1 +
-														(amb_temp - hit(temp_src, thread_id_x, thread_id_y)) * Rz_1));
+	hit(temp_dst, thr_i, thr_j) = hit(temp_src, thr_i, thr_j) +
+								  (Cap_1 * (hit(power, thr_i, thr_j) +
+											(hit(temp_src, S, thr_j) + hit(temp_src, N, thr_j) - 2.f * hit(temp_src, thr_i, thr_j)) * Ry_1 +
+											(hit(temp_src, thr_i, E) + hit(temp_src, thr_i, W) - 2.f * hit(temp_src, thr_i, thr_j)) * Rx_1 +
+											(amb_temp - hit(temp_src, thr_i, thr_j)) * Rz_1));
 });
 
-CTRL_HOST_TASK(Init_Tiles, HitTile_float matrix_temp, HitTile_float matrix_power) {
+CTRL_HOST_TASK(Init_Tiles, CTRL_HPARAMS(init_params)) {
 	srand(SEED);
-	for (int i = 0; i < hit_tileDimCard(matrix_temp, 0); i++) {
-		for (int j = 0; j < hit_tileDimCard(matrix_temp, 1); j++) {
-			hit(matrix_temp, i, j) = (-1 + (2 * (((float)rand()) / RAND_MAX)));
+	for (int i = 0; i < grid_rows; i++) {
+		for (int j = 0; j < grid_cols; j++) {
+			hit(matrix_temp, i, j) = -1 + 2 * (float)rand() / RAND_MAX;
 		}
 	}
-	for (int i = 0; i < hit_tileDimCard(matrix_power, 0); i++) {
-		for (int j = 0; j < hit_tileDimCard(matrix_power, 1); j++) {
-			hit(matrix_power, i, j) = (-1 + (2 * (((float)rand()) / RAND_MAX)));
-		}
-	}
-}
-
-CTRL_HOST_TASK(Host_Compute, HitTile_float matrix_dst, HitTile_float matrix_src) {
-	for (int i = 0; i < hit_tileDimCard(matrix_src, 0); i++) {
-		for (int j = 0; j < hit_tileDimCard(matrix_src, 1); j++) {
-			hit(matrix_dst, i, j) = hit(matrix_src, i, j);
+	for (int i = 0; i < grid_rows; i++) {
+		for (int j = 0; j < grid_cols; j++) {
+			hit(matrix_power, i, j) = -1 + 2 * (float)rand() / RAND_MAX;
 		}
 	}
 }
 
+CTRL_HOST_TASK(Host_Compute, CTRL_HPARAMS(compute_params)) {
+	for (int i = 0; i < grid_rows * grid_cols; i++) {
+		hit(matrix_dst, i) = hit_as(matrix_src, matrix_dst, i);
+	}
+}
+
+CTRL_KERNEL_PROTO(Hotspot, 1, CPU, DEFAULT, hotspot_params);
+CTRL_HOST_TASK_PROTO(Init_Tiles, init_params);
+CTRL_HOST_TASK_PROTO(Host_Compute, compute_params);
+
+// Extra HostTask added for error checking
+#define norm_params 1, INVAL, HitTile_float, matrix
 CTRL_HOST_TASK(Norm_Calc, HitTile_float matrix) {
 	double resultado = 0;
 	double suma      = 0;
@@ -64,71 +109,41 @@ CTRL_HOST_TASK(Norm_Calc, HitTile_float matrix) {
 
 	#ifdef _CTRL_EXAMPLES_EXP_MODE_
 	printf("%lf, %lf, ", suma, resultado);
-	fflush(stdout);
-	#else
+	#else // _CTRL_EXAMPLES_EXP_MODE_
 	printf("\n ----------------------- NORM ----------------------- \n\n");
 	printf(" Sum: %lf \n", suma);
 	printf(" Result: %lf \n", resultado);
 	printf("\n ---------------------------------------------------- \n");
+	#endif // _CTRL_EXAMPLES_EXP_MODE_
 	fflush(stdout);
-	#endif
 }
-
-CTRL_KERNEL_PROTO(Hotspot,
-				  1, CPU, DEFAULT, 8,
-				  IN, HitTile_float, power,
-				  IN, HitTile_float, temp_src,
-				  OUT, HitTile_float, temp_dst,
-				  INVAL, float, Cap_1,
-				  INVAL, float, Rx_1,
-				  INVAL, float, Ry_1,
-				  INVAL, float, Rz_1,
-				  INVAL, float, step);
-
-CTRL_HOST_TASK_PROTO(Init_Tiles, 2,
-					 OUT, HitTile_float, matrix_temp,
-					 OUT, HitTile_float, matrix_power);
-
-CTRL_HOST_TASK_PROTO(Host_Compute, 2,
-					 INVAL, HitTile_float, matrix_dst,
-					 IN, HitTile_float, matrix_src);
-
-CTRL_HOST_TASK_PROTO(Norm_Calc, 1,
-					 INVAL, HitTile_float, matrix);
+CTRL_HOST_TASK_PROTO(Norm_Calc, norm_params);
 
 void usage(int argc, char **argv) {
 	fprintf(stderr, "Usage: %s <grid_rows/grid_cols> <sim_time> <iters_per_copy> <n_threads> <device> <mem_transfers> <policy> <host>\n", argv[0]);
 	fprintf(stderr, "\t<grid_rows/grid_cols> - number of rows/cols in the grid (positive integer)\n");
 	fprintf(stderr, "\t<sim_time> - number of iterations\n");
 	fprintf(stderr, "\t<iters_per_copy> - nº of iter between each copy back\n");
-	fprintf(stderr, "\t<no. of threads> - number of threads\n");
-	fprintf(stderr, "\t<device> - numa node for the device \n");
-	fprintf(stderr, "\t<mem_transfers> - 0 for no mem transfers 1 for mem transfers\n");
 	fprintf(stderr, "\t<policy> - 0 for sync or 1 for async\n");
-	fprintf(stderr, "\t<host> - numa node for the host\n");
-	fflush(stdout);
+	fprintf(stderr, "\t<config_file> - path to ctrl config file\n");
 	exit(EXIT_FAILURE);
 }
 
 int main(int argc, char **argv) {
 	main_clock = omp_get_wtime();
+	Ctrl_Init(&argc, &argv);
 
-	if (argc != 9) {
+	if (argc != 6) {
 		usage(argc, argv);
 	}
 
-	int grid_rows      = atoi(argv[1]);
-	int grid_cols      = atoi(argv[1]);
-	int sim_time       = atoi(argv[2]);
-	int iters_per_copy = atoi(argv[3]);
-	int n_threads      = atoi(argv[4]);
-	int p_numanodes[1];
-	int n_numanodes           = 1;
-	p_numanodes[0]            = atoi(argv[5]);
-	bool        mem_transfers = atoi(argv[6]);
-	Ctrl_Policy policy        = atoi(argv[7]);
-	int         host_aff      = atoi(argv[8]);
-	Ctrl_SetHostAffinity(host_aff);
+	grid_rows                  = atoi(argv[1]);
+	grid_cols                  = atoi(argv[1]);
+	int         sim_time       = atoi(argv[2]);
+	int         iters_per_copy = atoi(argv[3]);
+	Ctrl_Policy policy         = atoi(argv[4]);
+	Ctrl_SetPolicy(policy);
+	char *ctrl_conf_file = argv[5];
 
 	float grid_height = chip_height / grid_rows;
 	float grid_width  = chip_width / grid_cols;
@@ -146,38 +161,37 @@ int main(int argc, char **argv) {
 	float Rz_1  = 1.f / Rz;
 	float Cap_1 = step / Cap;
 
-	#ifndef _CTRL_EXAMPLES_EXP_MODE_
-	printf("\n ----------------------- ARGS ----------------------- \n");
-	printf("\n SIZE (SIZE x SIZE): %d, %d, %d", grid_rows * grid_cols, grid_rows, grid_cols);
-	printf("\n N_ITER: %d", sim_time);
-	printf("\n N_THREADS: %d", n_threads);
-	printf("\n ITERS_PER_COPY: %d", iters_per_copy);
-
-	printf("\n POLICY %s", policy ? "Async" : "Sync");
-	printf("\n MEM_TRANSFERS: %s", mem_transfers ? "ON" : "OFF");
-	printf("\n HOST AFFINITY: %d", host_aff);
-	printf("\n DEVICE: %s", n_numanodes != 0 ? argv[5] : "NULL");
-	#ifdef _CTRL_QUEUE_
-	printf("\n QUEUES: ON");
-	#else
-	printf("\n QUEUES: OFF");
-	#endif // _CTRL_QUEUE_
-	printf("\n\n ---------------------------------------------------- \n");
-	fflush(stdout);
-	#endif // _CTRL_EXAMPLES_EXP_MODE_
-
 	Ctrl_Thread threads;
 	Ctrl_ThreadInit(threads, grid_rows, grid_cols);
 
-	__ctrl_block__(1, 1) {
-		PCtrl ctrl = Ctrl_Create(CTRL_TYPE_CPU, policy, n_threads, p_numanodes, n_numanodes, mem_transfers);
+	__ctrl_block__(ctrl_conf_file) {
+		PCtrl ctrl = Ctrl_Get(0);
+
+		// Extra information for collecting results
+		Ctrl_Info info = Ctrl_GetInfo(ctrl);
+		#ifdef _CTRL_EXAMPLES_EXP_MODE_
+		printf("%d, %d-%d, %s, ", info.n_threads, info.numa_range_min, info.numa_range_max, info.mem_transfers ? "ON" : "OFF");
+		#else
+		printf("\n ----------------------- ARGS ----------------------- \n");
+		printf("\n SIZE (SIZE x SIZE): %d, %d, %d", grid_rows * grid_cols, grid_rows, grid_cols);
+		printf("\n N_ITER: %d", sim_time);
+		printf("\n N_THREADS: %d", info.n_threads);
+		printf("\n ITERS_PER_COPY: %d", iters_per_copy);
+		printf("\n POLICY %s", policy ? "Async" : "Sync");
+		printf("\n MEM_TRANSFERS: %s", info.mem_transfers ? "ON" : "OFF");
+		printf("\n HOST AFFINITY: %d", info.host_affinity);
+		printf("\n DEVICE: %d-%d", info.numa_range_min, info.numa_range_max);
+		printf("\n\n ---------------------------------------------------- \n");
+		fflush(stdout);
+		#endif // _CTRL_EXAMPLES_EXP_MODE_
 
 		/* allocate memory for the temperature and power arrays	*/
 		HitTile_float MatrixTemp[2], MatrixPower;
-		MatrixTemp[0]            = Ctrl_DomainAlloc(ctrl, float, hitShapeSize(grid_rows, grid_cols));
-		MatrixTemp[1]            = Ctrl_DomainAlloc(ctrl, float, hitShapeSize(grid_rows, grid_cols));
-		MatrixPower              = Ctrl_DomainAlloc(ctrl, float, hitShapeSize(grid_rows, grid_cols));
-		HitTile_float MatrixCopy = hitTile(float, hitShapeSize(grid_rows, grid_cols));
+		HitShape      shape      = hitShapeSize(grid_rows, grid_cols);
+		MatrixTemp[0]            = Ctrl_DomainAlloc(ctrl, float, shape);
+		MatrixTemp[1]            = Ctrl_DomainAlloc(ctrl, float, shape);
+		MatrixPower              = Ctrl_DomainAlloc(ctrl, float, shape);
+		HitTile_float MatrixCopy = hitTile(float, shape);
 
 		/* read initial temperatures and input power */
 		Ctrl_HostTask(ctrl, Init_Tiles, MatrixTemp[0], MatrixPower);
@@ -209,20 +223,20 @@ int main(int argc, char **argv) {
 
 		Ctrl_Free(ctrl, MatrixTemp[0], MatrixTemp[1], MatrixPower);
 		hit_tileFree(MatrixCopy);
-		Ctrl_Destroy(ctrl);
+		Ctrl_EndBlock();
 	}
 
+	Ctrl_Finalize();
 	main_clock = omp_get_wtime() - main_clock;
 
 	#ifdef _CTRL_EXAMPLES_EXP_MODE_
 	printf("%lf, %lf\n", main_clock, exec_clock);
-	fflush(stdout);
-	#else
-	printf("\n ----------------------- TIME ----------------------- \n\n");
-	printf(" Clock main: %lf\n", main_clock);
-	printf(" Clock exec: %lf\n", exec_clock);
-	printf("\n ---------------------------------------------------- \n");
-	#endif
+	#else // _CTRL_EXAMPLES_EXP_MODE_
+	printf("\n ---------------------- TIMERS ---------------------- \n");
+	printf("Clock main: %lf\n", main_clock);
+	printf("Clock exec: %lf\n", exec_clock);
+	printf("\n\n ---------------------------------------------------- \n");
+	#endif // _CTRL_EXAMPLES_EXP_MODE_
 
-	return 0;
+	return EXIT_SUCCESS;
 }

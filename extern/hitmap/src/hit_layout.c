@@ -49,7 +49,7 @@
 #include <hit_layout.h>
 #include <hit_funcop.h>
 
-#include <hit_com.h>
+#include <hit_allocP.h>
 
 #include <hit_sshape.h>
 #include <hit_cshape.h>

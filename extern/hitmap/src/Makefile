@@ -39,17 +39,18 @@
 # 1. DEFINITIONS AND FLAGS FOR THIS PARTICULAR APPLICATION
 # 	(THEY WILL BE AUTOMATICALLY ADDED TO THE MAIN COMPILATION COMMAND)
 #
-APP_FLAGS=-funroll-loops
+APP_FLAGS=-funroll-loops -fPIC -g
 
 #
 # 2. DECLARE APPLICATION TARGETS
 #
-APP_TARGETS=../lib/libhit.a
+APP_TARGETS=../lib/libhit.a ../lib/libhit.so
 APP_CLEAN=$(APP_TARGETS)
 
 # ACTIVATE SPECIAL RULES TREATMENT FOR THE LIBRARY ITSELF
-APP_HITMAP=y
-APP_OPENMP=y
+APP_HITMAP=yes
+APP_OPENMP=yes
+HIT_COMM=yes
 
 #
 # 4. LOAD Hitmap COMPILING DEFINITIONS
@@ -63,7 +64,8 @@ include $(HIT_BASEDIR)/config/make.def
 # 	( SUBSTITUTE THE EXAMPLES BELLOW )
 #
 INC=$(HIT_INCLUDE_DIR)
-OBJS= hit_sig.o \
+
+COMMON_OBJS= hit_sig.o \
 	hit_shape.o hit_cshape.o hit_bshape.o \
 	hit_domain.o \
 	hit_tile.o hit_gctile.o hit_mctile.o hit_gbtile.o hit_mbtile.o \
@@ -71,13 +73,20 @@ OBJS= hit_sig.o \
 	hit_blockTile.o \
 	hit_topology.o \
 	hit_layout.o hit_layoutMetis.o \
-	hit_com.o hit_pattern.o \
 	hit_file.o  \
 	hit_dump.o\
-	hit_error.o
+	hit_error.o\
+	hit_env.o\
+	hit_alb.o
+
+OBJS= $(COMMON_OBJS)
+
+ifeq ($(HIT_COMM), yes)
+	OBJS+= hit_com.o hit_pattern.o 
+endif
 
 ../lib/libhit.so: $(OBJS)
-	gcc -shared -o $@ $(OBJS)
+	$(CC) -shared -o $@ $(OBJS) $(HIT_EXT_METIS_LIB_DIRS) $(HIT_EXT_METIS_LIBS)
 
 ../lib/libhit.a: $(OBJS)
 	ar -rcs $@ $(OBJS)
@@ -145,6 +154,11 @@ hit_pattern.o: hit_pattern.c $(INC)/hit_pattern.h $(INC)/hit_com.h
 hit_error.o: hit_error.c $(INC)/hit_error.h
 	$(HIT_COMPILE) -c $<
 
+hit_env.o: hit_env.c $(INC)/hit_env.h
+	$(HIT_COMPILE) -c $<
+
+hit_alb.o: ./hit_automatic_load_balancing/hit_alb.c $(INC)/hit_tile.h $(INC)/hit_layout.h $(INC)/hit_pattern.h $(INC)/hit_sshape.h $(INC)/hit_view.h $(INC)/hitmap2.h
+	$(HIT_COMPILE) -I$(HIT_BASEDIR)/include/hit_automatic_load_balancing -c $<
 
 #
 # END

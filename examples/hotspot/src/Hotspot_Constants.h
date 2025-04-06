@@ -34,5 +34,3 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 const float t_chip      = 0.0005;
 const float chip_height = 0.016;
 const float chip_width  = 0.016;
-/* ambient temperature, assuming no package at all	*/
-const float amb_temp = 80.0;

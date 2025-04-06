@@ -43,4 +43,4 @@ sigBlend.test: sigBlendTest.c
 sigExpand.test: sigExpandTest.c
 
 debugmode:
-	make APP_FLAGS='-I.. -DDEBUG'
+	$(MAKE) APP_FLAGS='-I.. -DDEBUG'

@@ -7,10 +7,10 @@
  * 
  * @file hit_topology.h
  * @ingroup Com
- * @version 1.4
+ * @version 1.5
  * @author Arturo Gonzalez-Escribano
  * @author Javier Fresno Bausela
- * @date Mar 2019
+ * @date Jul 2023
  *
  */
 
@@ -57,6 +57,24 @@
 #ifdef __cplusplus
 	extern "C" {
 #endif
+
+/* 0. Misc utilities */
+/* Hit BASIC RANKS AND COMMUNICATOR GLOBAL DEFINITIONS */
+/**
+ * Linear rank for the current processor
+ * @hideinitializer
+ */
+#undef hit_Rank
+#define	hit_Rank		(HIT_TOPOLOGY_INFO->selfRank)
+
+/* Hit MPI ERROR TEST */
+/** This macro checks if the MPI operation was successful. */
+#define	hit_mpiTestError(ok,cad)	\
+    if ( ok != MPI_SUCCESS ) {		\
+        fprintf(stderr,"Hit MPI RunTime-Error, Rank %d: %s - %d\n", hit_Rank, cad, ok);	fflush(stderr); \
+        exit(-1);					\
+    }
+
 
 /* 1. PHYSICAL TOPOLOGY */
 /* CURRENTLY, ONLY HOMOGENEOUS SYSTEM SUPPORT */
@@ -533,6 +551,7 @@ HitRanks hit_topRanksInternal( HitTopology topo, int linealRank );
 			hit_warning( message, __FILE__, __LINE__ );	\
 		}	\
 	}
+
 
 #ifdef __cplusplus
 }

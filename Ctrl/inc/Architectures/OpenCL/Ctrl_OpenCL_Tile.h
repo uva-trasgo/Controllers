@@ -57,6 +57,7 @@ typedef struct Ctrl_OpenCL_Tile {
 	cl_event                      offloading_last_write_event; /**< Event to sincronyze tasks, represents last HTD comunication*/
 	cl_event                      host_last_read_event;        /**< Event to sincronyze tasks, represents last write operation on host*/
 	cl_event                      host_last_write_event;       /**< Event to sincronyze tasks, represents last read operation on host*/
+	cl_event                      last_op;                     /**< Event to time tasks, represents last operation on tile*/
 	int                           host_status;                 /**< Information about the status of the host memory of this tile (unallocated, invalid or valid) */
 	int                           device_status;               /**< Information about the status of the device memory of this tile (unallocated, invalid or valid) */
 	bool                          is_pinned;                   /**< Flag to check if host image of this tile is pinned memory */

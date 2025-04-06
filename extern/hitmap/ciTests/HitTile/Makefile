@@ -58,4 +58,4 @@ tileSelectArrayCoords.test: tileSelectArrayCoordsTest.c
 tileShapeTile2Array.test: tileShapeTile2ArrayTest.c
 
 debugmode:
-	make APP_FLAGS='-I.. -DDEBUG'
+	$(MAKE) APP_FLAGS='-I.. -DDEBUG'

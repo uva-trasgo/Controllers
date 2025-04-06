@@ -44,12 +44,10 @@
  * This is used to preload kernels when the ctrl is created.
  */
 typedef struct Ctrl_FPGA_KernelParams {
-	cl_kernel     *p_kernel;      /**< Pointer to the kernel */
-	cl_program    *p_program;     /**< Pointer to the program */
-	const char    *p_kernel_name; /**< String containing the kernel's name */
-	unsigned char *p_binary_str;  /**< @gabriel document this*/
-	size_t         binary_length; /**< @gabriel document this*/
-	char          *p_binary_name; /**< @gabriel document this*/
+	cl_kernel  *p_kernel;      /**< Pointer to the kernel. Of size num ctrls of type FPGA. */
+	cl_program *p_program;     /**< Pointer to the program. Of size num ctrls of type FPGA. */
+	const char *p_kernel_name; /**< String containing the kernel's name */
+	char       *p_binary_name; /**< Path to kernel binary*/
 
 	struct Ctrl_FPGA_KernelParams *p_next; /**< Pointer to the next element in the list */
 } Ctrl_FPGA_KernelParams;
@@ -58,9 +56,8 @@ typedef struct Ctrl_FPGA_KernelParams {
  * Null value for \e Ctrl_FPGA_KernelParams
  * @hideinitializer
  */
-#define CTRL_FPGA_KERNELPARAMS_NULL                                                                         \
-	{ .p_kernel = NULL, .p_program = NULL, .p_kernel_name = NULL, .p_binary_str = NULL, .binary_length = 0, \
-	  .p_binary_name = NULL, .p_next = NULL }
+#define CTRL_FPGA_KERNELPARAMS_NULL \
+	{ .p_kernel = NULL, .p_program = NULL, .p_kernel_name = NULL, .p_binary_name = NULL, .p_next = NULL }
 
 /**
  * initial node of the kernel info.
@@ -80,6 +77,7 @@ typedef struct {
 	int               n_arguments;         /**< Number of arguments passed to the user defined kernel */
 	char             *p_roles;             /**< List of roles of the arguments passed to the kernel */
 	uint16_t         *p_displacements;     /**< Displacement of parameter over arguments array */
+	int               type_id;             /**< Id of the ctrl respect to other FPGA ctrls */
 } Ctrl_FPGA_Request;
 ///@endcond
 #endif // _CTRL_FPGA_REQUEST_H_

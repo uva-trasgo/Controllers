@@ -1,3 +1,34 @@
+/**
+ * @file Hotspot_OpenCL_Gpu_Ctrl.c
+ * @author Trasgo Group
+ * @brief Hotspot: Ctrl OpenCLGPU version
+ * @version 4.0
+ * @date 2021-07-31
+ *
+ * @copyright This software is provided to enhance knowledge and encourage progress in the scientific
+ * community. It should be used only for research and educational purposes. Any reproduction
+ * or use for commercial purpose, public redistribution, in source or binary forms, with or
+ * without modifications, is NOT ALLOWED without the previous authorization of the copyright
+ * holder. The origin of this software must not be misrepresented; you must not claim that you
+ * wrote the original software. If you use this software for any purpose (e.g. publication),
+ * a reference to the software package and the authors must be included.
+ *
+ * @copyright THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+ * THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * @copyright Copyright (c) 2007-2020, Trasgo Group, Universidad de Valladolid.
+ * All rights reserved.
+ *
+ * @copyright More information on http://trasgo.infor.uva.es/
+ */
+
 /*
 LICENSE TERMS
 
@@ -27,14 +58,21 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 double main_clock;
 double exec_clock;
 
+int grid_rows;
+int grid_cols;
+
 Ctrl_NewType(float);
 
-CTRL_KERNEL_CHAR(Hotspot, MANUAL, LOCAL_SIZE_0, LOCAL_SIZE_1);
+CTRL_KERNEL_CHAR(Hotspot, MANUAL, LOCAL_SIZE_1, LOCAL_SIZE_0);
 
-CTRL_KERNEL(Hotspot, OPENCLGPU, DEFAULT, int iteration, KHitTile_float power, KHitTile_float temp_src, KHitTile_float temp_dst, int border_cols, int border_rows, float Cap, float Rx, float Ry, float Rz, float step, {
-	__local float temp_on_opencl[LOCAL_SIZE_0][LOCAL_SIZE_1];
-	__local float power_on_opencl[LOCAL_SIZE_0][LOCAL_SIZE_1];
-	__local float temp_t[LOCAL_SIZE_0][LOCAL_SIZE_1]; // saving temparary temperature result
+#define hotspot_params 11, INVAL, int, iteration, IN, HitTile_float, power, IN, HitTile_float, temp_src, OUT, HitTile_float, temp_dst, INVAL, int, border_cols, INVAL, int, border_rows, INVAL, float, Cap, INVAL, float, Rx, INVAL, float, Ry, INVAL, float, Rz, INVAL, float, step
+#define init_params    2, OUT, HitTile_float, matrix_temp, OUT, HitTile_float, matrix_power
+#define compute_params 2, INVAL, HitTile_float, matrix_dst, IN, HitTile_float, matrix_src
+
+CTRL_KERNEL(Hotspot, OPENCLGPU, DEFAULT, CTRL_KPARAMS(hotspot_params), {
+	__local float temp_on_opencl[LOCAL_SIZE_1][LOCAL_SIZE_0];
+	__local float power_on_opencl[LOCAL_SIZE_1][LOCAL_SIZE_0];
+	__local float temp_t[LOCAL_SIZE_1][LOCAL_SIZE_0]; // saving temparary temperature result
 
 	float amb_temp = 80.0;
 	float step_div_Cap;
@@ -132,29 +170,27 @@ CTRL_KERNEL(Hotspot, OPENCLGPU, DEFAULT, int iteration, KHitTile_float power, KH
 	}
 });
 
-CTRL_HOST_TASK(Init_Tiles, HitTile_float matrix_temp, HitTile_float matrix_power) {
+CTRL_HOST_TASK(Init_Tiles, CTRL_HPARAMS(init_params)) {
 	srand(SEED);
-	for (int i = 0; i < hit_tileDimCard(matrix_temp, 0); i++) {
-		for (int j = 0; j < hit_tileDimCard(matrix_temp, 1); j++) {
-			hit(matrix_temp, i, j) = (-1 + (2 * (((float)rand()) / RAND_MAX)));
+	for (int i = 0; i < grid_rows; i++) {
+		for (int j = 0; j < grid_cols; j++) {
+			hit(matrix_temp, i, j) = -1 + 2 * (float)rand() / RAND_MAX;
 		}
 	}
-	for (int i = 0; i < hit_tileDimCard(matrix_power, 0); i++) {
-		for (int j = 0; j < hit_tileDimCard(matrix_power, 1); j++) {
-			hit(matrix_power, i, j) = (-1 + (2 * (((float)rand()) / RAND_MAX)));
+	for (int i = 0; i < grid_rows; i++) {
+		for (int j = 0; j < grid_cols; j++) {
+			hit(matrix_power, i, j) = -1 + 2 * (float)rand() / RAND_MAX;
 		}
 	}
 }
 
-CTRL_HOST_TASK(Host_Compute, HitTile_float matrix_dst, HitTile_float matrix_src) {
+CTRL_HOST_TASK(Host_Compute, CTRL_HPARAMS(compute_params)) {
 	#ifdef _PROFILING_ENABLED_
 	roctxRangePush("Host task");
 	#endif //_PROFILING_ENABLED_
 
-	for (int i = 0; i < hit_tileDimCard(matrix_src, 0); i++) {
-		for (int j = 0; j < hit_tileDimCard(matrix_src, 1); j++) {
-			hit(matrix_dst, i, j) = hit(matrix_src, i, j);
-		}
+	for (int i = 0; i < grid_rows * grid_cols; i++) {
+		hit(matrix_dst, i) = hit_as(matrix_src, matrix_dst, i);
 	}
 
 	#ifdef _PROFILING_ENABLED_
@@ -162,8 +198,13 @@ CTRL_HOST_TASK(Host_Compute, HitTile_float matrix_dst, HitTile_float matrix_src)
 	#endif //_PROFILING_ENABLED_
 }
 
-CTRL_HOST_TASK(Norm_Calc, HitTile_float matrix) {
+CTRL_KERNEL_PROTO(Hotspot, 1, OPENCLGPU, DEFAULT, hotspot_params);
+CTRL_HOST_TASK_PROTO(Init_Tiles, init_params);
+CTRL_HOST_TASK_PROTO(Host_Compute, compute_params);
 
+// Extra HostTask added for error checking
+#define norm_params 1, INVAL, HitTile_float, matrix
+CTRL_HOST_TASK(Norm_Calc, CTRL_HPARAMS(norm_params)) {
 	double resultado = 0;
 	double suma      = 0;
 
@@ -177,68 +218,40 @@ CTRL_HOST_TASK(Norm_Calc, HitTile_float matrix) {
 
 	#ifdef _CTRL_EXAMPLES_EXP_MODE_
 	printf("%lf, %lf, ", suma, resultado);
-	fflush(stdout);
 	#else
 	printf("\n ----------------------- NORM ----------------------- \n\n");
 	printf(" Sum: %lf \n", suma);
 	printf(" Result: %lf \n", resultado);
 	printf("\n ---------------------------------------------------- \n");
+	#endif // _CTRL_EXAMPLES_EXP_MODE_
 	fflush(stdout);
-	#endif
 }
 
-CTRL_KERNEL_PROTO(Hotspot,
-				  1, OPENCLGPU, DEFAULT, 11,
-				  INVAL, int, iteration,
-				  IN, HitTile_float, power,
-				  IN, HitTile_float, temp_src,
-				  OUT, HitTile_float, temp_dst,
-				  INVAL, int, border_cols,
-				  INVAL, int, border_rows,
-				  INVAL, float, Cap,
-				  INVAL, float, Rx,
-				  INVAL, float, Ry,
-				  INVAL, float, Rz,
-				  INVAL, float, step);
-
-CTRL_HOST_TASK_PROTO(Init_Tiles, 2,
-					 OUT, HitTile_float, matrix_temp,
-					 OUT, HitTile_float, matrix_power);
-
-CTRL_HOST_TASK_PROTO(Host_Compute, 2,
-					 INVAL, HitTile_float, matrix_dst,
-					 IN, HitTile_float, matrix_src);
-
-CTRL_HOST_TASK_PROTO(Norm_Calc, 1,
-					 INVAL, HitTile_float, matrix);
+CTRL_HOST_TASK_PROTO(Norm_Calc, norm_params);
 
 int main(int argc, char *argv[]) {
 	main_clock = omp_get_wtime();
+	Ctrl_Init(&argc, &argv);
 
-	if (argc != 9) {
+	if (argc != 7) {
 		fprintf(stderr, "Usage: %s <grid_rows/grid_cols> <pyramid_height> <sim_time> <device> <platform> <policy> <affinity>\n", argv[0]);
 		fprintf(stderr, "\t<grid_rows/grid_cols> - number of rows/cols in the grid (positive integer)\n");
 		fprintf(stderr, "\t<pyramid_height> - pyramid heigh(positive integer)\n");
 		fprintf(stderr, "\t<sim_time> - number of iterations\n");
 		fprintf(stderr, "\t<iters_per_copy> - nº of iter between each copy back\n");
-		fprintf(stderr, "\t<device> - GPU index\n");
-		fprintf(stderr, "\t<platform> - GPU index\n");
 		fprintf(stderr, "\t<policy> - 0 for sync or 1 for async\n");
-		fprintf(stderr, "\t<affinity> - index of NUMA node closer to device\n");
-		fflush(stdout);
+		fprintf(stderr, "\t<config_file> - path to ctrl config file\n");
 		exit(EXIT_FAILURE);
 	}
 
-	int         grid_rows        = atoi(argv[1]);
-	int         grid_cols        = atoi(argv[1]);
+	grid_rows                    = atoi(argv[1]);
+	grid_cols                    = atoi(argv[1]);
 	int         pyramid_height   = atoi(argv[2]);
 	int         total_iterations = atoi(argv[3]);
 	int         iters_per_copy   = atoi(argv[4]);
-	int         DEVICE           = atoi(argv[5]);
-	int         PLATFORM         = atoi(argv[6]);
-	Ctrl_Policy policy           = atoi(argv[7]);
-	int         host_aff         = atoi(argv[8]);
-	Ctrl_SetHostAffinity(host_aff);
+	Ctrl_Policy policy           = atoi(argv[5]);
+	Ctrl_SetPolicy(policy);
+	char *ctrl_conf_file = argv[6];
 
 	int borderCols    = (pyramid_height)*EXPAND_RATE / 2;
 	int borderRows    = (pyramid_height)*EXPAND_RATE / 2;
@@ -256,77 +269,45 @@ int main(int argc, char *argv[]) {
 	float Rz  = t_chip / (K_SI * grid_height * grid_width);
 
 	float max_slope = MAX_PD / (FACTOR_CHIP * t_chip * SPEC_HEAT_SI);
-	float step      = PRECISION / max_slope;
-
-	cl_platform_id *p_platforms = (cl_platform_id *)malloc((PLATFORM + 1) * sizeof(cl_platform_id));
-	OPENCL_ASSERT_OP(clGetPlatformIDs(PLATFORM + 1, p_platforms, NULL));
-	cl_platform_id platform_id = p_platforms[PLATFORM];
-	free(p_platforms);
-
-	size_t platform_name_size;
-	OPENCL_ASSERT_OP(clGetPlatformInfo(platform_id, CL_PLATFORM_NAME, 0, NULL, &platform_name_size));
-	char *platform_name = (char *)malloc(sizeof(char) * platform_name_size);
-	OPENCL_ASSERT_OP(clGetPlatformInfo(platform_id, CL_PLATFORM_NAME, platform_name_size, platform_name, NULL));
-
-	cl_device_id *p_devices = (cl_device_id *)malloc((DEVICE + 1) * sizeof(cl_device_id));
-	OPENCL_ASSERT_OP(clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_GPU, DEVICE + 1, p_devices, NULL));
-	cl_device_id device_id = p_devices[DEVICE];
-	free(p_devices);
-
-	size_t device_name_size;
-	OPENCL_ASSERT_OP(clGetDeviceInfo(device_id, CL_DEVICE_NAME, 0, NULL, &device_name_size));
-	char *device_name = (char *)malloc(sizeof(char) * device_name_size);
-	OPENCL_ASSERT_OP(clGetDeviceInfo(device_id, CL_DEVICE_NAME, device_name_size, device_name, NULL));
-
-	#ifdef _CTRL_EXAMPLES_EXP_MODE_
-	printf("%s, %s, ", device_name, platform_name);
-	#else
-	printf("\n ----------------------- ARGS ----------------------- \n");
-	printf("\n SIZE (SIZE x SIZE): %d, %d, %d", grid_rows * grid_cols, grid_rows, grid_cols);
-	printf("\n PYRAMID HEIGHT: %d", pyramid_height);
-	printf("\n N_ITER: %d", total_iterations);
-	printf("\n ITERS_PER_COPY: %d", iters_per_copy);
-	printf("\n POLICY %s", policy ? "Async" : "Sync");
-	printf("\n DEVICE: %s", device_name);
-	printf("\n PLATFORM: %s", platform_name);
-	printf("\n HOST AFFINITY: %d", host_aff);
-	#ifdef _CTRL_QUEUE_
-	printf("\n QUEUES: ON");
-	#else
-	printf("\n QUEUES: OFF");
-	#endif // _CTRL_QUEUE_
-	printf("\n\n ---------------------------------------------------- \n");
-	fflush(stdout);
-	#endif // _CTRL_EXAMPLES_EXP_MODE_
-	int flags = CTRL_MEM_PINNED;
-	if (strstr(platform_name, "AMD") && (grid_cols > 1024 || policy == CTRL_POLICY_SYNC)) {
-		flags = CTRL_MEM_NOPINNED;
-	}
-	free(platform_name);
-	free(device_name);
+	float step      = PRECISION / max_slope / 1000.0;
 
 	Ctrl_Thread threads;
-	#ifndef _CTRL_EXAMPLES_EXP_MODE_
-	printf("Threads: %d, %d\n", LOCAL_SIZE_0 * blockRows, LOCAL_SIZE_1 * blockCols);
-	fflush(stdout);
-	#endif
+	Ctrl_ThreadInit(threads, LOCAL_SIZE_1 * blockRows, LOCAL_SIZE_0 * blockCols);
 
-	Ctrl_ThreadInit(threads, LOCAL_SIZE_0 * blockRows, LOCAL_SIZE_1 * blockCols);
+	__ctrl_block__(ctrl_conf_file) {
+		PCtrl ctrl = Ctrl_Get(0);
 
-	#ifdef _CTRL_QUEUE_
-	__ctrl_block__(1, 1)
+		Ctrl_Info info = Ctrl_GetInfo(ctrl);
+
+		// Extra information for collecting results
+		#ifdef _CTRL_EXAMPLES_EXP_MODE_
+		printf("%s, %s, ", info.device_name, info.platform_name);
 		#else
-		__ctrl_block__(1, 0)
-	#endif //_CTRL_QUEUE_
-	{
+		printf("\n ----------------------- ARGS ----------------------- \n");
+		printf("\n SIZE (SIZE x SIZE): %d, %d, %d", grid_rows * grid_cols, grid_rows, grid_cols);
+		printf("\n PYRAMID HEIGHT: %d", pyramid_height);
+		printf("\n N_ITER: %d", total_iterations);
+		printf("\n ITERS_PER_COPY: %d", iters_per_copy);
+		printf("\n POLICY %s", policy ? "Async" : "Sync");
+		printf("\n DEVICE: %s", info.device_name);
+		printf("\n PLATFORM: %s", info.platform_name);
+		printf("\n HOST AFFINITY: %d", info.host_affinity);
+		printf("\n\n ---------------------------------------------------- \n");
+		printf("Threads: %d, %d\n", LOCAL_SIZE_0 * blockRows, LOCAL_SIZE_1 * blockCols);
+		#endif // _CTRL_EXAMPLES_EXP_MODE_
+		fflush(stdout);
 
-		PCtrl ctrl = Ctrl_Create(CTRL_TYPE_OPENCL_GPU, policy, DEVICE, PLATFORM);
+		int flags = CTRL_MEM_PINNED;
+		if (strstr(info.platform_name, "AMD") && (grid_cols > 1024 || policy == CTRL_POLICY_SYNC)) {
+			flags = CTRL_MEM_NOPINNED;
+		}
 
 		HitTile_float MatrixTemp[2], MatrixPower;
-		MatrixTemp[0]            = Ctrl_DomainAlloc(ctrl, float, hitShapeSize(grid_rows, grid_cols), flags);
-		MatrixTemp[1]            = Ctrl_DomainAlloc(ctrl, float, hitShapeSize(grid_rows, grid_cols), flags);
-		MatrixPower              = Ctrl_DomainAlloc(ctrl, float, hitShapeSize(grid_rows, grid_cols), flags);
-		HitTile_float MatrixCopy = hitTile(float, hitShapeSize(grid_rows, grid_cols));
+		HitShape      shape      = hitShapeSize(grid_rows, grid_cols);
+		MatrixTemp[0]            = Ctrl_DomainAlloc(ctrl, float, shape, flags);
+		MatrixTemp[1]            = Ctrl_DomainAlloc(ctrl, float, shape, flags);
+		MatrixPower              = Ctrl_DomainAlloc(ctrl, float, shape, flags);
+		HitTile_float MatrixCopy = hitTile(float, shape);
 
 		Ctrl_HostTask(ctrl, Init_Tiles, MatrixTemp[0], MatrixPower);
 
@@ -362,20 +343,20 @@ int main(int argc, char *argv[]) {
 		Ctrl_Synchronize();
 		Ctrl_Free(ctrl, MatrixTemp[0], MatrixTemp[1], MatrixPower);
 		hit_tileFree(MatrixCopy);
-		Ctrl_Destroy(ctrl);
+		Ctrl_EndBlock();
 	}
 
+	Ctrl_Finalize();
 	main_clock = omp_get_wtime() - main_clock;
 
 	#ifdef _CTRL_EXAMPLES_EXP_MODE_
 	printf("%lf, %lf\n", main_clock, exec_clock);
-	fflush(stdout);
-	#else
-	printf("\n ----------------------- TIME ----------------------- \n\n");
-	printf(" Clock main: %lf\n", main_clock);
-	printf(" Clock exec: %lf\n", exec_clock);
-	printf("\n ---------------------------------------------------- \n");
-	#endif
+	#else // _CTRL_EXAMPLES_EXP_MODE_
+	printf("\n ---------------------- TIMERS ---------------------- \n");
+	printf("Clock main: %lf\n", main_clock);
+	printf("Clock exec: %lf\n", exec_clock);
+	printf("\n\n ---------------------------------------------------- \n");
+	#endif // _CTRL_EXAMPLES_EXP_MODE_
 
-	return 0;
+	return EXIT_SUCCESS;
 }

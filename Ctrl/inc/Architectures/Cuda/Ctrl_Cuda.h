@@ -52,6 +52,7 @@
 
 #include "hitmap2.h"
 
+#include "Core/Ctrl_Info.h"
 #include "Core/Ctrl_KHitTile.h"
 #include "Core/Ctrl_Policy.h"
 #include "Core/Ctrl_Request.h"
@@ -121,13 +122,6 @@ typedef struct Ctrl_Cuda {
 	struct Ctrl_Cuda_Tile_List *p_tile_list_head; /**< Head of the list of tiles associate to this ctrl */
 	struct Ctrl_Cuda_Tile_List *p_tile_list_tail; /**< Tail of the list of tiles associate to this ctrl */
 
-	#ifdef _CTRL_QUEUE_
-	omp_lock_t *p_lock_first_host; /**< Lock used for sync between main thread and queue manager thread */
-	omp_lock_t *p_lock_first_ctrl; /**< Lock used for sync between main thread and queue manager thread */
-	omp_lock_t *p_lock_host;       /**< Lock used for sync between main thread and queue manager thread */
-	omp_lock_t *p_lock_ctrl;       /**< Lock used for sync between main thread and queue manager thread */
-	#endif //_CTRL_QUEUE_
-
 	#ifdef _CTRL_CUBLAS_
 	cublasHandle_t cublas_handle; /**< Handle for cublas lib operations */
 	#endif // _CTRL_CUBLAS_
@@ -147,13 +141,15 @@ typedef struct Ctrl_Cuda {
  * Create the controller and its corresponding variables.
  *
  * @param p_ctrl Controller to be created.
- * @param policy Policy to be used by the contrller.
- * @param device Index of the device to be used.
+ * @param policy Policy for this ctrl to be used.
+ * @param args Space separated string containing the params for this ctrl. Contains:
+ * 		- Device: index of the device to be used.
+ * 		- [OPTIONAL] Streams: number of streams to use to execute kernels. Default 1.
  */
-void Ctrl_Cuda_Create(Ctrl_Cuda *p_ctrl, Ctrl_Policy policy, int device, int streams);
+void Ctrl_Cuda_Create(Ctrl_Cuda *p_ctrl, Ctrl_Policy policy, char *args);
 
 /**
- * Evaluate a task on a CPU ctrl.
+ * Evaluate a task on a CUDA ctrl.
  *
  * @param p_ctrl Ctrl to execute the task.
  * @param p_task Pointer to the task to be evaluated.
@@ -161,10 +157,22 @@ void Ctrl_Cuda_Create(Ctrl_Cuda *p_ctrl, Ctrl_Policy policy, int device, int str
 void Ctrl_Cuda_EvalTask(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task);
 
 /**
- * Set cuda to use the device in \e p_ctrl. Calls to \e cudaSetDevice.
- *
- * @param p_ctrl Ctrl we want to set device of.
+ * Get information of the device asociated with \p p_ctrl.
+ * @param p_ctrl ctrl to get the info from.
+ * @param p_info struct to store the info into.
  */
-void Ctrl_Cuda_NewThreadSetup(Ctrl_Cuda *p_ctrl);
+void Ctrl_Cuda_GetInfo(Ctrl_Cuda *p_ctrl, Ctrl_Info *p_info);
+
+/**
+ * @brief Return the duration of the last kernel or memory transfer operation performed over \p tile.
+ *
+ * The last operation enqueued for \p tile must be completed before calling this function.
+ *
+ * @param p_ctrl Ctrl \p p_tile is associated to.
+ * @param p_tile HitTile attached to \p p_ctrl.
+ *
+ * @return Duration of the last op over \p p_tile in seconds.
+ */
+double Ctrl_Cuda_TimeLastOp(Ctrl_Cuda *p_ctrl, HitTile *p_tile);
 ///@endcond
 #endif /* _CTRL_CUDA_H_ */

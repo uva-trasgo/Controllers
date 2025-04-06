@@ -50,6 +50,8 @@ typedef struct Ctrl_Cuda_Tile {
 	cudaEvent_t                 offloading_last_write_event; /**< Event to sincronyze tasks, represents last HTD comunication*/
 	cudaEvent_t                 host_last_read_event;        /**< Event to sincronyze tasks, represents last write operation on host*/
 	cudaEvent_t                 host_last_write_event;       /**< Event to sincronyze tasks, represents last read operation on host*/
+	cudaEvent_t                 last_op_start;               /**< Event to time tasks, represents last operation start on tile*/
+	cudaEvent_t                 last_op_stop;                /**< Event to time tasks, represents last operation stop on tile*/
 	int                         host_status;                 /**< Information about the status of the host memory of this tile (unallocated, invalid or valid) */
 	int                         device_status;               /**< Information about the status of the device memory of this tile (unallocated, invalid or valid) */
 	bool                        is_pinned;                   /**< Flag to check if host image of this tile is pinned memory */

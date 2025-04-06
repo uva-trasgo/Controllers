@@ -57,13 +57,6 @@
 #ifdef __cplusplus
 	extern "C" {
 #endif
-/* Hit MPI ERROR TEST */
-/** This macro checks if the MPI operation was successful. */
-#define	hit_mpiTestError(ok,cad)	\
-    if ( ok != MPI_SUCCESS ) {		\
-        fprintf(stderr,"Hit MPI RunTime-Error, Rank %d: %s - %d\n", hit_Rank, cad, ok);	fflush(stderr); \
-        exit(-1);					\
-    }
 
 
 /** @name Hitmap Base types */
@@ -81,6 +74,11 @@ typedef MPI_Datatype HitType;
  * @hideinitializer
  */
 #define	HIT_INT			MPI_INT
+/**
+ * Constant for integer long type. 
+ * @hideinitializer
+ */
+#define	HIT_LONG		MPI_LONG
 /**
  * Constant for single precision real basic type. 
  * @hideinitializer
@@ -220,13 +218,6 @@ extern HitOp	HIT_OP_MAX_DOUBLE;
  */
 #define HIT_COM_MYSELF	-100
 
-
-/* Hit BASIC RANKS AND COMMUNICATOR GLOBAL DEFINITIONS */
-/**
- * Linear rank for the current processor
- * @hideinitializer
- */
-#define	hit_Rank		(HIT_TOPOLOGY_INFO->selfRank)
 /**
  * Number of total processors
  * @hideinitializer
@@ -253,6 +244,26 @@ void hit_comInit(int *pargc, char **pargv[]);
  * Finalize the communication environment freeing all internal resources.
  */
 void hit_comFinalize();
+
+/* Hit MPI NODE NAME/PROC INFO */
+/**
+ * Get the node name
+ * @return String with the MPI node name
+ */
+char * hit_comNodeName();
+
+/**
+ * Get the rank id in the node group (processes in the local node)
+ * @return int  Rank in the node group
+ */
+int hit_comNodeGroupRank();
+
+/**
+ * Get the size of the node group (processes in the local node)
+ * @return int  Size of the node group
+ */
+int hit_comNodeGroupSize();
+
 
 
 /* Hit COM TYPES: CONSTRUCTOR */
@@ -1362,8 +1373,7 @@ void hit_comDo(HitCom *issue);
 #define	hit_comDoOnce( com )	{ HitCom __HIT_COM__ = com; hit_comDo( & __HIT_COM__ ); hit_comFree( __HIT_COM__ ); }
 /** @} */
 
-#undef hit_error
-/** hit_error: prints an error.
+/** hit_error_noinit: prints an error without MPI initialized.
  * 
  * @hideinitializer
  * 
@@ -1371,6 +1381,21 @@ void hit_comDo(HitCom *issue);
  * @param file Code file.
  * @param numLine Line number.
  */
+#define hit_error_noinit( name )	\
+	{							\
+	fprintf(stderr,"Hit Programmer, RunTime-Error: %s, in %s[%d]\n", name, __FILE__, __LINE__);				\
+	exit( HIT_ERR_USER );		\
+	}
+
+/** hit_error: Redefines hit_error to include MPI information.
+ * 
+ * @hideinitializer
+ * 
+ * @param name Error message.
+ * @param file Code file.
+ * @param numLine Line number.
+ */
+#undef hit_error
 #define hit_error(name,file,numLine)	\
 	{							\
 	fprintf(stderr,"Hit Programmer, RunTime-Error Rank(%d): %s, in %s[%d]\n", hit_Rank, name, file, numLine); \

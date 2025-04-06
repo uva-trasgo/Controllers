@@ -87,25 +87,25 @@ typedef struct {
 	CTRL_KTILE_VARS(type);
 
 #ifndef _CTRL_KERNELS_H_
-#define CTRL_KTILE_VARS(type)                                                \
-	const char *raw_ktile_KHitTile_##type     = CTRL_KERNEL_STRINGIFY(type); \
-	const char *raw_def_ktile_KHitTile_##type = CTRL_KERNEL_STRINGIFY(       \
-		typedef struct {                                                     \
-			__global type *data;                                             \
-			int            origAcumCard[4];                                  \
-			int            card[3];                                          \
-		} KHitTile_##type##_write;                                           \
-		typedef struct {                                                     \
-			__global const type *data;                                       \
-			int                  origAcumCard[4];                            \
-			int                  card[3];                                    \
-		} KHitTile_##type##_read;                                            \
-		typedef struct {                                                     \
-			int origAcumCard[4];                                             \
-			int card[3];                                                     \
-			int offset;                                                      \
-		} KHitTile_##type##_wrapper;);                                       \
-	bool raw_added_ktile_KHitTile_##type = false;
+#define CTRL_KTILE_VARS(type)                                                                              \
+	static const char *raw_ktile_KHitTile_##type __attribute__((unused))     = CTRL_MACRO_STRINGIFY(type); \
+	static const char *raw_def_ktile_KHitTile_##type __attribute__((unused)) = CTRL_MACRO_STRINGIFY(       \
+		typedef struct {                                                                                   \
+			__global type *data;                                                                           \
+			int            origAcumCard[4];                                                                \
+			int            card[3];                                                                        \
+		} KHitTile_##type##_write;                                                                         \
+		typedef struct {                                                                                   \
+			__global const type *data;                                                                     \
+			int                  origAcumCard[4];                                                          \
+			int                  card[3];                                                                  \
+		} KHitTile_##type##_read;                                                                          \
+		typedef struct {                                                                                   \
+			int origAcumCard[4];                                                                           \
+			int card[3];                                                                                   \
+			int offset;                                                                                    \
+		} KHitTile_##type##_wrapper;);                                                                     \
+	static bool raw_added_ktile_KHitTile_##type __attribute__((unused)) = false;
 #else // _CTRL_KERNELS_H_
 #define CTRL_KTILE_VARS(type)
 #endif // _CTRL_KERNELS_H_

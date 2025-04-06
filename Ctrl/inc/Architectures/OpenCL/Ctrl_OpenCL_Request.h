@@ -44,8 +44,8 @@
  * This is used to preload kernels when the ctrl is created.
  */
 typedef struct Ctrl_OpenCLGpu_KernelParams {
-	cl_kernel  *p_kernel;      /**< Pointer to the kernel */
-	cl_program *p_program;     /**< Pointer to the program */
+	cl_kernel  *p_kernel;      /**< Pointer to the kernels. Of size num ctrls of type OpenCL GPU. */
+	cl_program *p_program;     /**< Pointer to the programs. Of size num ctrls of type OpenCL GPU. */
 	const char *p_kernel_name; /**< String containing the kernel's name */
 	char       *p_kernel_raw;  /**< String containing kernel's code */
 
@@ -62,7 +62,7 @@ typedef struct Ctrl_OpenCLGpu_KernelParams {
 /**
  * initial node of the kernel info.
  */
-extern Ctrl_OpenCLGpu_KernelParams OpenClGpu_initial_kp;
+extern Ctrl_OpenCLGpu_KernelParams OpenCLGpu_initial_kp;
 
 /**
  * \brief OpenCL_GPU specific info needed to execute a kernel.
@@ -77,6 +77,7 @@ typedef struct {
 	int               n_arguments;         /**< Number of arguments passed to the user defined kernel */
 	char             *p_roles;             /**< List of roles of the arguments passed to the kernel */
 	uint16_t         *p_displacements;     /**< Displacement of parameter over arguments array */
+	int               type_id;             /**< Id of the ctrl respect to other OpenCL Gpu ctrls */
 } Ctrl_OpenCL_Request;
 ///@endcond
 #endif // _CTRL_OPENCL_REQUEST_H_

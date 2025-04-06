@@ -52,4 +52,4 @@ sshapeTransform.test: sshapeTransformTest.c
 sshapeIterator.test: sshapeIteratorTest.c
 
 debugmode:
-	make APP_FLAGS='-I.. -DDEBUG'
+	$(MAKE) APP_FLAGS='-I.. -DDEBUG'

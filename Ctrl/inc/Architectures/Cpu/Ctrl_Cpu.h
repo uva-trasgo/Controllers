@@ -39,6 +39,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#include "Core/Ctrl_Info.h"
 #include "Core/Ctrl_KHitTile.h"
 #include "Core/Ctrl_Policy.h"
 #include "Core/Ctrl_Request.h"
@@ -97,26 +98,18 @@
  * CPU implementation of abstract ctrl
  */
 typedef struct Ctrl_Cpu {
-	int                        n_cores;          /**< Number of threads to be used when executing kernels*/
-	hwloc_topology_t           topo;             /**< Hwloc topology of the computer for binding threads and memory to specific cores and NUMA nodes */
-	hwloc_cpuset_t             device_cpuset;    /**< Cpuset representing NUMA nodes used as a device by this ctrl */
-	bool                       mem_moves;        /**< Flag to determine if memory transfers between host ad device should be made or not */
-	struct Ctrl_Cpu_Tile_List *p_tile_list_head; /**< Head of the list of tiles associate to this ctrl */
-	struct Ctrl_Cpu_Tile_List *p_tile_list_tail; /**< Tail of the list of tiles associate to this ctrl */
-
-	#ifdef _CTRL_QUEUE_
-	omp_lock_t *p_lock_first_host; /**< Lock used for sync between main thread and queue manager thread */
-	omp_lock_t *p_lock_first_ctrl; /**< Lock used for sync between main thread and queue manager thread */
-	omp_lock_t *p_lock_host;       /**< Lock used for sync between main thread and queue manager thread */
-	omp_lock_t *p_lock_ctrl;       /**< Lock used for sync between main thread and queue manager thread */
-	#endif //_CTRL_QUEUE_
-
-	Ctrl_Policy     policy;            /**< Policy to be used by this ctrl (sync or async) */
-	Ctrl_TaskQueue *p_kernel_stream;   /**< CPU stream for kernel execution */
-	Ctrl_TaskQueue *p_moveTo_stream;   /**< CPU stream for host to device memory transfers */
-	Ctrl_TaskQueue *p_moveFrom_stream; /**< CPU stream for host to device memory transfers */
-	Ctrl_CpuEvent   event_seq;         /**< Event used for sync policy */
-	int             dependance_mode;   /**< Dependance mode to be used by this ctrl */
+	int                        n_cores;           /**< Number of threads to be used when executing kernels*/
+	hwloc_topology_t           topo;              /**< Hwloc topology of the computer for binding threads and memory to specific cores and NUMA nodes */
+	hwloc_cpuset_t             device_cpuset;     /**< Cpuset representing NUMA nodes used as a device by this ctrl */
+	bool                       mem_moves;         /**< Flag to determine if memory transfers between host ad device should be made or not */
+	struct Ctrl_Cpu_Tile_List *p_tile_list_head;  /**< Head of the list of tiles associate to this ctrl */
+	struct Ctrl_Cpu_Tile_List *p_tile_list_tail;  /**< Tail of the list of tiles associate to this ctrl */
+	Ctrl_Policy                policy;            /**< Policy to be used by this ctrl (sync or async) */
+	Ctrl_TaskQueue            *p_kernel_stream;   /**< CPU stream for kernel execution */
+	Ctrl_TaskQueue            *p_moveTo_stream;   /**< CPU stream for host to device memory transfers */
+	Ctrl_TaskQueue            *p_moveFrom_stream; /**< CPU stream for host to device memory transfers */
+	Ctrl_CpuEvent              event_seq;         /**< Event used for sync policy */
+	int                        dependance_mode;   /**< Dependance mode to be used by this ctrl */
 } Ctrl_Cpu;
 
 #ifdef __cplusplus
@@ -126,15 +119,16 @@ extern "C" {
  * Create the controller and its corresponding variables.
  *
  * @param p_ctrl Controller to be created.
- * @param policy Policy to be used by the contrller.
- * @param n_cores Number of cores to be used.
- * @param p_numa_nodes Pointer to the list of NUMA nodes to be used for kernel affinity.
- * @param n_numa_nodes Number of NUMA nodes passed in \p p_numa_nodes.
- * @param mem_moves Flag to indicate if copies between device and host should be made or accesses should be zero copies.
+ * @param policy Policy for this ctrl to be used.
+ * @param args Space separated string containing the params for this ctrl. Contains:
+ * 		- n_cores: Number of cores to be used.
+ * 		- numa_begin: Start of the range of numa nodes to be used as device. Inclusive.
+ * 		- numa_end: End of the range of numa nodes to be used as device. Not inclusive.
+ * 		- mem_moves: Flag to indicate if copies between device and host should be made or accesses should be zero copies.
  *
- * @pre if \p p_numa_nodes is NULL then \p n_numa_nodes must be 0
+ * If range of numa nodes is empty or invalid (numa_start > numa_end), the entire machine is used.
  */
-void Ctrl_Cpu_Create(Ctrl_Cpu *p_ctrl, Ctrl_Policy policy, int n_cores, int *p_numa_nodes, int n_numa_nodes, bool mem_moves);
+void Ctrl_Cpu_Create(Ctrl_Cpu *p_ctrl, Ctrl_Policy policy, char *args);
 
 /**
  * Evaluate a task on a CPU ctrl.
@@ -160,6 +154,25 @@ int Ctrl_Cpu_GetNumThreads(Ctrl_Cpu *p_ctrl);
  * @param node index of NUMA node used as host.
  */
 void Ctrl_Cpu_ThreadInit(Ctrl_Cpu *p_ctrl, hwloc_topology_t topo, int node);
+
+/**
+ * Get information of the device asociated with \p p_ctrl.
+ * @param p_ctrl ctrl to get the info from.
+ * @param p_info struct to store the info into.
+ */
+void Ctrl_Cpu_GetInfo(Ctrl_Cpu *p_ctrl, Ctrl_Info *p_info);
+
+/**
+ * @brief Return the duration of the last kernel or memory transfer operation performed over \p tile.
+ *
+ * The last operation enqueued for \p tile must be completed before calling this function.
+ *
+ * @param p_ctrl Ctrl \p p_tile is associated to.
+ * @param p_tile HitTile attached to \p p_ctrl.
+ *
+ * @return Duration of the last op over \p p_tile in seconds.
+ */
+double Ctrl_Cpu_TimeLastOp(Ctrl_Cpu *p_ctrl, HitTile *p_tile);
 #ifdef __cplusplus
 }
 #endif

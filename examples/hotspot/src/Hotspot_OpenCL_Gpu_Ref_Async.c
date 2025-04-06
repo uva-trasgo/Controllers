@@ -1,3 +1,34 @@
+/**
+ * @file Hotspot_OpenCL_Gpu_Ref_Async.c
+ * @author Trasgo Group
+ * @brief Hotspot: Asynchronous native OpenCLGPU version
+ * @version 4.0
+ * @date 2021-07-31
+ *
+ * @copyright This software is provided to enhance knowledge and encourage progress in the scientific
+ * community. It should be used only for research and educational purposes. Any reproduction
+ * or use for commercial purpose, public redistribution, in source or binary forms, with or
+ * without modifications, is NOT ALLOWED without the previous authorization of the copyright
+ * holder. The origin of this software must not be misrepresented; you must not claim that you
+ * wrote the original software. If you use this software for any purpose (e.g. publication),
+ * a reference to the software package and the authors must be included.
+ *
+ * @copyright THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+ * THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * @copyright Copyright (c) 2007-2020, Trasgo Group, Universidad de Valladolid.
+ * All rights reserved.
+ *
+ * @copyright More information on http://trasgo.infor.uva.es/
+ */
+
 /*
 LICENSE TERMS
 
@@ -44,22 +75,21 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 #define HOTSPOT_KERNEL \
 	"__kernel void Hotspot(const int iteration, __global const float *power, __global const float *temp_src, \
-						__global float *temp_dst, const int grid_cols, const int grid_rows, const int border_cols, \
-						const int border_rows, const float Cap, const float Rx, const float Ry, const float Rz, const float step) \
-	{ \
-		__local float temp_on_opencl[LOCAL_SIZE_0][LOCAL_SIZE_1]; \
-		__local float power_on_opencl[LOCAL_SIZE_0][LOCAL_SIZE_1]; \
-		__local float temp_t[LOCAL_SIZE_0][LOCAL_SIZE_1]; \
+	__global float *temp_dst, const int grid_cols, const int grid_rows, const int border_cols, const int border_rows, \
+	const float Cap, const float Rx, const float Ry, const float Rz, const float step) { \
+		__local float temp_on_opencl[LOCAL_SIZE_1][LOCAL_SIZE_0]; \
+		__local float power_on_opencl[LOCAL_SIZE_1][LOCAL_SIZE_0]; \
+		__local float temp_t[LOCAL_SIZE_1][LOCAL_SIZE_0]; \
 		\
 		float amb_temp = 80.0; \
 		float step_div_Cap; \
 		float Rx_1; \
 		float Ry_1; \
 		float Rz_1; \
- 		\
+		\
 		int bx = get_group_id(0); \
 		int by = get_group_id(1); \
- 		\
+		\
 		int tx = get_local_id(0); \
 		int ty = get_local_id(1); \
  		\
@@ -120,7 +150,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 			if (i == iteration - 1) { \
 				break; \
 			} \
-			if (computed) {  \
+			if (computed) { \
 				temp_on_opencl[ty][tx] = temp_t[ty][tx]; \
 			} \
 			barrier(CLK_LOCAL_MEM_FENCE); \
@@ -143,12 +173,12 @@ void init_matrix(float *matrix_temp, float *matrix_power, int rows, int cols) {
 	srand(SEED);
 	for (int i = 0; i < rows; i++) {
 		for (int j = 0; j < cols; j++) {
-			matrix_temp[i * cols + j] = (-1 + (2 * (((float)rand()) / RAND_MAX)));
+			matrix_temp[i * cols + j] = -1 + 2 * (float)rand() / RAND_MAX;
 		}
 	}
 	for (int i = 0; i < rows; i++) {
 		for (int j = 0; j < cols; j++) {
-			matrix_power[i * cols + j] = (-1 + (2 * (((float)rand()) / RAND_MAX)));
+			matrix_power[i * cols + j] = -1 + 2 * (float)rand() / RAND_MAX;
 		}
 	}
 }
@@ -158,10 +188,8 @@ void host_compute(float *dst, float *src, int rows, int cols) {
 	roctxRangePush("Host task");
 	#endif //_PROFILING_ENABLED_
 
-	for (int i = 0; i < rows; i++) {
-		for (int j = 0; j < cols; j++) {
-			dst[i * cols + j] = src[i * cols + j];
-		}
+	for (int i = 0; i < rows * cols; i++) {
+		dst[i] = src[i];
 	}
 
 	#ifdef _PROFILING_ENABLED_
@@ -193,11 +221,11 @@ void calc_norm(float *matrix, int rows, int cols) {
 	#endif
 }
 
-int compute_tran_temp(cl_mem MatrixPower, cl_mem MatrixTemp[2], int col,
-					  int row, int total_iterations, int num_iterations,
-					  int blockCols, int blockRows, int borderCols,
-					  int borderRows, int iters_per_copy, float *FilesavingTemp[2],
-					  float *MatrixCopy, cl_kernel kernel_hotspot, cl_command_queue queues[3],
+int compute_tran_temp(cl_mem MatrixPower, cl_mem MatrixTemp[2], int col, int row,
+					  int total_iterations, int num_iterations,
+					  int blockCols, int blockRows, int borderCols, int borderRows,
+					  int iters_per_copy, float *FilesavingTemp[2], float *MatrixCopy,
+					  cl_kernel kernel_hotspot, cl_command_queue queues[3],
 					  cl_event MatrixTemp_event[2], cl_event FilesavingTemp_event[2], cl_context context) {
 	cl_int err;
 
@@ -223,24 +251,23 @@ int compute_tran_temp(cl_mem MatrixPower, cl_mem MatrixTemp[2], int col,
 	float Rz  = t_chip / (K_SI * grid_height * grid_width);
 
 	float max_slope = MAX_PD / (FACTOR_CHIP * t_chip * SPEC_HEAT_SI);
-	float step      = PRECISION / max_slope;
+	float step      = PRECISION / max_slope / 1000.0;
 
 	int real_iter = 1;
 	int src       = 1;
 	int dst       = 0;
 	int aux_index;
 
-	err = clSetKernelArg(kernel_hotspot, 1, sizeof(cl_mem), &MatrixPower);
-	err |= clSetKernelArg(kernel_hotspot, 4, sizeof(cl_int), &col);
-	err |= clSetKernelArg(kernel_hotspot, 5, sizeof(cl_int), &row);
-	err |= clSetKernelArg(kernel_hotspot, 6, sizeof(cl_int), &borderCols);
-	err |= clSetKernelArg(kernel_hotspot, 7, sizeof(cl_int), &borderRows);
-	err |= clSetKernelArg(kernel_hotspot, 8, sizeof(cl_float), &Cap);
-	err |= clSetKernelArg(kernel_hotspot, 9, sizeof(cl_float), &Rx);
-	err |= clSetKernelArg(kernel_hotspot, 10, sizeof(cl_float), &Ry);
-	err |= clSetKernelArg(kernel_hotspot, 11, sizeof(cl_float), &Rz);
-	err |= clSetKernelArg(kernel_hotspot, 12, sizeof(cl_float), &step);
-	OPENCL_ASSERT_ERROR(err);
+	OPENCL_ASSERT_OP(clSetKernelArg(kernel_hotspot, 1, sizeof(cl_mem), &MatrixPower));
+	OPENCL_ASSERT_OP(clSetKernelArg(kernel_hotspot, 4, sizeof(cl_int), &col));
+	OPENCL_ASSERT_OP(clSetKernelArg(kernel_hotspot, 5, sizeof(cl_int), &row));
+	OPENCL_ASSERT_OP(clSetKernelArg(kernel_hotspot, 6, sizeof(cl_int), &borderCols));
+	OPENCL_ASSERT_OP(clSetKernelArg(kernel_hotspot, 7, sizeof(cl_int), &borderRows));
+	OPENCL_ASSERT_OP(clSetKernelArg(kernel_hotspot, 8, sizeof(cl_float), &Cap));
+	OPENCL_ASSERT_OP(clSetKernelArg(kernel_hotspot, 9, sizeof(cl_float), &Rx));
+	OPENCL_ASSERT_OP(clSetKernelArg(kernel_hotspot, 10, sizeof(cl_float), &Ry));
+	OPENCL_ASSERT_OP(clSetKernelArg(kernel_hotspot, 11, sizeof(cl_float), &Rz));
+	OPENCL_ASSERT_OP(clSetKernelArg(kernel_hotspot, 12, sizeof(cl_float), &step));
 
 	for (int t = 0; t < total_iterations; t += num_iterations) {
 		int temp = src;
@@ -249,10 +276,9 @@ int compute_tran_temp(cl_mem MatrixPower, cl_mem MatrixTemp[2], int col,
 
 		int aux_iterations = MIN(num_iterations, total_iterations - t);
 
-		err = clSetKernelArg(kernel_hotspot, 0, sizeof(cl_int), &aux_iterations);
-		err |= clSetKernelArg(kernel_hotspot, 2, sizeof(cl_mem), &MatrixTemp[src]);
-		err |= clSetKernelArg(kernel_hotspot, 3, sizeof(cl_mem), &MatrixTemp[dst]);
-		OPENCL_ASSERT_ERROR(err);
+		OPENCL_ASSERT_OP(clSetKernelArg(kernel_hotspot, 0, sizeof(cl_int), &aux_iterations));
+		OPENCL_ASSERT_OP(clSetKernelArg(kernel_hotspot, 2, sizeof(cl_mem), &MatrixTemp[src]));
+		OPENCL_ASSERT_OP(clSetKernelArg(kernel_hotspot, 3, sizeof(cl_mem), &MatrixTemp[dst]));
 
 		aux_event = MatrixTemp_event[dst];
 		OPENCL_ASSERT_OP(clEnqueueNDRangeKernel(queues[STREAM_KERNEL], kernel_hotspot, 2, NULL, global_size, local_size, 1, &aux_event, &MatrixTemp_event[dst]));
@@ -283,7 +309,7 @@ int compute_tran_temp(cl_mem MatrixPower, cl_mem MatrixTemp[2], int col,
 			{
 				// These calls are added to the code in order to help to synchronize the access of the event in the task with
 				// the update of the event in the main thread. It solves deadk-lock problems found in some possibly non thread-safe implementations of OpenCL
-				clGetEventInfo(aux_event, CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(cl_int), NULL, NULL);
+				OPENCL_ASSERT_OP(clGetEventInfo(aux_event, CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(cl_int), NULL, NULL));
 				OPENCL_ASSERT_OP(clWaitForEvents(1, &aux_event));
 				OPENCL_ASSERT_OP(clReleaseEvent(aux_event));
 
@@ -298,24 +324,21 @@ int compute_tran_temp(cl_mem MatrixPower, cl_mem MatrixTemp[2], int col,
 	return dst;
 }
 
-void usage(int argc, char **argv) {
-	fprintf(stderr, "Usage: %s <grid_rows/grid_cols> <pyramid_height> <sim_time> <iters_per_copy> <device> <platform>\n", argv[0]);
-	fprintf(stderr, "\t<grid_rows/grid_cols>  - number of rows/cols in the grid (positive integer)\n");
-	fprintf(stderr, "\t<pyramid_height> - pyramid heigh(positive integer)\n");
-	fprintf(stderr, "\t<sim_time>   - number of iterations\n");
-	fprintf(stderr, "\t<iters_per_copy> - nº of iter between each copy back\n");
-	fprintf(stderr, "\t<device> - GPU index\n");
-	fprintf(stderr, "\t<platform> - OpenCL platform index\n");
-	exit(EXIT_FAILURE);
-}
-
-void run(int argc, char *argv[]) {
+int main(int argc, char **argv) {
+	main_clock = omp_get_wtime();
 
 	/* ARGUMENTS */
-
 	if (argc != 7) {
-		usage(argc, argv);
+		fprintf(stderr, "Usage: %s <grid_rows/grid_cols> <pyramid_height> <sim_time> <iters_per_copy> <device> <platform>\n", argv[0]);
+		fprintf(stderr, "\t<grid_rows/grid_cols>  - number of rows/cols in the grid (positive integer)\n");
+		fprintf(stderr, "\t<pyramid_height> - pyramid heigh(positive integer)\n");
+		fprintf(stderr, "\t<sim_time>   - number of iterations\n");
+		fprintf(stderr, "\t<iters_per_copy> - nº of iter between each copy back\n");
+		fprintf(stderr, "\t<device> - GPU index\n");
+		fprintf(stderr, "\t<platform> - OpenCL platform index\n");
+		exit(EXIT_FAILURE);
 	}
+
 	int grid_rows        = atoi(argv[1]);
 	int grid_cols        = atoi(argv[1]);
 	int pyramid_height   = atoi(argv[2]);
@@ -395,8 +418,6 @@ void run(int argc, char *argv[]) {
 	context                                    = clCreateContext(context_properties, 1, &device_id, NULL, NULL, &err);
 	OPENCL_ASSERT_ERROR(err);
 
-	OPENCL_ASSERT_ERROR(err);
-
 	program = clCreateProgramWithSource(context, 1, (const char **)(&kernel_raw), (const size_t *)(&kernel_size), &err);
 	OPENCL_ASSERT_ERROR(err);
 
@@ -453,6 +474,7 @@ void run(int argc, char *argv[]) {
 		exit(EXIT_FAILURE);
 	}
 
+	// Extra information for collecting results
 	size_t platform_name_size;
 	OPENCL_ASSERT_OP(clGetPlatformInfo(platform_id, CL_PLATFORM_NAME, 0, NULL, &platform_name_size));
 	char *platform_name = (char *)malloc(sizeof(char) * platform_name_size);
@@ -476,6 +498,7 @@ void run(int argc, char *argv[]) {
 	printf("\n POLICY ASYNC");
 	printf("\n\n ---------------------------------------------------- \n");
 	#endif // _CTRL_EXAMPLES_EXP_MODE_
+	fflush(stdout);
 	free(platform_name);
 	free(device_name);
 
@@ -507,10 +530,10 @@ void run(int argc, char *argv[]) {
 			OPENCL_ASSERT_OP(clFlush(queues[STREAM_KERNEL]));
 
 			int ret = compute_tran_temp(MatrixPower, MatrixTemp, grid_cols, grid_rows,
-										total_iterations, pyramid_height, blockCols,
-										blockRows, borderCols, borderRows, iters_per_copy,
-										FilesavingTemp, MatrixCopy, kernel_hotspot, queues,
-										MatrixTemp_event, FilesavingTemp_event, context);
+										total_iterations, pyramid_height,
+										blockCols, blockRows, borderCols, borderRows,
+										iters_per_copy, FilesavingTemp, MatrixCopy, kernel_hotspot,
+										queues, MatrixTemp_event, FilesavingTemp_event, context);
 
 			wait_event[0] = MatrixTemp_event[ret];
 			wait_event[1] = FilesavingTemp_event[ret];
@@ -549,7 +572,6 @@ void run(int argc, char *argv[]) {
 	}
 
 	/* CALCULATION OF RESULTS */
-
 	calc_norm(MatrixCopy, grid_rows, grid_cols);
 
 	/* RELEASE ZONE */
@@ -582,24 +604,17 @@ void run(int argc, char *argv[]) {
 	OPENCL_ASSERT_OP(clReleaseContext(context));
 
 	free(MatrixCopy);
-}
-
-int main(int argc, char **argv) {
-	main_clock = omp_get_wtime();
-
-	run(argc, argv);
 
 	main_clock = omp_get_wtime() - main_clock;
 
 	#ifdef _CTRL_EXAMPLES_EXP_MODE_
 	printf("%lf, %lf\n", main_clock, exec_clock);
-	fflush(stdout);
-	#else
-	printf("\n ----------------------- TIME ----------------------- \n\n");
-	printf(" Clock main: %lf\n", main_clock);
-	printf(" Clock exec: %lf\n", exec_clock);
-	printf("\n ---------------------------------------------------- \n");
-	#endif
+	#else // _CTRL_EXAMPLES_EXP_MODE_
+	printf("\n ---------------------- TIMERS ---------------------- \n");
+	printf("Clock main: %lf\n", main_clock);
+	printf("Clock exec: %lf\n", exec_clock);
+	printf("\n\n ---------------------------------------------------- \n");
+	#endif // _CTRL_EXAMPLES_EXP_MODE_
 
 	return EXIT_SUCCESS;
 }

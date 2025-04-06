@@ -35,10 +35,6 @@
 #include <omp.h>
 #include <stdbool.h>
 
-#ifdef _CTRL_OPENCL_GPU_DEBUG_
-#include <stdio.h>
-#endif
-
 #ifndef CL_USE_DEPRECATED_OPENCL_1_2_APIS
 #define CL_USE_DEPRECATED_OPENCL_1_2_APIS
 #endif // CL_USE_DEPRECATED_OPENCL_1_2_APIS
@@ -47,6 +43,7 @@
 
 #include "hitmap2.h"
 
+#include "Core/Ctrl_Info.h"
 #include "Core/Ctrl_KHitTile.h"
 #include "Core/Ctrl_Policy.h"
 #include "Core/Ctrl_Request.h"
@@ -124,18 +121,12 @@ typedef struct Ctrl_FPGA {
 	cl_event                    last_kernel_event;    /**< Event that records previous kernel operation */
 	cl_event                    last_host_task_event; /**< Event that records previous host task operation */
 	cl_event                    default_event;        /**< Event used to create all events initially */
-
-	#ifdef _CTRL_QUEUE_
-	omp_lock_t *p_lock_first_host; /**< Lock used for sync between main thread and queue manager thread */
-	omp_lock_t *p_lock_first_ctrl; /**< Lock used for sync between main thread and queue manager thread */
-	omp_lock_t *p_lock_host;       /**< Lock used for sync between main thread and queue manager thread */
-	omp_lock_t *p_lock_ctrl;       /**< Lock used for sync between main thread and queue manager thread */
-	#endif //_CTRL_QUEUE_
-
-	Ctrl_Policy       policy;          /**< Policy to be used by this ctrl (sync or async) */
-	int               dependance_mode; /**< Dependance mode to be used by this ctrl */
-	int               n_queues;        /**< Number of OpenCl queues for kernel launching available to this cltr */
-	cl_command_queue *queues;          /**< OpenCl queues to launch kernels */
+	Ctrl_Policy                 policy;               /**< Policy to be used by this ctrl (sync or async) */
+	int                         dependance_mode;      /**< Dependance mode to be used by this ctrl */
+	int                         n_queues;             /**< Number of OpenCl queues for kernel launching available to this cltr */
+	cl_command_queue           *queues;               /**< OpenCl queues to launch kernels */
+	int                         type_id;              /**< Id of this ctrl with respect to other FPGA ctrls */
+	int                         exec_mode;            /**< Execution mode */
 
 	#ifdef _CTRL_OPENCL_GPU_PROFILING_
 	int platform;
@@ -181,12 +172,14 @@ extern "C" {
  * Create the controller and its corresponding variables.
  *
  * @param p_ctrl Controller to be created.
- * @param policy Policy to be used by the contrller.
- * @param device Index of the device to be used.
- * @param platform Index of the OpenCL platform to be used.
- * @param exec_mode Execution mode.
+ * @param policy Policy for this ctrl to be used.
+ * @param args Space separated string containing the params for this ctrl. Contains:
+ * 		- Platform: index of the OpenCL platform to be used.
+ * 		- Device: index of the device to be used.
+ * 		- Exec mode: execution mode.
+ * 		- [OPTIONAL] Streams: number of OpenCL queues to use to execute kernels. Default 1.
  */
-void Ctrl_FPGA_Create(Ctrl_FPGA *p_ctrl, Ctrl_Policy policy, int device, int platform, int exec_mode, int streams);
+void Ctrl_FPGA_Create(Ctrl_FPGA *p_ctrl, Ctrl_Policy policy, char *args);
 
 /**
  * Evaluate a task on a FPGA ctrl.
@@ -196,6 +189,31 @@ void Ctrl_FPGA_Create(Ctrl_FPGA *p_ctrl, Ctrl_Policy policy, int device, int pla
  */
 void Ctrl_FPGA_EvalTask(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task);
 
+/**
+ * Allocate memory for \e cl_program and \e cl_kernel objects for all kernels defined for FPGA.
+ *
+ * @param n_fpga_ctrls Number of FPGA ctrls to be created.
+ */
+void Ctrl_FPGA_AllocKernel(int n_fpga_ctrls);
+
+/**
+ * Get information of the device asociated with \p p_ctrl.
+ * @param p_ctrl ctrl to get the info from.
+ * @param p_info struct to store the info into.
+ */
+void Ctrl_FPGA_GetInfo(Ctrl_FPGA *p_ctrl, Ctrl_Info *p_info);
+
+/**
+ * @brief Return the duration of the last kernel or memory transfer operation performed over \p tile.
+ *
+ * The last operation enqueued for \p tile must be completed before calling this function.
+ *
+ * @param p_ctrl Ctrl \p p_tile is associated to.
+ * @param p_tile HitTile attached to \p p_ctrl.
+ *
+ * @return Duration of the last op over \p p_tile in seconds.
+ */
+double Ctrl_FPGA_TimeLastOp(Ctrl_FPGA *p_ctrl, HitTile *p_tile);
 #ifdef __cplusplus
 }
 #endif

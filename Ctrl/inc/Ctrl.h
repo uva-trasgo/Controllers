@@ -35,6 +35,8 @@
 #endif
 
 #include "Core/Ctrl_Core.h"
+#include "Core/Ctrl_ALB.h"
+
 #include "Core/Ctrl_KHitTile.h"
 #include "Kernel/Ctrl_Kernel.h"
 

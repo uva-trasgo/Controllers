@@ -40,6 +40,7 @@ extern "C" {
 typedef enum {
 	CTRL_TYPE_CPU,
 	CTRL_TYPE_CUDA,
+	CTRL_TYPE_HIP,
 	CTRL_TYPE_OPENCL_GPU,
 	CTRL_TYPE_FPGA
 } Ctrl_Type;

@@ -30,6 +30,7 @@
  *
  * @copyright More information on http://trasgo.infor.uva.es/ */
 
+#include "Core/Ctrl_KHParams.h"
 #include "Core/Ctrl_KHitTile.h"
 #include "Kernel/Ctrl_KernelProto.h"
 #include "hitmap2.h"

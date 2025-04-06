@@ -1,3 +1,34 @@
+/**
+ * @file Hotspot_Cuda_Ref_Async.cu
+ * @author Trasgo Group
+ * @brief Hotspot: Asynchronous native CUDA version
+ * @version 4.0
+ * @date 2021-07-31
+ *
+ * @copyright This software is provided to enhance knowledge and encourage progress in the scientific
+ * community. It should be used only for research and educational purposes. Any reproduction
+ * or use for commercial purpose, public redistribution, in source or binary forms, with or
+ * without modifications, is NOT ALLOWED without the previous authorization of the copyright
+ * holder. The origin of this software must not be misrepresented; you must not claim that you
+ * wrote the original software. If you use this software for any purpose (e.g. publication),
+ * a reference to the software package and the authors must be included.
+ *
+ * @copyright THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+ * THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * @copyright Copyright (c) 2007-2020, Trasgo Group, Universidad de Valladolid.
+ * All rights reserved.
+ *
+ * @copyright More information on http://trasgo.infor.uva.es/
+ */
+
 /*
 LICENSE TERMS
 
@@ -12,6 +43,7 @@ Redistribution and use in source and binary forms, with or without modification,
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE UNIVERSITY OF VIRGINIA OR THE SOFTWARE AUTHORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -57,10 +89,8 @@ void host_compute(void *args) {
 	#endif //_PROFILING_ENABLED_
 
 	Hotspot_Compute_Args_t *tmp = (Hotspot_Compute_Args_t *)args;
-	for (int i = 0; i < tmp->rows; i++) {
-		for (int j = 0; j < tmp->cols; j++) {
-			tmp->dst[i * tmp->cols + j] = tmp->src[i * tmp->cols + j];
-		}
+	for (int i = 0; i < tmp->rows * tmp->cols; i++) {
+		tmp->dst[i] = tmp->src[i];
 	}
 
 	#ifdef _PROFILING_ENABLED_
@@ -103,9 +133,9 @@ __global__ void calculate_temp(int    iteration,   // number of iterations
 							   float  Cap,         // Capacitance
 							   float Rx, float Ry, float Rz, float step) {
 
-	__shared__ float temp_on_cuda[BLOCKSIZE_0][BLOCKSIZE_1];
-	__shared__ float power_on_cuda[BLOCKSIZE_0][BLOCKSIZE_1];
-	__shared__ float temp_t[BLOCKSIZE_0][BLOCKSIZE_1]; // saving temparary temperature result
+	__shared__ float temp_on_cuda[BLOCKSIZE_1][BLOCKSIZE_0];
+	__shared__ float power_on_cuda[BLOCKSIZE_1][BLOCKSIZE_0];
+	__shared__ float temp_t[BLOCKSIZE_1][BLOCKSIZE_0]; // saving temparary temperature result
 
 	float amb_temp = 80.0;
 	float step_div_Cap;
@@ -208,14 +238,12 @@ cudaStream_t kernel_stream, dtoh_stream, host_stream;
 /*
    compute N time steps
 */
-int compute_tran_temp(float *MatrixPower, float *MatrixTemp[2], int col,
-					  int row, int total_iterations, int num_iterations,
-					  int blockCols, int blockRows, int borderCols,
-					  int borderRows, int iters_per_copy,
-					  float *FilesavingTemp[2], float *MatrixCopy,
+int compute_tran_temp(float *MatrixPower, float *MatrixTemp[2], int col, int row,
+					  int total_iterations, int num_iterations,
+					  int blockCols, int blockRows, int borderCols, int borderRows,
+					  int iters_per_copy, float *FilesavingTemp[2], float *MatrixCopy,
 					  cudaStream_t streams[3], cudaEvent_t MatrixTemp_event[2],
-					  cudaEvent_t             FilesavingTemp_event[2],
-					  Hotspot_Compute_Args_t *args) {
+					  cudaEvent_t FilesavingTemp_event[2], Hotspot_Compute_Args_t *args) {
 	dim3 dimBlock(BLOCKSIZE_0, BLOCKSIZE_1);
 	dim3 dimGrid(blockCols, blockRows);
 
@@ -228,7 +256,7 @@ int compute_tran_temp(float *MatrixPower, float *MatrixTemp[2], int col,
 	float Rz  = t_chip / (K_SI * grid_height * grid_width);
 
 	float max_slope = MAX_PD / (FACTOR_CHIP * t_chip * SPEC_HEAT_SI);
-	float step      = PRECISION / max_slope;
+	float step      = PRECISION / max_slope / 1000.0;
 
 	cudaStreamWaitEvent(streams[STREAM_KERNEL], MatrixTemp_event[0], 0);
 
@@ -250,18 +278,14 @@ int compute_tran_temp(float *MatrixPower, float *MatrixTemp[2], int col,
 
 		if ((real_iter % iters_per_copy) == 0) {
 			cudaStreamWaitEvent(streams[STREAM_CPY], MatrixTemp_event[dst], 0);
-			cudaStreamWaitEvent(streams[STREAM_CPY], FilesavingTemp_event[dst],
-								0);
-			cudaMemcpyAsync(FilesavingTemp[dst], MatrixTemp[dst],
-							sizeof(float) * row * col, cudaMemcpyDeviceToHost,
-							streams[STREAM_CPY]);
+			cudaStreamWaitEvent(streams[STREAM_CPY], FilesavingTemp_event[dst], 0);
+			cudaMemcpyAsync(FilesavingTemp[dst], MatrixTemp[dst], sizeof(float) * row * col,
+							cudaMemcpyDeviceToHost, streams[STREAM_CPY]);
 			cudaEventRecord(MatrixTemp_event[dst], streams[STREAM_CPY]);
 			cudaEventRecord(FilesavingTemp_event[dst], streams[STREAM_CPY]);
 
-			cudaStreamWaitEvent(streams[STREAM_HOST], FilesavingTemp_event[dst],
-								0);
-			cudaLaunchHostFunc(streams[STREAM_HOST], host_compute,
-							   (void *)&(args[dst]));
+			cudaStreamWaitEvent(streams[STREAM_HOST], FilesavingTemp_event[dst], 0);
+			cudaLaunchHostFunc(streams[STREAM_HOST], host_compute, (void *)&(args[dst]));
 			cudaEventRecord(FilesavingTemp_event[dst], streams[STREAM_HOST]);
 		}
 		real_iter++;
@@ -270,26 +294,25 @@ int compute_tran_temp(float *MatrixPower, float *MatrixTemp[2], int col,
 	return dst;
 }
 
-void usage(int argc, char **argv) {
-	fprintf(stderr, "Usage: %s <grid_rows/grid_cols> <pyramid_height> <sim_time> <iters_per_copy> <device>\n", argv[0]);
-	fprintf(stderr, "\t<grid_rows/grid_cols>  - number of rows/cols in the grid (positive integer)\n");
-	fprintf(stderr, "\t<pyramid_height> - pyramid heigh(positive integer)\n");
-	fprintf(stderr, "\t<sim_time>   - number of iterations\n");
-	fprintf(stderr, "\t<iters_per_copy> - nº of iter between each copy back\n");
-	fprintf(stderr, "\t<device> - GPU index\n");
-	exit(EXIT_FAILURE);
-}
+int main(int argc, char **argv) {
+	main_clock = omp_get_wtime();
 
-void run(int argc, char **argv) {
 	if (argc != 6) {
-		usage(argc, argv);
+		fprintf(stderr, "Usage: %s <grid_rows/grid_cols> <pyramid_height> <sim_time> <iters_per_copy> <device>\n", argv[0]);
+		fprintf(stderr, "\t<grid_rows/grid_cols>  - number of rows/cols in the grid (positive integer)\n");
+		fprintf(stderr, "\t<pyramid_height> - pyramid heigh(positive integer)\n");
+		fprintf(stderr, "\t<sim_time>   - number of iterations\n");
+		fprintf(stderr, "\t<iters_per_copy> - nº of iter between each copy back\n");
+		fprintf(stderr, "\t<device> - GPU index\n");
+		exit(EXIT_FAILURE);
 	}
 	int grid_rows        = atoi(argv[1]);
 	int grid_cols        = atoi(argv[1]);
 	int pyramid_height   = atoi(argv[2]);
 	int total_iterations = atoi(argv[3]);
 	int iters_per_copy   = atoi(argv[4]);
-	int DEVICE           = atoi(argv[5]);
+	int device           = atoi(argv[5]);
+	cudaSetDevice(device);
 
 	/* --------------- pyramid parameters --------------- */
 
@@ -316,8 +339,9 @@ void run(int argc, char **argv) {
 		exit(EXIT_FAILURE);
 	}
 
+	// Extra information for collecting results
 	cudaDeviceProp cu_dev_prop;
-	cudaGetDeviceProperties(&cu_dev_prop, DEVICE);
+	cudaGetDeviceProperties(&cu_dev_prop, device);
 	#ifdef _CTRL_EXAMPLES_EXP_MODE_
 	printf("%s, ", cu_dev_prop.name);
 	#else
@@ -410,24 +434,17 @@ void run(int argc, char **argv) {
 	cudaFreeHost(FilesavingTemp[1]);
 	cudaFreeHost(FilesavingPower);
 	free(MatrixCopy);
-}
-
-int main(int argc, char **argv) {
-	main_clock = omp_get_wtime();
-
-	run(argc, argv);
 
 	main_clock = omp_get_wtime() - main_clock;
 
 	#ifdef _CTRL_EXAMPLES_EXP_MODE_
 	printf("%lf, %lf\n", main_clock, exec_clock);
-	fflush(stdout);
-	#else
-	printf("\n ----------------------- TIME ----------------------- \n\n");
-	printf(" Clock main: %lf\n", main_clock);
-	printf(" Clock exec: %lf\n", exec_clock);
-	printf("\n ---------------------------------------------------- \n");
-	#endif
+	#else // _CTRL_EXAMPLES_EXP_MODE_
+	printf("\n ---------------------- TIMERS ---------------------- \n");
+	printf("Clock main: %lf\n", main_clock);
+	printf("Clock exec: %lf\n", exec_clock);
+	printf("\n\n ---------------------------------------------------- \n");
+	#endif // _CTRL_EXAMPLES_EXP_MODE_
 
 	return EXIT_SUCCESS;
 }

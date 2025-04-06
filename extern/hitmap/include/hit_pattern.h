@@ -258,6 +258,14 @@ void hit_patMatMultBitmapInternal(HitPattern *pattern, HitLayout lay, HitShape o
 
 
 
+// FUNCTIONS NEEDED FOR ALB
+
+typedef HitShape (*expandBorderFunction)(HitTile* globalMat, int* borderLow, int* borderHigh, HitShape shape);
+HitPattern hit_patternLayRedistributeGeneric2(	HitLayout lay1, HitLayout lay2, void *tileP1, void *tileP2, HitType baseType,
+			expandBorderFunction f_for_inbound, expandBorderFunction f_for_outbound);
+HitPattern hit_patternLayRedistributeGeneric(	HitLayout lay1, HitLayout lay2, void *tileP1, void *tileP2, HitType baseType,
+			expandBorderFunction f_for_inbound, expandBorderFunction f_for_outbound);
+
 
 #ifdef __cplusplus
 }

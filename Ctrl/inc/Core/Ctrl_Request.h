@@ -40,6 +40,10 @@
 #include "Architectures/Cuda/Ctrl_Cuda_Request.h"
 #endif // _CTRL_ARCH_CUDA_
 
+#ifdef _CTRL_ARCH_HIP_
+#include "Architectures/Hip/Ctrl_Hip_Request.h"
+#endif // _CTRL_ARCH_HIP_
+
 #ifdef _CTRL_ARCH_OPENCL_GPU_
 #include "Architectures/OpenCL/Ctrl_OpenCL_Request.h"
 #endif // _CTRL_ARCH_OPENCL_GPU_
@@ -54,11 +58,15 @@
 typedef union {
 	#ifdef _CTRL_ARCH_CPU_
 	Ctrl_Cpu_Request cpu;
-	#endif // _CTRL_ARCH_CUDA_
+	#endif // _CTRL_ARCH_CPU_
 
 	#ifdef _CTRL_ARCH_CUDA_
 	Ctrl_Cuda_Request cuda;
 	#endif // _CTRL_ARCH_CUDA_
+
+	#ifdef _CTRL_ARCH_HIP_
+	Ctrl_Hip_Request hip;
+	#endif // _CTRL_ARCH_HIP_
 
 	#ifdef _CTRL_ARCH_OPENCL_GPU_
 	Ctrl_OpenCL_Request opencl;

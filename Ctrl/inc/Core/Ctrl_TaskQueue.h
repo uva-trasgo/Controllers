@@ -50,6 +50,10 @@
 #include <cuda_runtime_api.h>
 #endif //_CTRL_ARCH_CUDA_
 
+#ifdef _CTRL_ARCH_HIP_
+#include <hip/hip_runtime.h>
+#endif //_CTRL_ARCH_HIP_
+
 #if defined(_CTRL_ARCH_OPENCL_GPU_) || defined(_CTRL_ARCH_FPGA_)
 #include <CL/cl.h>
 #endif //_CTRL_ARCH_OPENCL_GPU_ || _CTRL_ARCH_FPGA_
@@ -76,13 +80,14 @@ typedef struct Ctrl_CpuUserEvent {
 typedef enum Ctrl_EventType {
 	CTRL_EVENT_TYPE_NULL,
 	CTRL_EVENT_TYPE_CUDA,
+	CTRL_EVENT_TYPE_HIP,
 	CTRL_EVENT_TYPE_OPENCL,
 	CTRL_EVENT_TYPE_CPU,
 	CTRL_EVENT_TYPE_USERCPU,
 } Ctrl_EventType;
 
 /**
- * Generic event that contains either \e CpuEvent, \e CpuUserEvent, \e cudaEvent_t or \e cl_event.
+ * Generic event that contains either \e CpuEvent, \e CpuUserEvent, \e cudaEvent_t, \e hipEvent_t or \e cl_event.
  * @see Ctrl_GenericEvent_StreamWait, Ctrl_GenericEvent_StreamSignal, Ctrl_GenericEvent_StreamRelease
  * @see Ctrl_GenericEvent_Wait, Ctrl_GenericEvent_Signal, Ctrl_GenericEvent_Release
  */
@@ -95,6 +100,10 @@ typedef struct Ctrl_GenericEvent {
 		#ifdef _CTRL_ARCH_CUDA_
 		cudaEvent_t event_cuda;
 		#endif //_CTRL_ARCH_CUDA_
+
+		#ifdef _CTRL_ARCH_HIP_
+		hipEvent_t event_hip;
+		#endif //_CTRL_ARCH_HIP_
 
 		#if defined(_CTRL_ARCH_OPENCL_GPU_) || defined(_CTRL_ARCH_FPGA_)
 		cl_event event_cl;
@@ -109,7 +118,7 @@ typedef enum Ctrl_TaskType {
 	CTRL_TASK_TYPE_NULL,
 	CTRL_TASK_TYPE_KERNEL,
 	CTRL_TASK_TYPE_HOST,
-	CTRL_TASK_TYPE_DESTROYCNTRL,
+	CTRL_TASK_TYPE_DESTROYCTRL,
 	CTRL_TASK_TYPE_GLOBALSYNC,
 	CTRL_TASK_TYPE_ALLOCTILE,
 	CTRL_TASK_TYPE_SELECTTILE,
@@ -148,6 +157,7 @@ typedef enum Ctrl_TaskType {
  * Tasks to send to \e Ctrl_TaskQueue
  */
 typedef struct Ctrl_Task {
+	const char *p_func_name; /**< Pointer to string with the kernel/host-task name */
 	void (*pfn_kernel_wrapper)(
 		Ctrl_Request request, int impl, Ctrl_Type ctrl_type,
 		Ctrl_Thread threads, Ctrl_Thread blocksize,
@@ -160,7 +170,7 @@ typedef struct Ctrl_Task {
 	char             *p_roles;                       /**< Input/Output roles, for memory optimizations */
 	void            **pp_pointers;                   /**< Pointers to the original variables, for memory basic operations */
 	uint16_t         *p_displacements;               /**< Displacement of parameter over arguments array, for memory basic operations */
-	struct Ctrl_Task *p_next;                        /**< Next task in the queue */
+	double           *p_op_duration;                 /**< Duration of the task in seconds, for cpu kernels and memory transfers */
 	Ctrl_Thread       threads;                       /**< Index domain where the task is executed */
 	Ctrl_Thread       blocksize;                     /**< Block size for this task */
 	HitTile          *p_tile;                        /**< For 1 tile tasks */
@@ -191,18 +201,28 @@ typedef struct Ctrl_TaskQueue {
 	(Ctrl_GenericEvent) { .event_type = CTRL_EVENT_TYPE_NULL }
 
 /**
- * Null value for \e Ctrl_task
+ * Null value for \e Ctrl_Task
  * @hideinitializer
  */
-#define CTRL_TASK_NULL                                                \
-	{                                                                 \
-		.pfn_kernel_wrapper = NULL, .pfn_hostTask_wrapper = NULL,     \
-		.device_id = 0, .task_type = CTRL_TASK_TYPE_NULL,             \
-		.n_arguments = 0, .p_arguments = NULL, .p_roles = NULL,       \
-		.pp_pointers = NULL, .p_displacements = NULL, .p_next = NULL, \
-		.threads = CTRL_THREAD_NULL, .blocksize = CTRL_THREAD_NULL,   \
-		.p_tile = NULL, .event = CTRL_GENERIC_EVENT_NULL, .flags = 0, \
-		.stream = 0                                                   \
+#define CTRL_TASK_NULL                                   \
+	{                                                    \
+		.p_func_name          = NULL,                    \
+		.pfn_kernel_wrapper   = NULL,                    \
+		.pfn_hostTask_wrapper = NULL,                    \
+		.device_id            = 0,                       \
+		.task_type            = CTRL_TASK_TYPE_NULL,     \
+		.n_arguments          = 0,                       \
+		.p_arguments          = NULL,                    \
+		.p_roles              = NULL,                    \
+		.pp_pointers          = NULL,                    \
+		.p_displacements      = NULL,                    \
+		.p_op_duration        = NULL,                    \
+		.threads              = CTRL_THREAD_NULL,        \
+		.blocksize            = CTRL_THREAD_NULL,        \
+		.p_tile               = NULL,                    \
+		.event                = CTRL_GENERIC_EVENT_NULL, \
+		.flags                = 0,                       \
+		.stream               = 0                        \
 	}
 
 /**
@@ -220,7 +240,7 @@ static inline void Ctrl_TaskQueue_FreeTask(Ctrl_Task *p_task) {
 	if ((p_task->p_roles) != NULL) free(p_task->p_roles);
 	if ((p_task->pp_pointers) != NULL) free(p_task->pp_pointers);
 	if ((p_task->p_displacements) != NULL) free(p_task->p_displacements);
-	p_task->p_next = NULL;
+	if ((p_task->p_op_duration) != NULL) free(p_task->p_op_duration);
 	p_task->p_tile = NULL;
 	p_task->event  = CTRL_GENERIC_EVENT_NULL;
 	p_task->flags  = 0;
@@ -289,9 +309,7 @@ static inline Ctrl_Task *Ctrl_TaskQueue_Pop(Ctrl_TaskQueue *p_queue) {
  */
 static inline void Ctrl_TaskQueue_Destroy(Ctrl_TaskQueue *p_queue) {
 	for (int i = 0; i < p_queue->read; i++) {
-		if ((p_queue->buffer[i]).task_type == CTRL_TASK_TYPE_HOST || (p_queue->buffer[i]).task_type == CTRL_TASK_TYPE_KERNEL) {
-			Ctrl_TaskQueue_FreeTask(&(p_queue->buffer[i]));
-		}
+		Ctrl_TaskQueue_FreeTask(&(p_queue->buffer[i]));
 	}
 	p_queue->read = p_queue->write = p_queue->last_finished = 0;
 }
@@ -454,16 +472,23 @@ static inline void Ctrl_GenericEvent_StreamRelease(Ctrl_GenericEvent event, Ctrl
  */
 static inline void Ctrl_GenericEvent_Wait(Ctrl_GenericEvent event) {
 	switch (event.event_type) {
+		#ifdef _CTRL_ARCH_CUDA_
 		case CTRL_EVENT_TYPE_CUDA:
-			#ifdef _CTRL_ARCH_CUDA_
 			cudaEventSynchronize(event.event.event_cuda);
-			#endif //_CTRL_ARCH_CUDA_
 			break;
+		#endif //_CTRL_ARCH_CUDA_
+
+		#ifdef _CTRL_ARCH_HIP_
+		case CTRL_EVENT_TYPE_HIP:
+			hipEventSynchronize(event.event.event_hip);
+			break;
+		#endif //_CTRL_ARCH_HIP_
+
+		#if defined(_CTRL_ARCH_OPENCL_GPU_) || defined(_CTRL_ARCH_FPGA_)
 		case CTRL_EVENT_TYPE_OPENCL:
-			#if defined(_CTRL_ARCH_OPENCL_GPU_) || defined(_CTRL_ARCH_FPGA_)
 			clWaitForEvents(1, &event.event.event_cl);
-			#endif //_CTRL_ARCH_OPENCL_GPU_ || _CTRL_ARCH_FPGA_
 			break;
+		#endif //_CTRL_ARCH_OPENCL_GPU_ || _CTRL_ARCH_FPGA_
 		case CTRL_EVENT_TYPE_CPU:
 			Ctrl_CpuEvent_Wait(event.event.event_cpu);
 			break;
@@ -487,11 +512,11 @@ static inline void Ctrl_GenericEvent_Wait(Ctrl_GenericEvent event) {
  */
 static inline void Ctrl_GenericEvent_Signal(Ctrl_GenericEvent event) {
 	switch (event.event_type) {
+		#if defined(_CTRL_ARCH_OPENCL_GPU_) || defined(_CTRL_ARCH_FPGA_)
 		case CTRL_EVENT_TYPE_OPENCL:
-			#if defined(_CTRL_ARCH_OPENCL_GPU_) || defined(_CTRL_ARCH_FPGA_)
 			clSetUserEventStatus(event.event.event_cl, CL_COMPLETE);
-			#endif //_CTRL_ARCH_OPENCL_GPU_ || _CTRL_ARCH_FPGA_
 			break;
+		#endif //_CTRL_ARCH_OPENCL_GPU_ || _CTRL_ARCH_FPGA_
 		case CTRL_EVENT_TYPE_USERCPU:
 			Ctrl_CpuUserEvent_Signal(&event.event.user_event_cpu);
 			break;
@@ -512,11 +537,11 @@ static inline void Ctrl_GenericEvent_Signal(Ctrl_GenericEvent event) {
  */
 static inline void Ctrl_GenericEvent_Release(Ctrl_GenericEvent event) {
 	switch (event.event_type) {
+		#if defined(_CTRL_ARCH_OPENCL_GPU_) || defined(_CTRL_ARCH_FPGA_)
 		case CTRL_EVENT_TYPE_OPENCL:
-			#if defined(_CTRL_ARCH_OPENCL_GPU_) || defined(_CTRL_ARCH_FPGA_)
 			clReleaseEvent(event.event.event_cl);
-			#endif //_CTRL_ARCH_OPENCL_GPU_ || _CTRL_ARCH_FPGA_
 			break;
+		#endif //_CTRL_ARCH_OPENCL_GPU_ || _CTRL_ARCH_FPGA_
 		default:
 			printf("unknown event type\n");
 			exit(EXIT_FAILURE);
@@ -541,8 +566,8 @@ static inline void Ctrl_TaskQueue_GetTypeName(Ctrl_Task *p_task, char *name) {
 		case CTRL_TASK_TYPE_HOST:
 			strcpy(name, "CTRL_TASK_TYPE_HOST");
 			break;
-		case CTRL_TASK_TYPE_DESTROYCNTRL:
-			strcpy(name, "CTRL_TASK_TYPE_DESTROYCNTRL");
+		case CTRL_TASK_TYPE_DESTROYCTRL:
+			strcpy(name, "CTRL_TASK_TYPE_DESTROYCTRL");
 			break;
 		case CTRL_TASK_TYPE_GLOBALSYNC:
 			strcpy(name, "CTRL_TASK_TYPE_GLOBALSYNC");
@@ -573,6 +598,9 @@ static inline void Ctrl_TaskQueue_GetTypeName(Ctrl_Task *p_task, char *name) {
 			break;
 		case CTRL_TASK_TYPE_SIGNALEVENT:
 			strcpy(name, "CTRL_TASK_TYPE_SIGNALEVENT");
+			break;
+		case CTRL_TASK_TYPE_RELEASEEVENT:
+			strcpy(name, "CTRL_TASK_TYPE_RELEASEEVENT");
 			break;
 		case CTRL_TASK_TYPE_SETDEPENDANCEMODE:
 			strcpy(name, "CTRL_TASK_TYPE_SETDEPENDANCEMODE");
