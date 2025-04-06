@@ -300,10 +300,10 @@ if(USE_EXPERIMENTATION_EXAMPLES)
 endif(USE_EXPERIMENTATION_EXAMPLES)
 
 # Examples
-#add_subdirectory(examples)
+# add_subdirectory(examples)
 
 # Parallel stencil skeleton
-add_subdirectory(ParallelStencilSkeleton)
+add_subdirectory(Epsilod)
 
 # Verbose
 if (CTRL_CMAKE_VERBOSE_MAIN)

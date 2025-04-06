@@ -8,7 +8,7 @@
 # 1. EXPERIMENT INFORMATION
 # 1.1. APP NAME AND DEFAULT EXECUTABLES LIST
 APP_NAME="GenericStencil"
-EXE_NAMES="../../build/ParallelStencilSkeleton/test_parallelStencilSkeleton"
+EXE_NAMES="../../build/Epsilod/test_parallelStencilSkeleton"
 DEVICE_FILE_PATH="../../examples/Device_Selection_Files/dev_epsilod_exp"
 
 # 1.2. APP/EXPERIMENT SPECIFIC PARAMETERS
