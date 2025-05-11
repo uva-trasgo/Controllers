@@ -652,33 +652,32 @@ void Ctrl_OpenCLGpu_WaitTileInner(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Tile *p_tile_data
 }
 
 /* Macro to define MoveTo and MoveFrom logic */
-/* TODO: STRIDED TILES */
 #define OpenCL_Move(type)                                                                                                 \
-	HitTile *p_parent = p_tile->ref;                                                                                      \
+	HitTile *p_parent = flat_tile.ref;                                                                                    \
 	size_t   offset   = 0;                                                                                                \
-	if (p_tile->memStatus == HIT_MS_NOT_OWNER) {                                                                          \
+	if (flat_tile.memStatus == HIT_MS_NOT_OWNER) {                                                                        \
 		while (p_parent->memStatus == HIT_MS_NOT_OWNER)                                                                   \
 			p_parent = p_parent->ref;                                                                                     \
-		offset = (((size_t)p_tile->data) - ((size_t)p_parent->data)) / p_tile->baseExtent;                                \
+		offset = (((size_t)flat_tile.data) - ((size_t)p_parent->data)) / flat_tile.baseExtent;                            \
 	} else {                                                                                                              \
-		p_parent = p_tile;                                                                                                \
+		p_parent = &flat_tile;                                                                                            \
 	}                                                                                                                     \
-	/* TILES WITH THEIR OWN MEMORY ALLOCATION, OR CONTIGUOUS 1D TILES NEED ONLY ONE CONTIGUOUS COPY */                    \
-	if (p_tile->shape.info.sig.numDims == 1) {                                                                            \
+	/* 1D FLATTENED TILE -> CONTIGUOUS MEMORY */                                                                          \
+	if (flat_tile.shape.info.sig.numDims == 1) {                                                                          \
 		OPENCL_ASSERT_OP(                                                                                                 \
 			clEnqueue##type##Buffer(cmd_queue, p_tile_data_ocl->device_data,                                              \
-									CL_FALSE, offset * p_tile->baseExtent,                                                \
-									((size_t)(p_tile->acumCard)) * (p_tile->baseExtent),                                  \
-									p_tile->data, 0, NULL,                                                                \
+									CL_FALSE, offset *flat_tile.baseExtent,                                               \
+									((size_t)(flat_tile.acumCard)) * (flat_tile.baseExtent),                              \
+									flat_tile.data, 0, NULL,                                                              \
 									p_task->event.event.p_event_cl));                                                     \
 	} /* CONTIGUOUS 2D TILES */                                                                                           \
-	else if (p_tile->shape.info.sig.numDims == 2) {                                                                       \
+	else if (flat_tile.shape.info.sig.numDims == 2) {                                                                     \
 		size_t dev_offset[3] = {                                                                                          \
-			(hit_tileDimBegin(*p_tile, 1) - hit_tileDimBegin(*p_parent, 1)) * p_parent->baseExtent,                       \
-			hit_tileDimBegin(*p_tile, 0) - hit_tileDimBegin(*p_parent, 0),                                                \
+			(hit_tileDimBegin(flat_tile, 1) - hit_tileDimBegin(*p_parent, 1)) * p_parent->baseExtent,                     \
+			hit_tileDimBegin(flat_tile, 0) - hit_tileDimBegin(*p_parent, 0),                                              \
 			0};                                                                                                           \
 		size_t zero_offset[3] = {0, 0, 0};                                                                                \
-		size_t size[3]        = {p_tile->card[1] * p_tile->baseExtent, p_tile->card[0], 1};                               \
+		size_t size[3]        = {flat_tile.card[1] * flat_tile.baseExtent, flat_tile.card[0], 1};                         \
 		OPENCL_ASSERT_OP(                                                                                                 \
 			clEnqueue##type##BufferRect(                                                                                  \
 				cmd_queue,                                                                                                \
@@ -686,16 +685,16 @@ void Ctrl_OpenCLGpu_WaitTileInner(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Tile *p_tile_data
 				CL_FALSE, dev_offset, zero_offset, size,                                                                  \
 				pitch, 0,                                                                                                 \
 				(p_parent->baseExtent) * p_parent->origAcumCard[1], 0,                                                    \
-				p_tile->data, 0, NULL,                                                                                    \
+				flat_tile.data, 0, NULL,                                                                                  \
 				p_task->event.event.p_event_cl));                                                                         \
 	} /* CONTIGUOUS 3D TILES */                                                                                           \
-	else if (p_tile->shape.info.sig.numDims == 3) {                                                                       \
+	else if (flat_tile.shape.info.sig.numDims == 3) {                                                                     \
 		size_t dev_offset[3] = {                                                                                          \
-			(hit_tileDimBegin(*p_tile, 2) - hit_tileDimBegin(*p_parent, 2)) * p_parent->baseExtent,                       \
-			hit_tileDimBegin(*p_tile, 1) - hit_tileDimBegin(*p_parent, 1),                                                \
-			hit_tileDimBegin(*p_tile, 0) - hit_tileDimBegin(*p_parent, 0)};                                               \
+			(hit_tileDimBegin(flat_tile, 2) - hit_tileDimBegin(*p_parent, 2)) * p_parent->baseExtent,                     \
+			hit_tileDimBegin(flat_tile, 1) - hit_tileDimBegin(*p_parent, 1),                                              \
+			hit_tileDimBegin(flat_tile, 0) - hit_tileDimBegin(*p_parent, 0)};                                             \
 		size_t zero_offset[3] = {0, 0, 0};                                                                                \
-		size_t size[3]        = {p_tile->card[2] * p_tile->baseExtent, p_tile->card[1], p_tile->card[0]};                 \
+		size_t size[3]        = {flat_tile.card[2] * flat_tile.baseExtent, flat_tile.card[1], flat_tile.card[0]};         \
 		OPENCL_ASSERT_OP(                                                                                                 \
 			clEnqueue##type##BufferRect(                                                                                  \
 				cmd_queue,                                                                                                \
@@ -705,11 +704,11 @@ void Ctrl_OpenCLGpu_WaitTileInner(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Tile *p_tile_data
 				(p_parent->baseExtent) * p_parent->origAcumCard[1],                                                       \
 				(p_parent->baseExtent) * p_parent->card[2],                                                               \
 				(p_parent->baseExtent) * p_parent->origAcumCard[1],                                                       \
-				p_tile->data, 0, NULL,                                                                                    \
+				flat_tile.data, 0, NULL,                                                                                  \
 				p_task->event.event.p_event_cl));                                                                         \
 	} else {                                                                                                              \
 		fprintf(stderr, "Internal Error: Number of dimensions not supported for non-owner tile in MoveTo/MoveFrom: %d\n", \
-				p_tile->shape.info.sig.numDims);                                                                          \
+				flat_tile.shape.info.sig.numDims);                                                                        \
 	}
 
 void Ctrl_OpenCLGpu_EvalTaskMoveToInner(Ctrl_OpenCLGpu *p_ctrl, HitTile *p_tile) {
@@ -766,7 +765,12 @@ void Ctrl_OpenCLGpu_ExecTaskMoveTo(Ctrl_Task *p_task, Ctrl_OpenCLGpu *p_ctrl) {
 	Ctrl_OpenCL_Tile *p_tile_data_ocl = p_tile_data->p_impls[p_ctrl->global_id].tile.p_opencl;
 	cl_command_queue  cmd_queue       = p_ctrl->htd_driver_stream;
 
-	size_t pitch = p_tile_data_ocl->pitch == 0 ? (p_tile->baseExtent) * p_tile->origAcumCard[1] : p_tile_data_ocl->pitch;
+	HitTile flat_tile = *p_tile;
+	size_t  pitch     = p_tile_data_ocl->pitch;
+	if (pitch == 0) {
+		hit_tileFlattenDims(&flat_tile);
+		pitch = (flat_tile.baseExtent) * flat_tile.origAcumCard[1];
+	}
 
 	// Enqueue the transfer operation
 	OpenCL_Move(Write);
@@ -830,7 +834,12 @@ void Ctrl_OpenCLGpu_ExecTaskMoveFrom(Ctrl_Task *p_task, Ctrl_OpenCLGpu *p_ctrl) 
 
 	cl_command_queue cmd_queue = p_ctrl->dth_driver_stream;
 
-	size_t pitch = p_tile_data_ocl->pitch == 0 ? (p_tile->baseExtent) * p_tile->origAcumCard[1] : p_tile_data_ocl->pitch;
+	HitTile flat_tile = *p_tile;
+	size_t  pitch     = p_tile_data_ocl->pitch;
+	if (pitch == 0) {
+		hit_tileFlattenDims(&flat_tile);
+		pitch = (flat_tile.baseExtent) * flat_tile.origAcumCard[1];
+	}
 
 	// Enqueue the transfer operation
 	OpenCL_Move(Read);
@@ -999,7 +1008,7 @@ void Ctrl_OpenCLGpu_EvalTaskKernelLaunch(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Task *p_ta
 			Ctrl_Tile        *p_tile_data      = (Ctrl_Tile *)(p_tile->ext);
 			Ctrl_Tile_Impl   *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
 			Ctrl_OpenCL_Tile *p_tile_data_ocl  = p_tile_data_impl->tile.p_opencl;
-			KHitTile         *p_ktile          = (KHitTile *)(p_task->p_arguments + p_task->p_displacements[i]);
+			KHitTile         *p_ktile          = (KHitTile *)((char *)p_task->p_arguments + p_task->p_displacements[i]);
 
 			if (hit_tileIsNull(*p_tile)) {
 				fprintf(stderr, "Warning: Launching task %s, skipping null tile on parameter %d (starting at 0)\n", p_task->p_func_name, i);

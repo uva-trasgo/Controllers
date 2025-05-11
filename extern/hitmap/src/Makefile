@@ -76,7 +76,8 @@ COMMON_OBJS= hit_sig.o \
 	hit_file.o  \
 	hit_dump.o\
 	hit_error.o\
-	hit_env.o
+	hit_env.o\
+	hit_alb.o
 
 OBJS= $(COMMON_OBJS)
 
@@ -155,6 +156,9 @@ hit_error.o: hit_error.c $(INC)/hit_error.h
 
 hit_env.o: hit_env.c $(INC)/hit_env.h
 	$(HIT_COMPILE) -c $<
+
+hit_alb.o: ./hit_automatic_load_balancing/hit_alb.c $(INC)/hit_tile.h $(INC)/hit_layout.h $(INC)/hit_pattern.h $(INC)/hit_sshape.h $(INC)/hit_view.h $(INC)/hitmap2.h
+	$(HIT_COMPILE) -I$(HIT_BASEDIR)/include/hit_automatic_load_balancing -c $<
 
 #
 # END

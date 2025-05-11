@@ -86,18 +86,15 @@
 #define CTRL_PARSE_ARGS_21(kernel, arg_idx, role, type, name, ...) CTRL_PARSE_ARGS_##role(kernel, arg_idx, type, name) CTRL_PARSE_ARGS_20(kernel, arg_idx + 1, __VA_ARGS__)
 
 // FIXME: clang-format breaks the formatting of the following define.
-#define CTRL_PARSE_ARGS_IN(kernel, arg_idx, type, name)                                                                                               \
-	KHitTile            *p_ktile_##type##_##subtype##_##name            = (KHitTile *)((uint8_t *)args_list + request.fpga.p_displacements[arg_idx]); \
-	fpga_wrapper_K##type ktile_fpga_wrapper_##type##_##subtype##_##name = {                                                                           \
-		.origAcumCard = {p_ktile_##type##_##subtype##_##name->origAcumCard[0],                                                                        \
-						 p_ktile_##type##_##subtype##_##name->origAcumCard[1],                                                                        \
-						 p_ktile_##type##_##subtype##_##name->origAcumCard[2],                                                                        \
-						 p_ktile_##type##_##subtype##_##name->origAcumCard[3]},                                                                       \
-		.card         = {p_ktile_##type##_##subtype##_##name->card[0],                                                                                \
-						 p_ktile_##type##_##subtype##_##name->card[1],                                                                                \
-						 p_ktile_##type##_##subtype##_##name->card[2]},                                                                               \
-		.offset       = p_ktile_##type##_##subtype##_##name->offset};                                                                                       \
-	err |= clSetKernelArg(kernel, arg_pos++, sizeof(fpga_wrapper_K##type), &ktile_fpga_wrapper_##type##_##subtype##_##name);                          \
+#define CTRL_PARSE_ARGS_IN(kernel, arg_idx, type, name)                                                                                    \
+	KHitTile            *p_ktile_##type##_##subtype##_##name = (KHitTile *)((uint8_t *)args_list + request.fpga.p_displacements[arg_idx]); \
+	fpga_wrapper_K##type ktile_fpga_wrapper_##type##_##subtype##_##name;                                                                   \
+	for (int i = 0; i < HIT_MAXDIMS + 1; i++)                                                                                              \
+		ktile_fpga_wrapper_##type##_##subtype##_##name.origAcumCard[i] = p_ktile_##type##_##subtype##_##name->origAcumCard[i];             \
+	for (int i = 0; i < HIT_MAXDIMS; i++)                                                                                                  \
+		ktile_fpga_wrapper_##type##_##subtype##_##name.card[i] = hit_tileDimCard((*p_ktile_##type##_##subtype##_##name), i);               \
+	ktile_fpga_wrapper_##type##_##subtype##_##name.offset = p_ktile_##type##_##subtype##_##name->offset;                                   \
+	err |= clSetKernelArg(kernel, arg_pos++, sizeof(fpga_wrapper_K##type), &ktile_fpga_wrapper_##type##_##subtype##_##name);               \
 	err |= clSetKernelArg(kernel, arg_pos++, sizeof(cl_mem), (cl_mem *)(p_ktile_##type##_##subtype##_##name->data));
 
 #define CTRL_PARSE_ARGS_OUT(kernel, arg_idx, type, name) \

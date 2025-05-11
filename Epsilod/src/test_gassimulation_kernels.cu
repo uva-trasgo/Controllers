@@ -8,12 +8,9 @@
  * The relevant license, warranty and copyright notice is available in the Controller project repository.
  */
 
-#include "math.h"
-
 #include "test_gassimulation_types.h"
 #include "test_gassimulation_ext_type.h"
 
-#define EPSILOD_BASE_TYPE cell_t
 #include "epsilod_kernels.h"
 
 CTRL_KERNEL(initCell_gassimulation, GENERIC, DEFAULT, KHitTile_cell_t tileMat, EpsilodCoords global_coords, Epsilod_ext ext_params, {
@@ -86,17 +83,6 @@ CTRL_KERNEL(initCell_gassimulation, GENERIC, DEFAULT, KHitTile_cell_t tileMat, E
 
 /* KERNEL GENERIC: GAS SIMULATION */
 CTRL_KERNEL(updateCell_gassimulation, GENERIC, DEFAULT, KHitTile_cell_t matrix, const KHitTile_cell_t matrixCopy, EpsilodCoords global_coords, KHitTile_float stencil, float factor, const Epsilod_ext ext_params, {
-// #define DEBUG_GASSIMULATION
-#ifdef DEBUG_GASSIMULATION
-	for (int i = 1; i < Q; i++) {
-		if (hit(matrix, thr_i, thr_j, thr_k).data[0] != INFINITY) {
-			int sx                                   = thr_i + (int)(ext_params.offsets[i].y);
-			int sy                                   = thr_j + (int)(ext_params.offsets[i].x);
-			int sz                                   = thr_k + (int)(ext_params.offsets[i].z);
-			hit(matrix, thr_i, thr_j, thr_k).data[i] = hit(matrixCopy, sx, sy, sz).data[i] + 1;
-		}
-	}
-#else
 	int x = thr_i;
 	int y = thr_j;
 	int z = thr_k;
@@ -108,26 +94,13 @@ CTRL_KERNEL(updateCell_gassimulation, GENERIC, DEFAULT, KHitTile_cell_t matrix, 
 	GASSIMULATION_CELL_TYPE        deltaT    = ext_params.deltaT;
 	GASSIMULATION_CELL_TYPE        tau       = ext_params.tau;
 
-	// Global coordinates
-	// Switch j and i to mimic muesli
-	// Subtract the stencil radius as we have added an extra border to de matrix
-	// int x_g = thr_j + global.offset[1] - global.borders.high[1];
-	// int y_g = thr_i + global.offset[0] - global.borders.high[0];
-	// int z_g = thr_k + global.offset[2] - global.borders.high[2];
-	// printf("Global: %d %d %d\n", x_g, y_g, z_g);
-
 	cell_t cell = hit(matrixCopy, x, y, z);
 
-	// floatparts *parts = (floatparts *)&cell.data[0];
-
-	// if (parts->exponent == MAX_EXPONENT && parts->mantissa & FLAG_KEEP_VELOCITY) {
-	if (cell.data[0] == INFINITY) {
-		// printf("Keep vel: %d %d %d\n", x_g, y_g, z_g);
+	if (cell.data[0] == FLAG_KEEP_VELOCITY) {
 		hit(matrix, x, y, z) = cell;
 		// return cell;
 	} else {
 		// Streaming.
-		// printf("%d %d %d | %6.4f\n", thr_i, thr_j, thr_k, cell.data[0]);
 		for (int i = 1; i < Q; i++) {
 			// Switch offsets x and y to mimic muesli
 			int    sx            = x + (int)(offsets[i].y);
@@ -138,16 +111,12 @@ CTRL_KERNEL(updateCell_gassimulation, GENERIC, DEFAULT, KHitTile_cell_t matrix, 
 		}
 
 		// Collision.
-		// if (parts->exponent == MAX_EXPONENT && parts->mantissa & FLAG_OBSTACLE) {
-		if (cell.data[0] == -INFINITY) {
-			// if (parts->mantissa & FLAG_OBSTACLE) {
+		if (cell.data[0] == FLAG_OBSTACLE) {
 			cell_t cell2 = cell;
 			for (size_t i = 1; i < Q; i++) {
 				cell.data[i] = cell2.data[opposite[i]];
 			}
-			//}
 			hit(matrix, x, y, z) = cell;
-			// return cell;
 		} else {
 			GASSIMULATION_CELL_TYPE p  = 0;
 			vec3f                   vp = {0}; // We initialize this way to prevent compilation errors due to commas
@@ -176,36 +145,7 @@ CTRL_KERNEL(updateCell_gassimulation, GENERIC, DEFAULT, KHitTile_cell_t matrix, 
 
 				cell.data[i] = cell.data[i] + deltaT / tau * (feq - cell.data[i]);
 			}
-			// cell.data[0]         = v.x;
-			// cell.data[1]         = v.y;
-			// cell.data[2]         = v.z;
 			hit(matrix, x, y, z) = cell;
-			// return cell;
-			// if (thr_j == 77 && thr_i == 79 && thr_k == 5) {
-			// 	const int    BS       = 8;
-			// 	const size_t numBytes = sizeof(float);
-			// 	char         bits[Q][numBytes * BS + 1];
-			// 	for (size_t iVal = 0; iVal < Q; iVal++) {
-			// 		unsigned char *bytes = (unsigned char *)&cell.data[iVal];
-			// 		for (size_t iByte = 0; iByte < numBytes; iByte++) {
-			// 			for (size_t i = 0; i < BS; i++) {
-			// 				bits[iVal][iByte * BS + i] = (bytes[iByte] & (1 << i)) ? '1' : '0';
-			// 			}
-			// 		}
-			// 		bits[iVal][numBytes * BS] = ' ';
-			// 	}
-			// 	bits[Q - 1][numBytes * BS] = '\0';
-			// 	// printf("p: %.8f vp: %.8f %.8f %.8f v: %.8f %.8f %.8f cells: %.8f %.8f %.8f %.8f %.8f %.8f %.8f %.8f %.8f %.8f %.8f %.8f %.8f %.8f %.8f %.8f %.8f %.8f %.8f\n",
-			// 	// 	   p, vp.x, vp.y, vp.z, v.x, v.y, v.z,
-			// 	// 	   cell.data[0], cell.data[1], cell.data[2], cell.data[3], cell.data[4], cell.data[5], cell.data[6], cell.data[7], cell.data[8], cell.data[9], cell.data[10], cell.data[11], cell.data[12], cell.data[13], cell.data[14], cell.data[15], cell.data[16], cell.data[17], cell.data[18]);
-			// 	printf("p: %.8f vp: %.8f %.8f %.8f v: %.8f %.8f %.8f cells: %s\n",
-			// 		   p, vp.x, vp.y, vp.z, v.x, v.y, v.z,
-			// 		   &bits[0][0]);
-			// }
-			// if (abs(cell.data[0] - 224.968445) < 0.0001) {
-			// 	printf("%d %d %d\n", thr_i, thr_j, thr_k);
-			// }
 		}
 	}
-#endif
 });

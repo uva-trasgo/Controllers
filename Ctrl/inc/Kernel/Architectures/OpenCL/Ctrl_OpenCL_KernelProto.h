@@ -123,30 +123,11 @@
 #define CTRL_KERNEL_OPENCL_MOUNT_INNER_TILES_OUT(string, type, name) \
 	CTRL_KERNEL_OPENCL_MOUNT_INNER_TILES_GENERIC(string, type, name, write)
 
-#define CTRL_KERNEL_OPENCL_MOUNT_INNER_TILES_GENERIC(string, type, name, IOtype) \
-	strcat(string, CTRL_MACRO_STRINGIFY(K##type##_##IOtype));                    \
-	strcat(string, " ");                                                         \
-	strcat(string, CTRL_MACRO_STRINGIFY(name));                                  \
-	strcat(string, " = { .data = ");                                             \
-	strcat(string, CTRL_MACRO_STRINGIFY(ctrl_mem_wrapper_##name));               \
-	strcat(string, " + ");                                                       \
-	strcat(string, CTRL_MACRO_STRINGIFY(ctrl_ktile_wrapper_##name));             \
-	strcat(string, ".offset, ");                                                 \
-	strcat(string, ".origAcumCard = { ");                                        \
-	strcat(string, CTRL_MACRO_STRINGIFY(ctrl_ktile_wrapper_##name));             \
-	strcat(string, ".origAcumCard[0], ");                                        \
-	strcat(string, CTRL_MACRO_STRINGIFY(ctrl_ktile_wrapper_##name));             \
-	strcat(string, ".origAcumCard[1], ");                                        \
-	strcat(string, CTRL_MACRO_STRINGIFY(ctrl_ktile_wrapper_##name));             \
-	strcat(string, ".origAcumCard[2], ");                                        \
-	strcat(string, CTRL_MACRO_STRINGIFY(ctrl_ktile_wrapper_##name));             \
-	strcat(string, ".origAcumCard[3] } , .card = { ");                           \
-	strcat(string, CTRL_MACRO_STRINGIFY(ctrl_ktile_wrapper_##name));             \
-	strcat(string, ".card[0], ");                                                \
-	strcat(string, CTRL_MACRO_STRINGIFY(ctrl_ktile_wrapper_##name));             \
-	strcat(string, ".card[1], ");                                                \
-	strcat(string, CTRL_MACRO_STRINGIFY(ctrl_ktile_wrapper_##name));             \
-	strcat(string, ".card[2] }}; ");
+#define CTRL_KERNEL_OPENCL_MOUNT_INNER_TILES_GENERIC(string, type, name, IOtype)                                                  \
+	strcat(string,                                                                                                                \
+		   CTRL_MACRO_STRINGIFY(                                                                                                  \
+			   K##type##_##IOtype name                    = {.data = ctrl_mem_wrapper_##name + ctrl_ktile_wrapper_##name.offset}; \
+			   *((K##type##_wrapper *)&name.origAcumCard) = ctrl_ktile_wrapper_##name;));
 
 #define CTRL_KERNEL_OPENCL_MOUNT_INNER_TILES_IO(string, type, name) CTRL_KERNEL_OPENCL_MOUNT_INNER_TILES_OUT(string, type, name)
 
@@ -310,12 +291,12 @@
 			} else {                                                                                                                                                                                    \
 				KHitTile *p_ktile = (KHitTile *)((uint8_t *)args_list + request.opencl.p_displacements[i]);                                                                                             \
                                                                                                                                                                                                         \
-				KHitTile_opencl_wrapper ktile_opencl_wraper = {.origAcumCard = {p_ktile->origAcumCard[0],                                                                                               \
-																				p_ktile->origAcumCard[1],                                                                                               \
-																				p_ktile->origAcumCard[2],                                                                                               \
-																				p_ktile->origAcumCard[3]},                                                                                              \
-															   .card         = {p_ktile->card[0], p_ktile->card[1], p_ktile->card[2]},                                                                  \
-															   .offset       = p_ktile->offset};                                                                                                              \
+				KHitTile_opencl_wrapper ktile_opencl_wraper;                                                                                                                                            \
+				for (int i = 0; i < HIT_MAXDIMS + 1; i++)                                                                                                                                               \
+					ktile_opencl_wraper.origAcumCard[i] = p_ktile->origAcumCard[i];                                                                                                                     \
+				for (int i = 0; i < HIT_MAXDIMS; i++)                                                                                                                                                   \
+					ktile_opencl_wraper.card[i] = hit_tileDimCard((*p_ktile), i);                                                                                                                       \
+				ktile_opencl_wraper.offset = p_ktile->offset;                                                                                                                                           \
                                                                                                                                                                                                         \
 				OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos++, sizeof(KHitTile_opencl_wrapper), &ktile_opencl_wraper)); \
 				OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos++, sizeof(cl_mem), (cl_mem *)(p_ktile->data)));             \

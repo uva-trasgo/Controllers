@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 import os
 import statistics as st
+import itertools as itt
 from typing import Callable, Self
 import argparse
 from benchmark import bench_dict
@@ -41,30 +42,28 @@ def confidence_interval(data: list[float], confidence = 0.95) -> tuple[float, fl
 	return dist.mean - h, dist.mean + h
 
 
-def comparative_metric(key: tuple[str, ...], data_dict: dict[tuple, Data], legend: list[str], comp_param: str, comp_values: tuple[str, ...],
-                       func: Callable[[Stats, Stats], None]):
+def comparative_metric(key: tuple[str, ...],
+                       data_dict: dict[tuple, Data],
+                       legend: list[str],
+                       comp_param: str,
+                       comp_base: str,
+                       func: Callable[[Stats, Stats], None],
+                       allowed_diffs: tuple[str, ...] = ("device_args",)):
 	""" 
 	calculate comparative metric for an entry
-		name: name of the metric
-		key: key of the entry we want to calculate the metric for
+		key: key of the entry
 		data_dict: dict containing all data
 		comp_param: parameter that changes between entries
-		comp_values: values that comp_param can be
+		comp_base: value of comp_param to compare against
 		func: function to calculate metric
+		allowed_diffs: other fields of key allowed to differ
 	"""
 	param_index = legend.index(comp_param)
-	# first version has the metric, the other has 0
-	if key[param_index] == comp_values[0]:
-		counterpart = (*key[:param_index], comp_values[1], *key[param_index + 1:])
-		# handle cpu differences, ref has no async and device only has number of threads
-		if comp_param == "version" and key[legend.index("arch")] == "cpu":
-			device_index = legend.index("device_args")
-			policy_index = legend.index("policy")
-			counterpart = (*counterpart[:policy_index], "sync", *counterpart[policy_index + 1:])
-			# only keep the arch and nthreads part of the device
-			counterpart = (*counterpart[:device_index], "_".join(key[device_index].split("_")[:2]), *counterpart[device_index + 1:])
-		if counterpart in data_dict:
-			func(data_dict[key].stats, data_dict[counterpart].stats)
+	counterpart = (*key[:param_index], comp_base, *key[param_index + 1:])
+	for k, v in data_dict.items():
+		if compare_keys(k, counterpart, legend, allowed_diffs):
+			func(data_dict[key].stats, v.stats)
+			return
 
 
 def read_files(config: os.DirEntry, legend: str) -> dict[tuple, Data]:
@@ -145,10 +144,21 @@ def output_results(grouped_dict: dict[tuple, dict[str, Data]], group_param: str,
 				f_out.write("\n")
 
 
+def compare_keys(k1: tuple[str, ...], k2: tuple[str, ...], legend: list[str], allowed_diffs: tuple[str, ...]) -> bool:
+	"""	Compare two tuple keys while allowing some fields to differ	"""
+	k1_l = list(k1)
+	k2_l = list(k2)
+	for di in sorted([legend.index(d) for d in allowed_diffs if d in legend], reverse = True):
+		k1_l.pop(di)
+		k2_l.pop(di)
+	return k1_l == k2_l
+
+
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description = "Utility to check restults and calculate statistics of Controller experimentation")
 	parser.add_argument("res_path", type = str, help = "Path to results directory")
 	parser.add_argument("-t", "--test", action = "store_true", help = "Only check results, don't calculate stats")
+	# args = parser.parse_args(["exp/exp_cpumatpow"])
 	args = parser.parse_args()
 
 	# NOTE: care for non result fields that contain string res or sum and same for clock
@@ -162,19 +172,16 @@ if __name__ == "__main__":
 				calc_stats(data_dict)
 
 			# check results among diferent versions (ctrl, ref) and policies (sync, async)
-			# FIXME this is currently broken because it compares different sized matrices
-			# ref_res_pair = list(data_dict.items())[0]
-			# for key, value in data_dict.items():
-			# 	if ref_res_pair[1].results != value.results:
-			# 		print(f"Warning results differ on {ref_res_pair[0]} and {key}")
+			for r1, r2 in itt.combinations(data_dict.items(), 2):
+				if compare_keys(r1[0], r2[0], legend, ("policy", "version", "host_aff", "device_args")) and r1[1].results != r2[1].results:
+					print(f"Warning results differ on {r1[0]} and {r2[0]}")
 
 			# calculate comparative metrics, these involve more than 2 versions eg: overhead, overlap...
-			# FIXME if arch is not in legend this breaks, find device equivalence
-			# if not args.test:
-			# 	for key, value in data_dict.items():
-			# 		comparative_metric(key, data_dict, legend, "version", ("ctrl", "ref"), Stats.calc_overhead)
-			# 		if "cpu" not in key or "ctrl" in key:
-			# 			comparative_metric(key, data_dict, legend, "policy", ("async", "sync"), Stats.calc_overlap)
+			if not args.test:
+				for key, value in data_dict.items():
+					comparative_metric(key, data_dict, legend, "policy", "sync", Stats.calc_overlap)
+					allowed_diffs = ("device_args", "policy", "host_aff") if "cpu" in key else ("device_args",)
+					comparative_metric(key, data_dict, legend, "version", "ref", Stats.calc_overhead, allowed_diffs = allowed_diffs)
 
 			# group data_dict entries whose keys only differ on the x axis parameter
 			grouped_dict = group_entries(data_dict, legend, bench_dict[bench.name].group_param)

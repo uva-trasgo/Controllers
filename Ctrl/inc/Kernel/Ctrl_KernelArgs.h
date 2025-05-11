@@ -366,7 +366,6 @@
 #define CTRL_KERNEL_KTILE_STORE_IO(list, type, name) \
 	CTRL_KERNEL_KTILE_STORE_NO_INVAL(list, type, name)
 
-// TODO @waxa las lineas de deviceType hay que moverlas a compilacion condicional
 #define CTRL_KERNEL_KTILE_STORE_NO_INVAL(list, hit_type, name)                                                                              \
 	KHitTile k_##name##_void;                                                                                                               \
 	switch (p_ctrl->type) {                                                                                                                 \
@@ -381,14 +380,11 @@
 			break;                                                                                                                          \
 	}                                                                                                                                       \
 	K##hit_type k_##name;                                                                                                                   \
-	memcpy(&k_##name, &k_##name##_void, sizeof(KHitTile));                                                                                  \
-	k_##name.origAcumCard[0] = name->origAcumCard[0];                                                                                       \
-	k_##name.origAcumCard[1] = name->origAcumCard[1];                                                                                       \
-	k_##name.origAcumCard[2] = name->origAcumCard[2];                                                                                       \
-	k_##name.origAcumCard[3] = name->origAcumCard[3];                                                                                       \
-	k_##name.card[0]         = hit_tileDimCard((*name), 0);                                                                                 \
-	k_##name.card[1]         = hit_tileDimCard((*name), 1);                                                                                 \
-	k_##name.card[2]         = hit_tileDimCard((*name), 2);                                                                                 \
+ 	memcpy(&k_##name, &k_##name##_void, sizeof(KHitTile));                                                                                  \
+	for (int i = 0; i < HIT_MAXDIMS + 1; i++)                                                                                               \
+		k_##name.origAcumCard[i] = name->origAcumCard[i];                                                                                   \
+	for (int i = 0; i < HIT_MAXDIMS; i++)                                                                                                   \
+		k_##name.card[i] = hit_tileDimCard((*name), i);                                                                                     \
 	/* Offset for subselections. Most times will be 0. */                                                                                   \
 	{                                                                                                                                       \
 		hit_type *p_parent = name;                                                                                                          \

@@ -694,7 +694,7 @@ void Ctrl_CreateTexInner(Ctrl *p_ctrl, HitTile *p_tile, Ctrl_TexDesc tex_desc) {
 }
 
 void *Ctrl_GetDevPtrInner(Ctrl *p_ctrl, HitTile *p_tile) {
-	if ( hit_tileIsNull( *p_tile ) || p_tile->ext == NULL )
+	if (hit_tileIsNull(*p_tile) || p_tile->ext == NULL)
 		return NULL;
 
 	switch (p_ctrl->type) {

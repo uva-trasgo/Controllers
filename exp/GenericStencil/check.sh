@@ -63,7 +63,7 @@ function doTest() {
 	# EXECUTE PROGRAM
 	rm -f $RESULT_FILE
 	dims=$(echo $5 | cut -c1)
-	for dim in $(seq 1 $dims) ; do
+	for dim in $(seq 1 $dims); do
 		partition="EPSILOD_PARTITION=r$dim"
 		export $partition
 		if [ $dims == "1" ]; then

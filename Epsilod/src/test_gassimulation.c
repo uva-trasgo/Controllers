@@ -28,7 +28,6 @@
 #include <test_gassimulation_types.h>
 #include <test_gassimulation_ext_type.h>
 
-#define EPSILOD_BASE_TYPE cell_t
 #include <epsilod.h>
 
 GASSIMULATION_CELL_TYPE deltaT    = 1.f;

@@ -16,7 +16,9 @@ if(SUPPORT_HIP AND SUPPORT_CUDA)
     set(SUPPORT_CUDA OFF)
     message(
         STATUS
-        "Warning: CUDA backend compilation has been deactivated. CUDA and HIP have non-compatible declarations on their header files. This will be solved in a future release."
+        "Warning: CUDA backend compilation has been deactivated. "
+        "CUDA and HIP have non-compatible declarations on their header files. "
+        "This will be solved in a future release."
     )
     message(STATUS "Deafult: Compile only HIP backend.")
 endif(SUPPORT_HIP AND SUPPORT_CUDA)
@@ -174,16 +176,13 @@ endif(DEFINED SKIP_HWLOC)
 
 # CUDA
 if(SUPPORT_CUDA)
-    enable_language(CUDA)
     set(CMAKE_CUDA_HOST_COMPILER "${CMAKE_CXX_COMPILER}")
+    enable_language(CUDA)
     set(CUDA_ARCH "50;72;80;89" CACHE STRING "CUDA Architectures")
     set(CMAKE_CUDA_ARCHITECTURES ${CUDA_ARCH})
     find_package(CUDAToolkit REQUIRED)
     set(CTRL_INCLUDE_DIRS ${CTRL_INCLUDE_DIRS} ${CUDAToolkit_INCLUDE_DIRS})
     set(CTRL_LIBS ${CTRL_LIBS} CUDA::cudart)
-
-    # NOTE. @sergioalo disable link time optimizations if cuda is active to avoid nvcc linker errors
-    set(CTRL_LIBS ${CTRL_LIBS} "-fno-lto")
 endif(SUPPORT_CUDA)
 
 # OpenCL

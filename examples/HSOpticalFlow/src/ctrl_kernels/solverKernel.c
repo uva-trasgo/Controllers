@@ -120,9 +120,9 @@ CTRL_KERNEL(Solve, CUDA, DEFAULT, CTRL_KPARAMS(solver_params), {
 	hit(dv1, thr_i, thr_j) = sumV - hit(Iy, thr_i, thr_j) * frac;
 });
 
-CTRL_KERNEL(Solve, HIP, DEFAULT, CTRL_KPARAMS(solver_params), {
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
+CTRL_KERNEL(Solve, HIP, DEFAULT, CTRL_KPARAMS(solver_params), {
 	volatile __shared__ float du[(bx + 2) * (by + 2)];
 	volatile __shared__ float dv[(bx + 2) * (by + 2)];
 
@@ -214,8 +214,6 @@ CTRL_KERNEL(Solve, HIP, DEFAULT, CTRL_KPARAMS(solver_params), {
 });
 
 CTRL_KERNEL(Solve, OPENCLGPU, DEFAULT, CTRL_KPARAMS(solver_params), {
-#define MAX(x, y) (((x) > (y)) ? (x) : (y))
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
 	volatile __local float du[(bx + 2) * (by + 2)];
 	volatile __local float dv[(bx + 2) * (by + 2)];
 

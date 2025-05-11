@@ -540,33 +540,34 @@ void Ctrl_Cpu_EvalTaskInner(Ctrl_Task *p_task, Ctrl_Cpu *p_ctrl) {
 			HitTile       *p_tile          = &p_task->tile;
 			Ctrl_Tile     *p_tile_data     = (Ctrl_Tile *)p_tile->ext;
 			Ctrl_Cpu_Tile *p_tile_data_cpu = p_tile_data->p_impls[p_ctrl->global_id].tile.p_cpu;
-			/* TODO: STRIDED TILES */
 
-			/* TILES WITH THEIR OWN MEMORY ALLOCATION, OR CONTIGUOUS 1D TILES NEED ONLY ONE CONTIGUOUS COPY */
-			if ((p_tile->memStatus == HIT_MS_OWNER) || (p_tile->shape.info.sig.numDims == 1)) {
-				memcpy(p_tile_data_cpu->p_device_data, p_tile->data, ((size_t)(p_tile->acumCard)) * (p_tile->baseExtent));
+			HitTile flat_tile = *p_tile;
+			hit_tileFlattenDims(&flat_tile);
+
+			/* 1D OF FLATTENED TILE -> CONTIGUOUS MEMORY */
+			if (flat_tile.shape.info.sig.numDims == 1) {
+				memcpy(p_tile_data_cpu->p_device_data, flat_tile.data, ((size_t)(flat_tile.acumCard)) * (flat_tile.baseExtent));
 			}
 			/* 2D TILES */
-			else if (p_tile->shape.info.sig.numDims == 2) {
-				for (int i = 0; i < p_tile->card[0]; i++) {
-					memcpy((void *)(p_tile_data_cpu->p_device_data + (p_tile->baseExtent) * (i * p_tile->origAcumCard[1])),
-						   (void *)(p_tile->data + (p_tile->baseExtent) * (i * p_tile->origAcumCard[1])),
-						   ((size_t)(p_tile->card[1])) * (p_tile->baseExtent));
+			else if (flat_tile.shape.info.sig.numDims == 2) {
+				for (int i = 0; i < flat_tile.card[0]; i++) {
+					memcpy((void *)((char *)p_tile_data_cpu->p_device_data + (flat_tile.baseExtent) * (i * flat_tile.origAcumCard[1])),
+						   (void *)((char *)flat_tile.data + (flat_tile.baseExtent) * (i * flat_tile.origAcumCard[1])),
+						   ((size_t)(flat_tile.card[1])) * (flat_tile.baseExtent));
 				}
 			}
 			/* 3D TILES */
-			// TODO: Check if 3D transfers are correct! - Manu 04/2021
-			else if (p_tile->shape.info.sig.numDims == 3) {
-				for (int i = 0; i < p_tile->card[0]; i++) {
-					for (int j = 0; j < p_tile->card[1]; j++) {
-						memcpy((void *)(p_tile_data_cpu->p_device_data + (p_tile->baseExtent) * (i * p_tile->origAcumCard[1] + j * p_tile->origAcumCard[2])),
-							   (void *)(p_tile->data + (p_tile->baseExtent) * (i * p_tile->origAcumCard[1] + j * p_tile->origAcumCard[2])),
-							   ((size_t)(p_tile->card[2])) * (p_tile->baseExtent));
+			else if (flat_tile.shape.info.sig.numDims == 3) {
+				for (int i = 0; i < flat_tile.card[0]; i++) {
+					for (int j = 0; j < flat_tile.card[1]; j++) {
+						memcpy((void *)((char *)p_tile_data_cpu->p_device_data + (flat_tile.baseExtent) * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2])),
+							   (void *)((char *)flat_tile.data + (flat_tile.baseExtent) * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2])),
+							   ((size_t)(flat_tile.card[2])) * (flat_tile.baseExtent));
 					}
 				}
 			} else {
 				fprintf(stderr, "[Ctrl_Cpu] error: Number of dimensions not supported for non-owner tile in MoveTo: %d\n",
-						p_tile->shape.info.sig.numDims);
+						flat_tile.shape.info.sig.numDims);
 			}
 			break;
 		}
@@ -574,33 +575,34 @@ void Ctrl_Cpu_EvalTaskInner(Ctrl_Task *p_task, Ctrl_Cpu *p_ctrl) {
 			HitTile       *p_tile          = &p_task->tile;
 			Ctrl_Tile     *p_tile_data     = (Ctrl_Tile *)p_tile->ext;
 			Ctrl_Cpu_Tile *p_tile_data_cpu = p_tile_data->p_impls[p_ctrl->global_id].tile.p_cpu;
-			/* TODO: STRIDED TILES */
+
+			HitTile flat_tile = *p_tile;
+			hit_tileFlattenDims(&flat_tile);
 
 			/* TILES WITH THEIR OWN MEMORY ALLOCATION, OR CONTIGUOUS 1D TILES NEED ONLY ONE CONTIGUOUS COPY */
-			if ((p_tile->memStatus == HIT_MS_OWNER) || (p_tile->shape.info.sig.numDims == 1)) {
-				memcpy(p_tile->data, p_tile_data_cpu->p_device_data, ((size_t)(p_tile->acumCard)) * (p_tile->baseExtent));
+			if (flat_tile.shape.info.sig.numDims == 1) {
+				memcpy(flat_tile.data, p_tile_data_cpu->p_device_data, ((size_t)(flat_tile.acumCard)) * (flat_tile.baseExtent));
 			}
 			/* CONTIGUOUS 2D TILES */
-			else if (p_tile->shape.info.sig.numDims == 2) {
-				for (int i = 0; i < p_tile->card[0]; i++) {
-					memcpy((void *)(p_tile->data + (p_tile->baseExtent) * (i * p_tile->origAcumCard[1])),
-						   (void *)(p_tile_data_cpu->p_device_data + (p_tile->baseExtent) * (i * p_tile->origAcumCard[1])),
-						   ((size_t)(p_tile->card[1])) * (p_tile->baseExtent));
+			else if (flat_tile.shape.info.sig.numDims == 2) {
+				for (int i = 0; i < flat_tile.card[0]; i++) {
+					memcpy((void *)((char *)flat_tile.data + (flat_tile.baseExtent) * (i * flat_tile.origAcumCard[1])),
+						   (void *)((char *)p_tile_data_cpu->p_device_data + (flat_tile.baseExtent) * (i * flat_tile.origAcumCard[1])),
+						   ((size_t)(flat_tile.card[1])) * (flat_tile.baseExtent));
 				}
 			}
 			/* CONTIGUOUS 3D TILES */
-			// TODO: Check if 3D transfers are correct! - Manu 04/2021
-			else if (p_tile->shape.info.sig.numDims == 3) {
-				for (int i = 0; i < p_tile->card[0]; i++) {
-					for (int j = 0; j < p_tile->card[1]; j++) {
-						memcpy((void *)(p_tile->data + (p_tile->baseExtent) * (i * p_tile->origAcumCard[1] + j * p_tile->origAcumCard[2])),
-							   (void *)(p_tile_data_cpu->p_device_data + (p_tile->baseExtent) * (i * p_tile->origAcumCard[1] + j * p_tile->origAcumCard[2])),
-							   ((size_t)(p_tile->card[2])) * (p_tile->baseExtent));
+			else if (flat_tile.shape.info.sig.numDims == 3) {
+				for (int i = 0; i < flat_tile.card[0]; i++) {
+					for (int j = 0; j < flat_tile.card[1]; j++) {
+						memcpy((void *)((char *)flat_tile.data + (flat_tile.baseExtent) * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2])),
+							   (void *)((char *)p_tile_data_cpu->p_device_data + (flat_tile.baseExtent) * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2])),
+							   ((size_t)(flat_tile.card[2])) * (flat_tile.baseExtent));
 					}
 				}
 			} else {
 				fprintf(stderr, "[Ctrl_Cpu] error: Number of dimensions not supported for non-owner tile in MoveFrom: %d\n",
-						p_tile->shape.info.sig.numDims);
+						flat_tile.shape.info.sig.numDims);
 			}
 			break;
 		}
@@ -934,7 +936,7 @@ void Ctrl_Cpu_EvalTaskSelectTile(Ctrl_Cpu *p_ctrl, Ctrl_Task *p_task) {
 	if (p_tile->memStatus == HIT_MS_NOT_OWNER) {
 		p_tile_data_impl->device_status = p_parent_data_impl->device_status;
 
-		p_tile_data_cpu->p_device_data = p_parent_data_cpu->p_device_data + (p_tile->data - p_parent->data);
+		p_tile_data_cpu->p_device_data = (char *)p_parent_data_cpu->p_device_data + ((char *)p_tile->data - (char *)p_parent->data);
 	}
 }
 

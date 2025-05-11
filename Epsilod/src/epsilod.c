@@ -489,14 +489,12 @@ void compute(PCtrl comm, EpsilodProperties *props, EpsilodComputationArgs *compu
 	}
 
 	/* SYNC BORDERS BEFORE INNER */
-	if (mpi_dev_aware) {
-		for (int i = 0; i < props->dims; i++) {
-			if (validShape(tiles->border_out_dev[i][0].shape) && validShape(copy_tiles->border_out_dev[i][0].shape)) {
-				Ctrl_WaitTile(comm, tiles->border_out_dev[i][0]);
-			}
-			if (validShape(tiles->border_out_dev[i][1].shape) && validShape(copy_tiles->border_out_dev[i][1].shape)) {
-				Ctrl_WaitTile(comm, tiles->border_out_dev[i][1]);
-			}
+	for (int i = 0; i < props->dims; i++) {
+		if (validShape(tiles->border_out_dev[i][0].shape) && validShape(copy_tiles->border_out_dev[i][0].shape)) {
+			Ctrl_WaitTile(comm, tiles->border_out_dev[i][0]);
+		}
+		if (validShape(tiles->border_out_dev[i][1].shape) && validShape(copy_tiles->border_out_dev[i][1].shape)) {
+			Ctrl_WaitTile(comm, tiles->border_out_dev[i][1]);
 		}
 	}
 
