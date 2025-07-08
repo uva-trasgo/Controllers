@@ -18,7 +18,6 @@ typedef struct Ctrl_Info {
 	char *type;                             /**< Type of the ctrl */
 	char  device_name[CTRL_MAX_DEV_NAME];   /**< Name of the device */
 	char  platform_name[CTRL_MAX_DEV_NAME]; /**< Name of the platform of the device (only for OpenCL GPU and FPGA ctrls)*/
-	char *exec_mode;                        /**< Execution mode (only for FPGA ctrls)*/
 	int   host_affinity;                    /**< Index of numa node to use as host */
 	int   n_kernel_queues;                  /**< Number of kernel queues in this device (empty on CPU ctrls)*/
 	int   n_threads;                        /**< Number of threads used to execute kernels (only for CPU ctrls)*/
@@ -36,7 +35,6 @@ typedef struct Ctrl_Info {
 		.type            = NULL, \
 		.device_name     = {0},  \
 		.platform_name   = {0},  \
-		.exec_mode       = NULL, \
 		.host_affinity   = 0,    \
 		.n_kernel_queues = 0,    \
 		.n_threads       = 0,    \

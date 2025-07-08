@@ -20,13 +20,13 @@
 	#include <stdio.h>
 #endif
 
-#ifdef _CTRL_OPENCL_GPU_ERROR_CHECK_
+#ifdef _CTRL_OPENCL_ERROR_CHECK_
 	#include <stdio.h>
 	#include <assert.h>
 	
-	/********************************************
-	 ***** OpenCL GPU util functions ******
-	********************************************/
+	/**********************************
+	 ***** OpenCL util functions ******
+	 **********************************/
 
 	#define CASE_RETURN_STRING(err) \
 		case err:                   \
@@ -185,5 +185,18 @@
 	#define OPENCL_PROFILE_LAST( ... )
 	#define OPENCL_PROFILE_VISUAL( ... )
 #endif
+
+static inline int clGetVersion(cl_device_id device) {
+	char version_string[128];
+    OPENCL_ASSERT_OP( clGetDeviceInfo(device, CL_DEVICE_VERSION, sizeof(version_string), version_string, NULL) ); 
+    // Check if the device supports OpenCL 1.1 or higher
+    if (version_string[7] > 1 || (version_string[7] == '1' && version_string[9] >= '1')) {
+        OPENCL_ASSERT_OP( clGetDeviceInfo(device, CL_DEVICE_OPENCL_C_VERSION, sizeof(version_string), version_string, NULL) );
+		
+		return (version_string[9] - '0') * 10 + (version_string[11] - '0');
+    }
+
+	return (version_string[7] - '0') * 10 + (version_string[9] - '0');
+}
 ///@endcond 
 #endif /* _CTRL_OPENCL_HELPER_H_ */

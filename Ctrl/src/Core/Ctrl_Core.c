@@ -12,7 +12,7 @@
 #include <string.h>
 
 /**
- * optional weights for distributed computations
+ * Optional weights for distributed computations.
  */
 HitWeights ctrl_weights = {0, NULL};
 
@@ -37,14 +37,26 @@ hwloc_topology_t topo;
 int host_node = 0;
 
 /**
+ * Path to the FPGA kernel binaries.
+ */
+char *Ctrl_FPGA_kernels_path;
+
+/**
  * Policy to be used by ctrls.
  */
 Ctrl_Policy policy = CTRL_POLICY_DEFAULT;
 
 /**
- * Pointer to stream for host task execution
+ * Pointer to stream for host task execution, consumed by host task thread
+ * @see Ctrl_Thread_HostTask, Ctrl_LaunchHostTask
  */
 Ctrl_TaskQueue *p_ctrl_host_stream = NULL;
+
+/**
+ * Queue used to handle driver event destruction, consumed by queue manager thread
+ * @see Ctrl_GenericEvent_Release, Ctrl_GenericEvent_Destroy, Ctrl_Thread_QueueManager
+ */
+Ctrl_TaskQueue *p_ctrl_event_destroy_queue = NULL;
 
 /**
  * Evaluate \p p_task.
@@ -167,6 +179,45 @@ void Ctrl_Create(Ctrl_Type type, int id, char *args);
  */
 bool Ctrl_PushEventIfCompat(Ctrl_GenericEvent event, int qid, Ctrl *p_ctrl);
 
+void Ctrl_Init(int *pargc, char ***pargv) {
+	hit_comInit(pargc, pargv);
+
+	int    argc = *pargc;
+	char **argv = *pargv;
+
+	int i;
+	for (i = 0; i < argc; i++) {
+		if (!strncmp(argv[i], "--fpga-kernels-path=", 20))
+			break;
+	}
+	// If the argument was not found, i is equal to argc.
+
+	if (i < argc) {
+		Ctrl_FPGA_kernels_path = (char *)malloc(strlen(&argv[i][20]) * sizeof(char));
+		strcpy(Ctrl_FPGA_kernels_path, &argv[i][20]);
+
+		// Fix argc and argv:
+		for (; i < argc - 1; i++) {
+			argv[i] = argv[i + 1];
+		}
+		argv[i] = NULL; // Erase last argument
+		(*pargc)--;
+	} else {
+		// Argument not found. Use default path (same as the executed program's, argv[0]).
+
+		// Extract directory path from program's path, find rightmost '/':
+		int last_slash_idx = 0;
+		for (int i = 0; i < strlen(argv[0]); i++) {
+			if (argv[0][i] == '/')
+				last_slash_idx = i;
+		}
+
+		Ctrl_FPGA_kernels_path                 = (char *)malloc((last_slash_idx + 1) * sizeof(char));
+		Ctrl_FPGA_kernels_path[last_slash_idx] = '\0';
+		strncpy(Ctrl_FPGA_kernels_path, argv[0], last_slash_idx);
+	}
+}
+
 void Ctrl_PinToHostNuma() {
 	hwloc_obj_t obj = hwloc_get_obj_by_type(topo, HWLOC_OBJ_NUMANODE, host_node);
 	if (!obj) {
@@ -270,11 +321,11 @@ void Ctrl_Thread_Spawner() {
 	{
 		// Distribute new threads
 		switch (p_ctrl->type) {
-			#ifdef _CTRL_ARCH_CPU_
+				#ifdef _CTRL_ARCH_CPU_
 			case CTRL_TYPE_CPU:
 				Ctrl_Cpu_ThreadInit(&(p_ctrl->p_impl->cpu), topo);
 				break;
-			#endif // _CTRL_ARCH_CPU_
+				#endif // _CTRL_ARCH_CPU_
 			default:
 				#pragma omp single
 				{
@@ -293,41 +344,41 @@ void Ctrl_Create(Ctrl_Type type, int id, char *args) {
 	p_ctrl->type   = type;
 	// TODO @sergioalo send id as param to inner create?
 	switch (type) {
-		#ifdef _CTRL_ARCH_CPU_
+			#ifdef _CTRL_ARCH_CPU_
 		case CTRL_TYPE_CPU:
 			p_ctrl->p_impl->cpu.topo      = topo;
 			p_ctrl->p_impl->cpu.global_id = p_ctrl->id;
 			Ctrl_Cpu_Create(&(p_ctrl->p_impl->cpu), policy, args);
 			break;
-		#endif // _CTRL_ARCH_CPU_
+			#endif // _CTRL_ARCH_CPU_
 
-		#ifdef _CTRL_ARCH_CUDA_
+			#ifdef _CTRL_ARCH_CUDA_
 		case CTRL_TYPE_CUDA:
 			p_ctrl->p_impl->cuda.global_id = p_ctrl->id;
 			Ctrl_Cuda_Create(&(p_ctrl->p_impl->cuda), policy, args);
 			break;
-		#endif // _CTRL_ARCH_CUDA_
+			#endif // _CTRL_ARCH_CUDA_
 
-		#ifdef _CTRL_ARCH_HIP_
+			#ifdef _CTRL_ARCH_HIP_
 		case CTRL_TYPE_HIP:
 			p_ctrl->p_impl->hip.global_id = p_ctrl->id;
 			Ctrl_Hip_Create(&(p_ctrl->p_impl->hip), policy, args);
 			break;
-		#endif // _CTRL_ARCH_HIP_
+			#endif // _CTRL_ARCH_HIP_
 
-		#ifdef _CTRL_ARCH_OPENCL_GPU_
+			#ifdef _CTRL_ARCH_OPENCL_GPU_
 		case CTRL_TYPE_OPENCL_GPU:
 			p_ctrl->p_impl->opencl_gpu.global_id = p_ctrl->id;
 			Ctrl_OpenCLGpu_Create(&(p_ctrl->p_impl->opencl_gpu), policy, args);
 			break;
-		#endif // _CTRL_ARCH_OPENCL_GPU_
+			#endif // _CTRL_ARCH_OPENCL_GPU_
 
-		#ifdef _CTRL_ARCH_FPGA_
+			#ifdef _CTRL_ARCH_FPGA_
 		case CTRL_TYPE_FPGA:
 			p_ctrl->p_impl->fpga.global_id = p_ctrl->id;
 			Ctrl_FPGA_Create(&(p_ctrl->p_impl->fpga), policy, args);
 			break;
-		#endif // _CTRL_ARCH_FPGA_
+			#endif // _CTRL_ARCH_FPGA_
 		default:
 			fprintf(stderr, "[Ctrl_Create] Unknown or unsupported architecture: %d\n", type);
 			exit(EXIT_FAILURE);
@@ -348,35 +399,35 @@ int Ctrl_GetNCtrls() {
 
 void Ctrl_ExecTask(Ctrl *p_ctrl, Ctrl_Task *p_task) {
 	switch (p_ctrl->type) {
-		#ifdef _CTRL_ARCH_CPU_
+			#ifdef _CTRL_ARCH_CPU_
 		case CTRL_TYPE_CPU:
 			Ctrl_Cpu_EvalTask(&(p_ctrl->p_impl->cpu), p_task);
 			break;
-		#endif // _CTRL_ARCH_CPU_
+			#endif // _CTRL_ARCH_CPU_
 
-		#ifdef _CTRL_ARCH_CUDA_
+			#ifdef _CTRL_ARCH_CUDA_
 		case CTRL_TYPE_CUDA:
 			Ctrl_Cuda_EvalTask(&(p_ctrl->p_impl->cuda), p_task);
 			break;
-		#endif // _CTRL_ARCH_CUDA_
+			#endif // _CTRL_ARCH_CUDA_
 
-		#ifdef _CTRL_ARCH_HIP_
+			#ifdef _CTRL_ARCH_HIP_
 		case CTRL_TYPE_HIP:
 			Ctrl_Hip_EvalTask(&(p_ctrl->p_impl->hip), p_task);
 			break;
-		#endif // _CTRL_ARCH_HIP_
+			#endif // _CTRL_ARCH_HIP_
 
-		#ifdef _CTRL_ARCH_OPENCL_GPU_
+			#ifdef _CTRL_ARCH_OPENCL_GPU_
 		case CTRL_TYPE_OPENCL_GPU:
 			Ctrl_OpenCLGpu_EvalTask(&(p_ctrl->p_impl->opencl_gpu), p_task);
 			break;
-		#endif // _CTRL_ARCH_OPENCL_GPU_
+			#endif // _CTRL_ARCH_OPENCL_GPU_
 
-		#ifdef _CTRL_ARCH_FPGA_
+			#ifdef _CTRL_ARCH_FPGA_
 		case CTRL_TYPE_FPGA:
 			Ctrl_FPGA_EvalTask(&(p_ctrl->p_impl->fpga), p_task);
 			break;
-		#endif // _CTRL_ARCH_FPGA_
+			#endif // _CTRL_ARCH_FPGA_
 		default:
 			fprintf(stderr, "[Ctrl_ExecTask] Unsupported architecture %d. Recompile Ctrl library with the proper support.\n", p_ctrl->type);
 			exit(EXIT_FAILURE);
@@ -391,31 +442,28 @@ void Ctrl_EndBlock() {
 	// Wait for all operations to end before starting cleanup
 	Ctrl_Synchronize();
 
-	bool freed_queues = 0;
 	for (int i = 0; i < Ctrl_GetNCtrls(); i++) {
 		// Tell ctrls to cleanup their internal stuff and propagate the destroy signal
-		if (!freed_queues && (p_ctrl_global[i].type != CTRL_TYPE_CPU)) {
-			// sends destroy signal to queue manager, only from 1 ctrl that is not cpu
-			Ctrl_AddTaskFlagged(&p_ctrl_global[i], CTRL_TASK_TYPE_DESTROYCTRL, NULL, 1);
-			freed_queues = 1;
-		} else {
-			Ctrl_AddTaskFlagged(&p_ctrl_global[i], CTRL_TASK_TYPE_DESTROYCTRL, NULL, 0);
-		}
+		Ctrl_AddTask(&p_ctrl_global[i], CTRL_TASK_TYPE_DESTROYCTRL, NULL);
 		// Free internal part of the ctrl
 		free(p_ctrl_global[i].p_impl);
 		p_ctrl_global[i].p_impl = NULL;
 	}
 
-	// Tell send destroy signal to host task queue
+	// Send destroy signal to host task queue
 	Ctrl_Task task;
 	task.task_type = CTRL_TASK_TYPE_DESTROYCTRL;
 	Ctrl_TaskQueue_Push(p_ctrl_host_stream, task);
+	// send destroy signal to queue manager thread
+	if (p_ctrl_event_destroy_queue != NULL)
+		Ctrl_TaskQueue_Push(p_ctrl_event_destroy_queue, task);
 
 	// Wait for other threads to be ready for ctrl list full cleanup
 	#pragma omp barrier
 	free(p_ctrl_global);
 	free(ctrl_weights.ratios);
 	hwloc_topology_destroy(topo);
+	free(Ctrl_FPGA_kernels_path);
 }
 
 void Ctrl_AddTask(Ctrl *p_ctrl, Ctrl_TaskType type, HitTile *p_tile) {
@@ -646,6 +694,34 @@ void Ctrl_CreateTexInner(Ctrl *p_ctrl, HitTile *p_tile, Ctrl_TexDesc tex_desc) {
 	}
 }
 
+void *Ctrl_GetDevPtrInner(Ctrl *p_ctrl, HitTile *p_tile) {
+	if (hit_tileIsNull(*p_tile) || p_tile->ext == NULL)
+		return NULL;
+
+	switch (p_ctrl->type) {
+		#ifdef _CTRL_ARCH_CPU_
+		case CTRL_TYPE_CPU:
+			return Ctrl_Cpu_GetDevPtr(&p_ctrl->p_impl->cpu, p_tile);
+		#endif // _CTRL_ARCH_CPU_
+
+		#ifdef _CTRL_ARCH_CUDA_
+		case CTRL_TYPE_CUDA:
+			return Ctrl_Cuda_GetDevPtr(&p_ctrl->p_impl->cuda, p_tile);
+		#endif // _CTRL_ARCH_CUDA_
+
+		#ifdef _CTRL_ARCH_HIP_
+		case CTRL_TYPE_HIP:
+			return Ctrl_Hip_GetDevPtr(&p_ctrl->p_impl->hip, p_tile);
+		#endif // _CTRL_ARCH_HIP_
+		case CTRL_TYPE_OPENCL_GPU:
+		case CTRL_TYPE_FPGA:
+			return NULL;
+		default:
+			fprintf(stderr, "[Ctrl_Core] Ctrl_GetDevPtr: Unknown ctrl type %d", p_ctrl->type);
+			exit(EXIT_FAILURE);
+	}
+}
+
 void Ctrl_SelectInner(HitTile *p_tile, int flags) {
 	// @arturo: Bug, select tasks for NULL Tiles should not be introduced in the queue
 	if (hit_tileIsNull(*p_tile)) {
@@ -742,35 +818,35 @@ Ctrl_Info Ctrl_GetInfo(Ctrl *p_ctrl) {
 	Ctrl_Info info     = CTRL_INFO_NULL;
 	info.host_affinity = host_node;
 	switch (p_ctrl->type) {
-		#ifdef _CTRL_ARCH_CPU_
+			#ifdef _CTRL_ARCH_CPU_
 		case CTRL_TYPE_CPU:
 			Ctrl_Cpu_GetInfo(&(p_ctrl->p_impl->cpu), &info);
 			break;
-		#endif // _CTRL_ARCH_CPU_
+			#endif // _CTRL_ARCH_CPU_
 
-		#ifdef _CTRL_ARCH_CUDA_
+			#ifdef _CTRL_ARCH_CUDA_
 		case CTRL_TYPE_CUDA:
 			Ctrl_Cuda_GetInfo(&(p_ctrl->p_impl->cuda), &info);
 			break;
-		#endif // _CTRL_ARCH_CUDA_
+			#endif // _CTRL_ARCH_CUDA_
 
-		#ifdef _CTRL_ARCH_HIP_
+			#ifdef _CTRL_ARCH_HIP_
 		case CTRL_TYPE_HIP:
 			Ctrl_Hip_GetInfo(&(p_ctrl->p_impl->hip), &info);
 			break;
-		#endif // _CTRL_ARCH_HIP_
+			#endif // _CTRL_ARCH_HIP_
 
-		#ifdef _CTRL_ARCH_OPENCL_GPU_
+			#ifdef _CTRL_ARCH_OPENCL_GPU_
 		case CTRL_TYPE_OPENCL_GPU:
 			Ctrl_OpenCLGpu_GetInfo(&(p_ctrl->p_impl->opencl_gpu), &info);
 			break;
-		#endif // _CTRL_ARCH_OPENCL_GPU_
+			#endif // _CTRL_ARCH_OPENCL_GPU_
 
-		#ifdef _CTRL_ARCH_FPGA_
+			#ifdef _CTRL_ARCH_FPGA_
 		case CTRL_TYPE_FPGA:
 			Ctrl_FPGA_GetInfo(&(p_ctrl->p_impl->fpga), &info);
 			break;
-		#endif // _CTRL_ARCH_FPGA_
+			#endif // _CTRL_ARCH_FPGA_
 		default:
 			fprintf(stderr, "[Ctrl_GetInfo] Unsupported architecture. Recompile Ctrl library with the proper support.\n");
 			exit(EXIT_FAILURE);
@@ -902,10 +978,10 @@ void Ctrl_EvalTask(Ctrl_Task *p_task) {
 int Ctrl_GetNumThreads(Ctrl *p_ctrl) {
 	int default_num_threads = 0;
 	switch (p_ctrl->type) {
-		#ifdef _CTRL_ARCH_CPU_
+			#ifdef _CTRL_ARCH_CPU_
 		case CTRL_TYPE_CPU:
 			return default_num_threads + Ctrl_Cpu_GetNumThreads(&(p_ctrl->p_impl->cpu));
-		#endif // _CTRL_ARCH_CPU_
+			#endif // _CTRL_ARCH_CPU_
 		default:
 			return default_num_threads;
 	}
@@ -1240,11 +1316,17 @@ void Ctrl_Thread_QueueManager() {
 		return;
 	}
 
+	// Extra queue for event destruction
+	n_queues++;
+	p_nqueues[n_ctrls - 1]++;
+
 	Ctrl_TaskQueue  *pp_queues[n_queues];
 	Ctrl_TaskQueue **pp_aux = pp_queues;
 	for (int i = 0; i < n_ctrls; i++) {
 		pp_aux = Ctrl_GetHostQueues(&p_ctrl_global[i], pp_aux);
 	}
+	p_ctrl_event_destroy_queue = Ctrl_TaskQueue_Create();
+	pp_queues[n_queues - 1]    = p_ctrl_event_destroy_queue;
 
 	while (true) {
 		for (int cid = 0; cid < n_ctrls; cid++) {
@@ -1305,6 +1387,11 @@ void Ctrl_Thread_QueueManager() {
 							#pragma omp atomic update
 							pp_queues[gqid]->last_finished++;
 						}
+						break;
+					case CTRL_TASK_TYPE_DESTROYEVENT:
+						// All driver events are destroyed here by this thread to avoid locks
+						Ctrl_TaskQueue_Pop(pp_queues[gqid]);
+						Ctrl_GenericEvent_Destroy(p_task->event);
 						break;
 					case CTRL_TASK_TYPE_DESTROYCTRL:
 						for (int j = 0; j < n_queues; j++) {

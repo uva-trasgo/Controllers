@@ -10,6 +10,7 @@
 APP_NAME="GenericStencil"
 EXE_NAMES="../../build/ParallelStencilSkeleton/test_parallelStencilSkeleton"
 DEVICE_FILE_PATH="../../examples/Device_Selection_Files/dev_epsilod_exp"
+FPGA_KERNELS_PATH="/home/manuel/controllers/ParallelStencilSkeleton/src/fpga_kernels/"
 
 # 1.2. APP/EXPERIMENT SPECIFIC PARAMETERS
 PROCS="1 2 3 4"
@@ -25,7 +26,7 @@ RESULT_FILE="Matrix.out.txt"
 
 # 1.5. MPI RUN COMMAND
 if [ -z "$MPI_RUN" ]; then
-	MPI_RUN="srun --mpi=pmi2 -w gorgon -Q --exclusive -t 3"
+	MPI_RUN="srun --mpi=pmi2 -w gorgon -Q -K --exclusive -t 3"
 fi
 
 # 2. WRITE HEADER
@@ -74,14 +75,14 @@ function doTest() {
 	rm -f $RESULT_FILE
 	dims=$(echo $5 | cut -c1)
 	if [ $dims == "1" ]; then
-		$MPI_RUN -n $2 ./$1 $5 $3 $4 $DEVICE_FILE_PATH >/dev/null 2>check.err
-		echo "$MPI_RUN -n $2 ./$1 $5 $3 $4 $DEVICE_FILE_PATH 2>check.err"
+		$MPI_RUN -n $2 ./$1 $5 $3 $4 $DEVICE_FILE_PATH --fpga-kernels-path=$FPGA_KERNELS_PATH >/dev/null 2>check.err
+		echo "$MPI_RUN -n $2 ./$1 $5 $3 $4 $DEVICE_FILE_PATH --fpga-kernels-path=$FPGA_KERNELS_PATH 2>check.err"
 	elif [ $dims == "2" ]; then
-		$MPI_RUN -n $2 ./$1 $5 $3 $3 $4 $DEVICE_FILE_PATH >/dev/null 2>check.err
-		echo "$MPI_RUN -n $2 ./$1 $5 $3 $3 $4 $DEVICE_FILE_PATH 2>check.err"
+		$MPI_RUN -n $2 ./$1 $5 $3 $3 $4 $DEVICE_FILE_PATH --fpga-kernels-path=$FPGA_KERNELS_PATH >/dev/null 2>check.err
+		echo "$MPI_RUN -n $2 ./$1 $5 $3 $3 $4 $DEVICE_FILE_PATH --fpga-kernels-path=$FPGA_KERNELS_PATH 2>check.err"
 	elif [ $dims == "3" ]; then
-		$MPI_RUN -n $2 ./$1 $5 $3 $3 $3 $4 $DEVICE_FILE_PATH >/dev/null 2>check.err
-		echo "$MPI_RUN -n $2 ./$1 $5 $3 $3 $3 $4 $DEVICE_FILE_PATH 2>check.err"
+		$MPI_RUN -n $2 ./$1 $5 $3 $3 $3 $4 $DEVICE_FILE_PATH --fpga-kernels-path=$FPGA_KERNELS_PATH >/dev/null 2>check.err
+		echo "$MPI_RUN -n $2 ./$1 $5 $3 $3 $3 $4 $DEVICE_FILE_PATH --fpga-kernels-path=$FPGA_KERNELS_PATH 2>check.err"
 	fi
 
 	# EXECUTION ERRORS, SKIP TESTING RESULT FILE

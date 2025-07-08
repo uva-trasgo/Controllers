@@ -96,7 +96,7 @@ void DestroyWorkPartition() {
  */
 void AddCutPoint(int cid, int lvl, int wi) {
 	if (npoints >= Ctrl_GetNCtrls()) {
-		fprintf(stderr, "Error: tried to add more cut points than compute devices available\n");
+		fprintf(stderr, "Error: tried to add more cut points than compute devices available points %d, devs %d\n", npoints, Ctrl_GetNCtrls() - 1);
 		exit(EXIT_FAILURE);
 	}
 
@@ -336,6 +336,7 @@ int main(int argc, char *argv[]) {
 				// rtx4500/gfx1100 a100
 				// AddCutPoint(0, 3, 2);
 				// AddCutPoint(1, 4, 3);
+				break;
 			case 3:
 				// 2x rtx4500 1x a100
 				AddCutPoint(0, 3, 0);

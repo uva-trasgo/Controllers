@@ -28,7 +28,8 @@ while :; do
 			echo "	-d|--debug				Debug mode. Compile with -O0 -g and extra error checking and info."
 			echo "	-c|--clean				Allways clean and recompile hitmap."
 			echo "	-p|--profile			Enable marks for host tasks for profiling on CUDA and OpenCL AMD."
-			echo "	--cc compiler			Use a diferent C/C++ compiler. Also applies for CUDA host compiler and hitmap compilation if necessary. By default uses the value on \$CC or gcc if \$CC does not exist."
+			echo "	--cc compiler			Use a diferent C/C++ compiler. Also applies for CUDA host compiler and hitmap compilation if necessary."
+			echo "							By default uses the value on \$CC/\$CXX or cc/c++ if \$CC/\$CXX do not exist."
 			echo "	-l|--libs libs			Select blas libs to support. Comma separated. Valid values are cublas, hipblas, mkl, magma."
 			echo "							If not specified uses defaults specified in cmake."
 			echo "	-f|--flags				Specify extra flags for compiler.Comma separated to specify multiple extra flags."
@@ -148,8 +149,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 . ./env.sh
 
 # overwrite c and c++ compilers if indicated
-CC=${CC:-"gcc"}
-CXX=${CXX:-"gcc"}
+CC=${CC:-"cc"}
+CXX=${CXX:-"c++"}
 
 CC=${C_COMP:-$CC}
 CXX=${C_COMP:-$CXX}

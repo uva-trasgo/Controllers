@@ -52,28 +52,6 @@
 #endif // EXTRA_STREAMS
 
 /**
- * Launch a kernel to the ctrl queue
- * @hideinitializer
- *
- * @param p_ctrl pointer to the ctrl to launch the kernel.
- * @param name name of the kernel to be launched.
- * @param threads thread block to launch the kernel with. (Ctrl_Thread).
- * @param group block sizes for this kernel execution.
- *      Optional, if a block with 0 dimensions is passed (such as CTRL_THREAD_NULL), default characterization is used instead.
- * @param ... arguments passed to the kernel.
- *
- * @see Ctrl_Launch, Ctrl_Thread
- */
-#define CTRL_CUDA_LAUNCH(p_ctrl, name, threads, group, ...)                                                                                                                                            \
-	case CTRL_TYPE_CUDA:                                                                                                                                                                               \
-		if (group.dims == 0) {                                                                                                                                                                         \
-			Ctrl_LaunchKernel(p_ctrl, Ctrl_KernelTaskCreate_##name(p_ctrl, threads, CTRL_KERNEL_CUDA_CHAR_threads(name, CTRL_KERNEL_CUDA_ARCH_KEPLER), 0, CTRL_KERNEL_ARGS_TO_POINTERS(__VA_ARGS__))); \
-		} else {                                                                                                                                                                                       \
-			Ctrl_LaunchKernel(p_ctrl, Ctrl_KernelTaskCreate_##name(p_ctrl, threads, group, 0, CTRL_KERNEL_ARGS_TO_POINTERS(__VA_ARGS__)));                                                             \
-		}                                                                                                                                                                                              \
-		break;
-
-/**
  * Launch a kernel to a specific stream of the ctrl queue
  * @hideinitializer
  *
@@ -247,5 +225,17 @@ void Ctrl_Cuda_CreateTex(Ctrl_Cuda *p_ctrl, HitTile *p_tile, Ctrl_TexDesc tex_de
  * Issues likely have to do with CUDA runtime initialization stuff.
  */
 void Ctrl_Cuda_SetDevice();
+
+/**
+ * Get the device ptr of tile \p p_tile on ctrl \p p_ctrl.
+ *
+ * If \p tile is not attached to \p ctrl or has no device memory allocated NULL is returned.
+ *
+ * @param p_ctrl pointer to ctrl.
+ * @param p_tile tile to get de device ptr from.
+ * @return pointer to device memory for \p tile on device \p ctrl
+ */
+void *Ctrl_Cuda_GetDevPtr(Ctrl_Cuda *p_ctrl, HitTile *p_tile);
+
 ///@endcond
 #endif /* _CTRL_CUDA_H_ */

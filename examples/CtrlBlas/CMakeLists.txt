@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.20)
+cmake_minimum_required(VERSION 3.20)
 
 set(CTRL_INCLUDE_DIRS ${CTRL_INCLUDE_DIRS} ${PROJECT_SOURCE_DIR}/CtrlBlas/)
 

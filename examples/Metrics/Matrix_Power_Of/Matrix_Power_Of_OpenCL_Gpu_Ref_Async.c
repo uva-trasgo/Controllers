@@ -14,7 +14,7 @@
 double main_clock;
 double exec_clock;
 
-cl_int DEVICE   = 0;
+cl_int DEVICE = 0;
 
 #define CELL_AUTOM_KERNEL_NAME_MULT "Mult"
 
@@ -102,11 +102,11 @@ void Init_Tiles(cl_float *matrix_a, cl_float *matrix_b, cl_float *matrix_c, int 
 	for (int j = 0; j < columns; j++) {
 		float col_sum_a = 0;
 		for (int i = 0; i < rows; i++) {
-			float min = -(1 - col_sum_a) + EPSILON;
-			float max = 1 - col_sum_a - EPSILON;
-			float random = ((float)rand()) / (float)RAND_MAX;
-			float range  = max - min;
-			float value = (random * range) + min;
+			float min                 = -(1 - col_sum_a) + EPSILON;
+			float max                 = 1 - col_sum_a - EPSILON;
+			float random              = ((float)rand()) / (float)RAND_MAX;
+			float range               = max - min;
+			float value               = (random * range) + min;
 			matrix_a[i * columns + j] = value;
 			matrix_b[i * columns + j] = value;
 			matrix_c[i * columns + j] = 0;
@@ -210,21 +210,21 @@ int main(int argc, char *argv[]) {
 		{
 			properties = 0;
 
-			main_command_queue = clCreateCommandQueue(context, device_id, properties, &err);
+			main_command_queue   = clCreateCommandQueue(context, device_id, properties, &err);
 			read_command_queue_b = clCreateCommandQueue(context, device_id, properties, &err);
 			read_command_queue_c = clCreateCommandQueue(context, device_id, properties, &err);
 
 			mem_pinned_matrix_a = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, MATRIX_SIZE, NULL, &err);
-			p_pinned_matrix_a = (float *)clEnqueueMapBuffer(main_command_queue, mem_pinned_matrix_a, CL_TRUE, CL_MAP_READ | CL_MAP_WRITE, 0, MATRIX_SIZE, 0, NULL, NULL, &err);
-			mem_matrix_a = clCreateBuffer(context, CL_MEM_READ_WRITE, MATRIX_SIZE, NULL, &err);
+			p_pinned_matrix_a   = (float *)clEnqueueMapBuffer(main_command_queue, mem_pinned_matrix_a, CL_TRUE, CL_MAP_READ | CL_MAP_WRITE, 0, MATRIX_SIZE, 0, NULL, NULL, &err);
+			mem_matrix_a        = clCreateBuffer(context, CL_MEM_READ_WRITE, MATRIX_SIZE, NULL, &err);
 
 			mem_pinned_matrix_b = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, MATRIX_SIZE, NULL, &err);
-			p_pinned_matrix_b = (float *)clEnqueueMapBuffer(main_command_queue, mem_pinned_matrix_b, CL_TRUE, CL_MAP_WRITE | CL_MAP_READ, 0, MATRIX_SIZE, 0, NULL, NULL, &err);
-			mem_matrix_b = clCreateBuffer(context, CL_MEM_READ_WRITE, MATRIX_SIZE, NULL, &err);
+			p_pinned_matrix_b   = (float *)clEnqueueMapBuffer(main_command_queue, mem_pinned_matrix_b, CL_TRUE, CL_MAP_WRITE | CL_MAP_READ, 0, MATRIX_SIZE, 0, NULL, NULL, &err);
+			mem_matrix_b        = clCreateBuffer(context, CL_MEM_READ_WRITE, MATRIX_SIZE, NULL, &err);
 
 			mem_pinned_matrix_c = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, MATRIX_SIZE, NULL, &err);
-			p_pinned_matrix_c = (float *)clEnqueueMapBuffer(main_command_queue, mem_pinned_matrix_c, CL_TRUE, CL_MAP_WRITE | CL_MAP_READ, 0, MATRIX_SIZE, 0, NULL, NULL, &err);
-			mem_matrix_c = clCreateBuffer(context, CL_MEM_READ_WRITE, MATRIX_SIZE, NULL, &err);
+			p_pinned_matrix_c   = (float *)clEnqueueMapBuffer(main_command_queue, mem_pinned_matrix_c, CL_TRUE, CL_MAP_WRITE | CL_MAP_READ, 0, MATRIX_SIZE, 0, NULL, NULL, &err);
+			mem_matrix_c        = clCreateBuffer(context, CL_MEM_READ_WRITE, MATRIX_SIZE, NULL, &err);
 
 			clFinish(main_command_queue);
 
@@ -352,7 +352,7 @@ int main(int argc, char *argv[]) {
 			exec_clock = omp_get_wtime() - exec_clock;
 
 		} // omp single
-	}     // omp parallel
+	} // omp parallel
 
 	/* RELEASE ZONE */
 

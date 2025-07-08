@@ -192,7 +192,7 @@
  *
  * @see Ctrl_ImplType, CTRL_KERNEL, CTRL_KERNEL_WRAP_CPULIB
  */
-#define CTRL_KERNEL_FUNCTION_CPULIB(name, type, subtype, ...) CTRL_KERNEL_FUNCTION_CPULIB_##subtype(name, type, subtype, __VA_ARGS__)
+#define CTRL_KERNEL_FN_CPULIB(name, type, subtype, ...) CTRL_KERNEL_FN_CPULIB_##subtype(name, type, subtype, __VA_ARGS__)
 
 #ifdef _CTRL_MKL_
 /**
@@ -221,14 +221,14 @@
  * @param subtype Subtype of the kernel.
  * @param ... Parameters to the kernel.
  *
- * @see Ctrl_ImplType, CTRL_KERNEL_FUNCTION, CTRL_KERNEL_WRAP_CPULIB
+ * @see Ctrl_ImplType, CTRL_KERNEL_FN, CTRL_KERNEL_WRAP_CPULIB
  */
-#define CTRL_KERNEL_FUNCTION_CPULIB_MKL(name, type, subtype, ...) \
-	C_GUARD                                                       \
+#define CTRL_KERNEL_FN_CPULIB_MKL(name, type, subtype, ...) \
+	C_GUARD                                                 \
 	void Ctrl_Kernel_Cpu_##type##_##subtype##_##name(__VA_ARGS__)
 #else // _CTRL_MKL_
 #define CTRL_KERNEL_CPULIB_MKL(...)
-#define CTRL_KERNEL_FUNCTION_CPULIB_MKL(...)
+#define CTRL_KERNEL_FN_CPULIB_MKL(...)
 #endif // _CTRL_MKL_
 
 /**

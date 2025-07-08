@@ -24,13 +24,13 @@ Ctrl_NewType(float);
 double main_clock;
 double exec_clock;
 
-CTRL_KERNEL_CHAR(Mult, MANUAL, LOCAL_SIZE_1, LOCAL_SIZE_0);
+CTRL_KERNEL_CHAR(Mult, MANUAL, LOCAL_SIZE, LOCAL_SIZE);
 
 #define init_params      3, OUT, HitTile_float, matrix_a, OUT, HitTile_float, matrix_b, OUT, HitTile_float, matrix_c
 #define host_task_params 5, INVAL, int, ITER, INVAL, double *, p_sum, INVAL, double *, p_res, IN, HitTile_float, matrix, INVAL, HitTile_float, matrix_res
 
 CTRL_KERNEL_PROTO(Mult,
-				  1, FPGA, DEFAULT, 5,
+				  1, FPGA, NDRANGE, 5,
 				  OUT, HitTile_float, C,
 				  IN, HitTile_float, A,
 				  IN, HitTile_float, B,
@@ -109,13 +109,12 @@ int main(int argc, char *argv[]) {
 	Ctrl_ThreadInit(threads, SIZE, SIZE);
 
 	Ctrl_Thread group;
-	Ctrl_ThreadInit(group, LOCAL_SIZE_1, LOCAL_SIZE_0);
+	Ctrl_ThreadInit(group, LOCAL_SIZE, LOCAL_SIZE);
 
 	__ctrl_block__(ctrl_conf_file) {
 		PCtrl ctrl = Ctrl_Get(0);
 
 		// Extra information for collecting results
-		Ctrl_Info info = Ctrl_GetInfo(ctrl);
 		#ifndef _CTRL_EXAMPLES_EXP_MODE_
 		printf("\n ----------------------- ARGS ----------------------- \n");
 		printf("\n SIZE: %d", SIZE);

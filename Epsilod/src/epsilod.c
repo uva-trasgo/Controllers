@@ -56,8 +56,10 @@ CTRL_KERNEL_CHAR(updateCell_default_1D, MANUAL, 0, 0, 0);
 CTRL_KERNEL_CHAR(updateCell_default_2D, MANUAL, 0, 0, 0);
 CTRL_KERNEL_CHAR(updateCell_default_3D, MANUAL, 0, 0, 0);
 
-CTRL_KERNEL_PROTO(updateCell_default_1D,
-				  1, GENERIC, DEFAULT, 7,
+CTRL_KERNEL_PROTO(updateCell_default_1D, 2,
+				  GENERIC, DEFAULT,
+				  FPGA, NDRANGE,
+				  7,
 				  OUT, HitTile_float, matrix,
 				  IN, HitTile_float, matrixCopy,
 				  IN, HitTile_float, weight,
@@ -72,8 +74,10 @@ void updateCell_default_1D(PCtrl ctrl, Ctrl_Thread threads, Ctrl_Thread blockSiz
 						factor, *ext_params);
 }
 
-CTRL_KERNEL_PROTO(updateCell_default_2D,
-				  1, GENERIC, DEFAULT, 9,
+CTRL_KERNEL_PROTO(updateCell_default_2D, 2,
+				  GENERIC, DEFAULT,
+				  FPGA, NDRANGE,
+				  9,
 				  OUT, HitTile_float, matrix,
 				  IN, HitTile_float, matrixCopy,
 				  IN, HitTile_float, weight,
@@ -91,8 +95,10 @@ void updateCell_default_2D(PCtrl ctrl, Ctrl_Thread threads, Ctrl_Thread blockSiz
 						factor, *ext_params);
 }
 
-CTRL_KERNEL_PROTO(updateCell_default_3D,
-				  1, GENERIC, DEFAULT, 11,
+CTRL_KERNEL_PROTO(updateCell_default_3D, 2,
+				  GENERIC, DEFAULT,
+				  FPGA, NDRANGE,
+				  11,
 				  OUT, HitTile_float, matrix,
 				  IN, HitTile_float, matrixCopy,
 				  IN, HitTile_float, weight,
@@ -190,7 +196,6 @@ CTRL_HOST_TASK_PROTO(Ctrl_Copy_Stencil, 2,
 HitClock mainClock;
 HitClock initClock;
 HitClock loopClock;
-/// HitClock	redistributeClock;
 HitClock commClock;
 
 /* HELP. PRINT EXTRA OPTIONS OF EPSILOD USING ENVIRONMENT VARIABLES */
@@ -689,12 +694,6 @@ void stencilComputation(
 															   HIT_FLOAT));
 			}
 
-			/* 4.7. INITIALIZE REDISTRIBUTION STRUCTURES */
-			/// HitTile *redistributedTiles[2];
-			/// HitPattern *redistributedPatterns[2];
-
-			/// HitAvg avgs = hit_avgSimple(49); // TODO: change windows from 49 (50 - 1) to something that makes more sense.
-
 			/* 4.8. INITIALIZE ARRAY */
 			if (hit_Rank == 0) {
 				printf("Init stage\n");
@@ -772,25 +771,25 @@ void stencilComputation(
 
 			hit_clockStop(initClock);
 
+			Ctrl_Synchronize();
 			hit_comBarrier(lay);
 
 			/* 4.9. COMPUTATION LOOP */
 			hit_clockStart(loopClock);
 
 			// clang-format off
-			
-			#define swap(a, b, n)                      \
-				for (int _i = 0; _i < n; _i++) {       \
-					HitTile_float tmp = *a[_i];        \
-					*a[_i]            = *b[_i];        \
-					a[_i]->ref        = tmp.ref;       \
-					tmp.ref           = b[_i]->ref;    \
-					*b[_i]            = tmp;           \
-				}                                      \
-				HitPattern *sync     = &neighSync;     \
-				HitPattern *syncCopy = &neighSyncCopy; \
-				HitPattern  tmpSync  = neighSync;      \
-				*sync                = neighSyncCopy;  \
+			#define swap( tileList, copyList, nTiles )     \
+				for (int _i = 0; _i < nTiles; _i++) {      \
+					HitTile_float tmp = *tileList[_i];     \
+					*tileList[_i]     = *copyList[_i];     \
+					tileList[_i]->ref = tmp.ref;           \
+					tmp.ref           = copyList[_i]->ref; \
+					*copyList[_i]     = tmp;               \
+				}                                          \
+				HitPattern *sync     = &neighSync;         \
+				HitPattern *syncCopy = &neighSyncCopy;     \
+				HitPattern  tmpSync  = neighSync;          \
+				*sync                = neighSyncCopy;      \
 				*syncCopy            = tmpSync;
 			// clang-format on
 
@@ -834,15 +833,6 @@ void stencilComputation(
 						}
 					}
 				}
-				/// redistributedTiles[0] = (HitTile *)&tileMat;
-				/// redistributedTiles[1] = (HitTile *)&tileCopy;
-				/// redistributedPatterns[0] = &neighSync;
-				/// redistributedPatterns[1] = &neighSyncCopy;
-
-				/// hit_clockStart( redistributeClock );
-				/// hit_albWeightedRedistributeFixedInterval(redistributedTiles, 2, &lay, &avgs, redistributedPatterns, 2, ... );
-				/// hit_clockStop( redistributeClock );
-
 				hit_clockStart(commClock);
 				hit_patternDo(neighSync);
 				hit_clockStop(commClock);
@@ -899,12 +889,10 @@ void stencilComputation(
 			hit_clockReduce(lay, mainClock);
 			hit_clockReduce(lay, initClock);
 			hit_clockReduce(lay, loopClock);
-			/// hit_clockReduce( lay, redistributeClock );
 			hit_clockReduce(lay, commClock);
 			hit_clockPrintMax(mainClock);
 			hit_clockPrintMax(initClock);
 			hit_clockPrintMax(loopClock);
-			/// hit_clockPrintMax( redistributeClock );
 			hit_clockPrintMax(commClock);
 			fflush(stdout);
 
@@ -928,12 +916,10 @@ void stencilComputation(
 			hit_clockReduce(lay, mainClock);
 			hit_clockReduce(lay, initClock);
 			hit_clockReduce(lay, loopClock);
-			/// hit_clockReduce( lay, redistributeClock );
 			hit_clockReduce(lay, commClock);
 			hit_clockPrintMax(mainClock);
 			hit_clockPrintMax(initClock);
 			hit_clockPrintMax(loopClock);
-			/// hit_clockPrintMax( redistributeClock );
 			hit_clockPrintMax(commClock);
 		}
 

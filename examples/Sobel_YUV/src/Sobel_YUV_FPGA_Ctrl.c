@@ -39,9 +39,9 @@ void Save_Frame(BYTE *Output_Img[N_IMG], FILE *File_writer, size_t sizes[N_IMG])
 
 Ctrl_NewType(BYTE);
 
-CTRL_KERNEL_CHAR(Sobel, MANUAL, LOCAL_SIZE_1, LOCAL_SIZE_0);
+CTRL_KERNEL_CHAR(Sobel, MANUAL, 1);
 
-CTRL_KERNEL_PROTO(Sobel, 1, FPGA, DEFAULT, 3,
+CTRL_KERNEL_PROTO(Sobel, 1, FPGA, TASK, 3,
 				  IN, HitTile_BYTE, frame_in,
 				  OUT, HitTile_BYTE, frame_out,
 				  INVAL, int, iterations);

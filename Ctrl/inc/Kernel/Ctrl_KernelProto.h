@@ -18,17 +18,12 @@
 #endif
 CTRL_USER_TYPES
 
-#ifdef CTRL_HOST_COMPILE
-#define MODEL_TASK    0
-#define MODEL_NDRANGE 1
-#endif // CTRL_HOST_COMPILE
-
-#ifndef CTRL_FPGA_KERNEL_FILE
 #include "Kernel/Ctrl_ImplType.h"
 #include "Kernel/Ctrl_KernelArgs.h"
 
+#ifndef _CTRL_FPGA_KERNEL_FILE_
 #include "Core/Ctrl_TaskQueue.h"
-#endif // CTRL_FPGA_KERNEL_FILE
+#endif // _CTRL_FPGA_KERNEL_FILE_
 
 #include "Core/Ctrl_Profiler_Helper.h"
 
@@ -38,7 +33,7 @@ CTRL_USER_TYPES
 #define CTRL_KERNEL_CPU(...)
 #define CTRL_KERNEL_WRAP_CPU(...)
 #define CTRL_KERNEL_CPULIB(...)
-#define CTRL_KERNEL_FUNCTION_CPULIB(...)
+#define CTRL_KERNEL_FN_CPULIB(...)
 #define CTRL_KERNEL_WRAP_CPULIB(...)
 #define CTRL_KERNEL_CPU_GENERIC(...)
 #define CTRL_KERNEL_WRAP_CPU_GENERIC(...)
@@ -50,10 +45,10 @@ CTRL_USER_TYPES
 #include "Kernel/Architectures/Cuda/Ctrl_Cuda_KernelProto.h"
 #else // _CTRL_ARCH_CUDA_
 #define CTRL_KERNEL_CUDA(...)
-#define CTRL_KERNEL_FUNCTION_CUDA(...)
+#define CTRL_KERNEL_FN_CUDA(...)
 #define CTRL_KERNEL_WRAP_CUDA(...)
 #define CTRL_KERNEL_CUDALIB(...)
-#define CTRL_KERNEL_FUNCTION_CUDALIB(...)
+#define CTRL_KERNEL_FN_CUDALIB(...)
 #define CTRL_KERNEL_WRAP_CUDALIB(...)
 #define CTRL_KERNEL_CUDA_GENERIC(...)
 #define CTRL_KERNEL_WRAP_CUDA_GENERIC(...)
@@ -65,10 +60,10 @@ CTRL_USER_TYPES
 #include "Kernel/Architectures/Hip/Ctrl_Hip_KernelProto.h"
 #else // _CTRL_ARCH_HIP_
 #define CTRL_KERNEL_HIP(...)
-#define CTRL_KERNEL_FUNCTION_HIP(...)
+#define CTRL_KERNEL_FN_HIP(...)
 #define CTRL_KERNEL_WRAP_HIP(...)
 #define CTRL_KERNEL_HIPLIB(...)
-#define CTRL_KERNEL_FUNCTION_HIPLIB(...)
+#define CTRL_KERNEL_FN_HIPLIB(...)
 #define CTRL_KERNEL_WRAP_HIPLIB(...)
 #define CTRL_KERNEL_HIP_GENERIC(...)
 #define CTRL_KERNEL_WRAP_HIP_GENERIC(...)
@@ -92,7 +87,7 @@ CTRL_USER_TYPES
 #ifdef _CTRL_ARCH_FPGA_
 #include "Kernel/Architectures/FPGA/Ctrl_FPGA_KernelProto.h"
 #else // _CTRL_ARCH_FPGA_
-#define CTRL_KERNEL_FUNCTION_FPGA(...)
+#define CTRL_KERNEL_FN_FPGA(...)
 #define CTRL_KERNEL_WRAP_FPGA(...)
 #define CTRL_KERNEL_FPGALIB(...)
 #define CTRL_KERNEL_WRAP_FPGALIB(...)
@@ -159,7 +154,7 @@ CTRL_USER_TYPES
  * @param subtype Subtype of the kernel.
  * @param ... Parameters to the kernel and kernel body.
  *
- * @pre \p type must not be FPGA. FPGA type kernels must use \e CTRL_KERNEL_FUNCTION instead.
+ * @pre \p type must not be FPGA. FPGA type kernels must use \e CTRL_KERNEL_FN instead.
  * @see Ctrl_ImplType, CTRL_KERNEL_PROTO
  * @if INTERNAL
  * @see CTRL_KERNEL_CPU_GENERIC, CTRL_KERNEL_CUDA_GENERIC, CTRL_KERNEL_OPENCLGPU_GENERIC, CTRL_KERNEL_HIP_GENERIC
@@ -186,18 +181,18 @@ CTRL_USER_TYPES
  * @pre \p type must be CUDA, FPGA, HIP or a lib type. Other types must use \e CTRL_KERNEL instead.
  * @see Ctrl_ImplType, CTRL_KERNEL_PROTO
  * @if INTERNAL
- * @see CTRL_KERNEL_FUNCTION_CUDA, CTRL_KERNEL_FUNCTION_FPGA, CTRL_KERNEL_FUNCTION_HIP
+ * @see CTRL_KERNEL_FN_CUDA, CTRL_KERNEL_FN_FPGA, CTRL_KERNEL_FN_HIP
  * @endif
  */
-#define CTRL_KERNEL_FUNCTION(name, type, subtype, ...) \
-	CTRL_KERNEL_FUNCTION_##type(name, type, subtype, __VA_ARGS__)
+#define CTRL_KERNEL_FN(name, type, subtype, ...) \
+	CTRL_KERNEL_FN_##type(name, type, subtype, __VA_ARGS__)
 
 /**
  * Kernel end marker.
- * Used to mark the end of a kernel.
+ * Used to mark the end of a kernel function.
  * @hideinitializer
  *
- * @param type type of the kernel.
+ * @param type (optional) type of the kernel.
  */
 #define CTRL_KERNEL_END(type) }
 
@@ -258,12 +253,6 @@ CTRL_USER_TYPES
 #define CTRL_KERNEL_WRAP_LAUNCH_50(name, argsList, type, subtype, ...) case type##_##subtype: CTRL_KERNEL_WRAP_##type(name, argsList, type, subtype, CTRL_KERNEL_SKIP_IMPL(ROLED, NULL, 49, __VA_ARGS__)) break; CTRL_KERNEL_WRAP_LAUNCH_49(name, argsList, __VA_ARGS__)
 // clang-format on
 
-#ifdef CTRL_FPGA_KERNEL_FILE
-/* Case structure to define one of the kernel implementations */
-#define CTRL_KERNEL_WRAP_DEFINE(name, type, subtype, ...) \
-	CTRL_KERNEL_WRAP_##type(name, type, subtype, __VA_ARGS__)
-#endif
-
 /**
  * Kernel declaration for host code or header files.
  * Used in Cuda and Hip implementations to declare the kernel prototype in included
@@ -306,8 +295,8 @@ CTRL_USER_TYPES
 	CTRL_KERNEL_DECLARATION(name, type, subtype, CTRL_KERNEL_SKIP_IMPL(ROLED, NULL, 6, __VA_ARGS__)) \
 	CTRL_KERNEL_DECLARATION_6(name, __VA_ARGS__)
 
+// Remember: Generic kernels do not work in the FPGA backend
 #define CTRL_KERNEL_DECLARATION_GENERIC(name, type, subtype, ...)  \
-	CTRL_KERNEL_DECLARATION_FPGA(name, type, subtype, __VA_ARGS__) \
 	CTRL_KERNEL_DECLARATION_CPU(name, type, subtype, __VA_ARGS__)  \
 	CTRL_KERNEL_DECLARATION_CUDA(name, type, subtype, __VA_ARGS__) \
 	CTRL_KERNEL_DECLARATION_HIP(name, type, subtype, __VA_ARGS__)  \
@@ -378,7 +367,6 @@ CTRL_USER_TYPES
  *******************************************************************************************
  */
 
-#ifndef CTRL_FPGA_KERNEL_FILE
 /**
  * Prototype and implementations declaration for a kernel.
  * @hideinitializer
@@ -431,10 +419,6 @@ CTRL_USER_TYPES
 		task.device_id = dev;                                                                                                                                                                  \
 		return task;                                                                                                                                                                           \
 	}
-#else // CTRL_FPGA_KERNEL_FILE
-#define CTRL_KERNEL_PROTO(name, n_implementations, ...) \
-	CTRL_KERNEL_WRAP_DEFINE(name, __VA_ARGS__)
-#endif // CTRL_FPGA_KERNEL_FILE
 
 /*
  *******************************************************************************************

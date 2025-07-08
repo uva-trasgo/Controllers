@@ -24,6 +24,16 @@
 void Ctrl_Cuda_InitTile(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task);
 
 /**
+ * Waits for all the work from \p p_ctrl related to \p p_tile_data .
+ *
+ * @param p_ctrl Pointer to the ctrl attached to the tile.
+ * @param p_tile_data Pointer to the ctrl tile.
+ *
+ * @see Ctrl_Cuda_EvalTaskWaitTile, Ctrl_Cuda_EvalTaskGlobalSync
+ */
+void Ctrl_Cuda_WaitTileInner(Ctrl_Cuda *p_ctrl, Ctrl_Tile *p_tile_data);
+
+/**
  * Enqueue memory transfer from host to device task on host queue.
  *
  * @param p_ctrl Pointer to the ctrl attached to the tile to be moved.
@@ -209,7 +219,7 @@ void Ctrl_Cuda_Create(Ctrl_Cuda *p_ctrl, Ctrl_Policy policy, char *args) {
 	}
 
 	p_ctrl->host_seq_event = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CPU, p_ctrl->global_id);
-	p_ctrl->dev_seq_event  = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CUDA, p_ctrl->global_id);
+	p_ctrl->dev_seq_event  = CTRL_GENERIC_EVENT_NULL;
 
 	#ifdef _CTRL_CUBLAS_
 	cublasCreate(&(p_ctrl->cublas_handle));
@@ -273,7 +283,6 @@ void Ctrl_Cuda_ExecTask(Ctrl_Task *p_task, Ctrl_Cuda *p_ctrl) {
 	if (p_task->stream >= 2) {
 		int kqid = p_task->stream - 2;
 		p_ctrl->p_stream_op_count[kqid]++;
-		// cudaStream_t *p_stream = &p_ctrl->p_kernel_driver_streams[(kqid)*EXTRA_STREAMS + p_ctrl->p_stream_indexes[kqid]];
 		if (p_ctrl->p_stream_op_count[kqid] == MAX_STREAM_TASKS) {
 			// resest counter
 			p_ctrl->p_stream_op_count[kqid] = 0;
@@ -295,21 +304,30 @@ void Ctrl_Cuda_ExecTask(Ctrl_Task *p_task, Ctrl_Cuda *p_ctrl) {
 	switch (p_task->task_type) {
 		case CTRL_TASK_TYPE_KERNEL:
 			p_task->pfn_kernel_wrapper(p_task->request, p_task->device_id, CTRL_TYPE_CUDA, p_task->threads, p_task->blocksize, p_task->p_arguments);
-			CUDA_OP(cudaEventRecord(p_task->event.event.event_cuda, stream));
-			Ctrl_GenericEvent_Release(p_task->event);
+			if (Ctrl_GenericEvent_GetRefCount(p_task->event) > 1) {
+				CUDA_OP(cudaEventCreateWithFlags(p_task->event.event.p_event_cuda, cudaEventDisableTiming));
+				CUDA_OP(cudaEventRecord(*p_task->event.event.p_event_cuda, stream));
+				Ctrl_GenericEvent_Release(p_task->event);
+			}
 			break;
 		case CTRL_TASK_TYPE_MOVETO:
 			Ctrl_Cuda_ExecTaskMoveTo(p_task, p_ctrl);
-			CUDA_OP(cudaEventRecord(p_task->event.event.event_cuda, stream));
-			Ctrl_GenericEvent_Release(p_task->event);
+			if (Ctrl_GenericEvent_GetRefCount(p_task->event) > 1) {
+				CUDA_OP(cudaEventCreateWithFlags(p_task->event.event.p_event_cuda, cudaEventDisableTiming));
+				CUDA_OP(cudaEventRecord(*p_task->event.event.p_event_cuda, stream));
+				Ctrl_GenericEvent_Release(p_task->event);
+			}
 			break;
 		case CTRL_TASK_TYPE_MOVEFROM:
 			Ctrl_Cuda_ExecTaskMoveFrom(p_task, p_ctrl);
-			CUDA_OP(cudaEventRecord(p_task->event.event.event_cuda, stream));
-			Ctrl_GenericEvent_Release(p_task->event);
+			if (Ctrl_GenericEvent_GetRefCount(p_task->event) > 1) {
+				CUDA_OP(cudaEventCreateWithFlags(p_task->event.event.p_event_cuda, cudaEventDisableTiming));
+				CUDA_OP(cudaEventRecord(*p_task->event.event.p_event_cuda, stream));
+				Ctrl_GenericEvent_Release(p_task->event);
+			}
 			break;
 		case CTRL_TASK_TYPE_WAITEVENT:
-			CUDA_OP(cudaStreamWaitEvent(stream, p_task->event.event.event_cuda, 0));
+			CUDA_OP(cudaStreamWaitEvent(stream, *p_task->event.event.p_event_cuda, 0));
 			break;
 		default:
 			fprintf(stderr, "[Ctrl_Cuda] ExecTask: task type %d should not get here\n", p_task->task_type);
@@ -408,6 +426,16 @@ void Ctrl_Cuda_SetDevice() {
 	CUDA_OP(cudaSetDevice(0));
 }
 
+void *Ctrl_Cuda_GetDevPtr(Ctrl_Cuda *p_ctrl, HitTile *p_tile) {
+	Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)(p_tile->ext);
+	Ctrl_Tile_Impl *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
+	Ctrl_Cuda_Tile *p_tile_data_cuda = p_tile_data_impl->tile.p_cuda;
+
+	if (p_tile_data_cuda == NULL || p_tile_data_impl->device_status == CTRL_TILE_UNALLOC) return NULL;
+
+	return p_tile_data_cuda->p_device_data;
+}
+
 /*********************************
  ******* Private functions *******
  *********************************/
@@ -439,15 +467,43 @@ void Ctrl_Cuda_InitTile(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 		p_ctrl->p_tile_list_head = p_ctrl->p_tile_list_tail = p_list_node;
 	}
 
-	// TODO @sergioalo these creates are redundant, could create one of each type and then call retain as in ocl
 	p_tile_data_impl_cuda->host_last_kernel_read_event  = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CPU, p_ctrl->global_id);
 	p_tile_data_impl_cuda->host_last_kernel_write_event = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CPU, p_ctrl->global_id);
 	p_tile_data_impl_cuda->host_last_dth_event          = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CPU, p_ctrl->global_id);
 	p_tile_data_impl_cuda->host_last_htd_event          = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CPU, p_ctrl->global_id);
-	p_tile_data_impl_cuda->dev_last_kernel_read_event   = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CUDA, p_ctrl->global_id);
-	p_tile_data_impl_cuda->dev_last_kernel_write_event  = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CUDA, p_ctrl->global_id);
-	p_tile_data_impl_cuda->dev_last_dth_event           = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CUDA, p_ctrl->global_id);
-	p_tile_data_impl_cuda->dev_last_htd_event           = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CUDA, p_ctrl->global_id);
+	p_tile_data_impl_cuda->dev_last_kernel_read_event   = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_impl_cuda->dev_last_kernel_write_event  = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_impl_cuda->dev_last_dth_event           = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_impl_cuda->dev_last_htd_event           = CTRL_GENERIC_EVENT_NULL;
+
+	p_tile_data_impl_cuda->streamid_last_kr = 0;
+	p_tile_data_impl_cuda->streamid_last_kw = 0;
+}
+
+void Ctrl_Cuda_WaitTileInner(Ctrl_Cuda *p_ctrl, Ctrl_Tile *p_tile_data) {
+	Ctrl_Cuda_Tile *p_tile_data_cuda = p_tile_data->p_impls[p_ctrl->global_id].tile.p_cuda;
+
+	// Wait for all work related to this tile to finish
+	Ctrl_GenericEvent_Wait(p_tile_data->last_host_read_event);
+	Ctrl_GenericEvent_Wait(p_tile_data->last_host_write_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_cuda->host_last_kernel_read_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_cuda->host_last_kernel_write_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_cuda->host_last_dth_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_cuda->host_last_htd_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_cuda->dev_last_kernel_read_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_cuda->dev_last_kernel_write_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_cuda->dev_last_dth_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_cuda->dev_last_htd_event);
+
+	Ctrl_GenericEvent_Release(p_tile_data_cuda->dev_last_kernel_read_event);
+	Ctrl_GenericEvent_Release(p_tile_data_cuda->dev_last_kernel_write_event);
+	Ctrl_GenericEvent_Release(p_tile_data_cuda->dev_last_dth_event);
+	Ctrl_GenericEvent_Release(p_tile_data_cuda->dev_last_htd_event);
+
+	p_tile_data_cuda->dev_last_kernel_read_event  = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_cuda->dev_last_kernel_write_event = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_cuda->dev_last_dth_event          = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_cuda->dev_last_htd_event          = CTRL_GENERIC_EVENT_NULL;
 }
 
 void Ctrl_Cuda_EvalTaskMoveToInner(Ctrl_Cuda *p_ctrl, HitTile *p_tile) {
@@ -459,6 +515,8 @@ void Ctrl_Cuda_EvalTaskMoveToInner(Ctrl_Cuda *p_ctrl, HitTile *p_tile) {
 	CUDA_OP(cudaSetDevice(p_ctrl->device));
 
 	for (int i = 0; i < Ctrl_GetNCtrls(); i++) {
+		if (i == p_ctrl->global_id) continue;
+
 		Ctrl_MoveToWait(&p_tile_data->p_impls[i], p_ctrl->p_htd_host_stream);
 	}
 
@@ -504,50 +562,54 @@ void Ctrl_Cuda_ExecTaskMoveTo(Ctrl_Task *p_task, Ctrl_Cuda *p_ctrl) {
 	Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)p_tile->ext;
 	Ctrl_Cuda_Tile *p_tile_data_cuda = p_tile_data->p_impls[p_ctrl->global_id].tile.p_cuda;
 
-	size_t pitch = p_tile_data_cuda->pitch == 0 ? (p_tile->baseExtent) * p_tile->origAcumCard[1] : p_tile_data_cuda->pitch;
-	/* @arturo TODO: STRIDED TILES */
+	HitTile flat_tile = *p_tile;
+	size_t  pitch     = p_tile_data_cuda->pitch;
+	if (pitch == 0) {
+		hit_tileFlattenDims(&flat_tile);
+		pitch = (flat_tile.baseExtent) * flat_tile.origAcumCard[1];
+	}
 
 	// Send memcpy to cuda stream
-	/* TILES WITH THEIR OWN MEMORY ALLOCATION, OR CONTIGUOUS 1D TILES NEED ONLY ONE CONTIGUOUS COPY */
-	if (p_tile->shape.info.sig.numDims == 1) {
+	/* 1D FLATTENED TILE -> CONTIGUOUS MEMORY */
+	if (flat_tile.shape.info.sig.numDims == 1) {
 		CUDA_OP(
 			cudaMemcpyAsync(p_tile_data_cuda->p_device_data,
-							p_tile->data,
-							((size_t)(p_tile->acumCard)) * (p_tile->baseExtent),
+							flat_tile.data,
+							((size_t)(flat_tile.acumCard)) * (flat_tile.baseExtent),
 							cudaMemcpyHostToDevice,
 							p_ctrl->htd_driver_stream));
 	}
 	/* 2D TILES */
-	else if (p_tile->shape.info.sig.numDims == 2) {
+	else if (flat_tile.shape.info.sig.numDims == 2) {
 		CUDA_OP(
 			cudaMemcpy2DAsync(p_tile_data_cuda->p_device_data,
 							  pitch,
-							  p_tile->data,
-							  (p_tile->baseExtent) * p_tile->origAcumCard[1],
-							  (p_tile->baseExtent) * p_tile->card[1],
-							  p_tile->card[0],
+							  flat_tile.data,
+							  (flat_tile.baseExtent) * flat_tile.origAcumCard[1],
+							  (flat_tile.baseExtent) * flat_tile.card[1],
+							  flat_tile.card[0],
 							  cudaMemcpyHostToDevice,
 							  p_ctrl->htd_driver_stream));
 	}
 	/* 3D TILES */
-	else if (p_tile->shape.info.sig.numDims == 3) {
+	else if (flat_tile.shape.info.sig.numDims == 3) {
 		struct cudaMemcpy3DParms params = {0};
 
-		params.srcPtr = make_cudaPitchedPtr(p_tile->data,
-											(p_tile->baseExtent) * p_tile->origAcumCard[2],
-											p_tile->origAcumCard[2],
-											p_tile->origAcumCard[1] / p_tile->origAcumCard[2]);
+		params.srcPtr = make_cudaPitchedPtr(flat_tile.data,
+											(flat_tile.baseExtent) * flat_tile.origAcumCard[2],
+											flat_tile.origAcumCard[2],
+											flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
 		params.dstPtr = make_cudaPitchedPtr(p_tile_data_cuda->p_device_data,
-											(p_tile->baseExtent) * p_tile->origAcumCard[2],
-											p_tile->origAcumCard[2],
-											p_tile->origAcumCard[1] / p_tile->origAcumCard[2]);
-		params.extent = make_cudaExtent(p_tile->card[2] * p_tile->baseExtent, p_tile->card[1], p_tile->card[0]);
+											(flat_tile.baseExtent) * flat_tile.origAcumCard[2],
+											flat_tile.origAcumCard[2],
+											flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
+		params.extent = make_cudaExtent(flat_tile.card[2] * flat_tile.baseExtent, flat_tile.card[1], flat_tile.card[0]);
 		params.kind   = cudaMemcpyHostToDevice;
 
 		CUDA_OP(cudaMemcpy3DAsync(&params, p_ctrl->htd_driver_stream));
 	} else {
 		fprintf(stderr, "Internal Error: Number of dimensions not supported for non-owner tile in MoveTo: %d\n",
-				p_tile->shape.info.sig.numDims);
+				flat_tile.shape.info.sig.numDims);
 	}
 }
 
@@ -560,6 +622,8 @@ void Ctrl_Cuda_EvalTaskMoveFromInner(Ctrl_Cuda *p_ctrl, HitTile *p_tile) {
 	CUDA_OP(cudaSetDevice(p_ctrl->device));
 
 	for (int i = 0; i < Ctrl_GetNCtrls(); i++) {
+		if (i == p_ctrl->global_id) continue;
+
 		Ctrl_MoveFromWait(&p_tile_data->p_impls[i], p_ctrl->p_dth_host_stream);
 	}
 
@@ -585,7 +649,7 @@ void Ctrl_Cuda_EvalTaskMoveFromInner(Ctrl_Cuda *p_ctrl, HitTile *p_tile) {
 	if (p_ctrl->policy == CTRL_POLICY_SYNC) {
 		Ctrl_CpuEvent_Record(&p_ctrl->host_seq_event.event.event_cpu, p_ctrl->p_htd_host_stream);
 		Ctrl_GenericEvent_Release(p_ctrl->dev_seq_event);
-		p_ctrl->dev_seq_event = p_tile_data_cuda->dev_last_htd_event;
+		p_ctrl->dev_seq_event = p_tile_data_cuda->dev_last_dth_event;
 		Ctrl_GenericEvent_Retain(p_ctrl->dev_seq_event);
 	}
 
@@ -605,50 +669,54 @@ void Ctrl_Cuda_ExecTaskMoveFrom(Ctrl_Task *p_task, Ctrl_Cuda *p_ctrl) {
 	Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)p_tile->ext;
 	Ctrl_Cuda_Tile *p_tile_data_cuda = p_tile_data->p_impls[p_ctrl->global_id].tile.p_cuda;
 
-	size_t pitch = p_tile_data_cuda->pitch == 0 ? (p_tile->baseExtent) * p_tile->origAcumCard[1] : p_tile_data_cuda->pitch;
+	HitTile flat_tile = *p_tile;
+	size_t  pitch     = p_tile_data_cuda->pitch;
+	if (pitch == 0) {
+		hit_tileFlattenDims(&flat_tile);
+		pitch = (flat_tile.baseExtent) * flat_tile.origAcumCard[1];
+	}
 
-	/* @arturo TODO: STRIDED TILES */
 	// Send memcpy to cuda stream
 	/* TILES WITH THEIR OWN MEMORY ALLOCATION, OR CONTIGUOUS 1D TILES NEED ONLY ONE CONTIGUOUS COPY */
-	if (p_tile->shape.info.sig.numDims == 1) {
+	if (flat_tile.shape.info.sig.numDims == 1) {
 		CUDA_OP(
-			cudaMemcpyAsync(p_tile->data,
+			cudaMemcpyAsync(flat_tile.data,
 							p_tile_data_cuda->p_device_data,
-							((size_t)(p_tile->acumCard)) * (p_tile->baseExtent),
+							((size_t)(flat_tile.acumCard)) * (flat_tile.baseExtent),
 							cudaMemcpyDeviceToHost,
 							p_ctrl->dth_driver_stream));
 	}
 	/* CONTIGUOUS 2D TILES */
-	else if (p_tile->shape.info.sig.numDims == 2) {
+	else if (flat_tile.shape.info.sig.numDims == 2) {
 		CUDA_OP(
-			cudaMemcpy2DAsync(p_tile->data,                                   // dst
-							  (p_tile->baseExtent) * p_tile->origAcumCard[1], // dpitch
-							  p_tile_data_cuda->p_device_data,                // src
-							  pitch,                                          // spitch
-							  (p_tile->baseExtent) * p_tile->card[1],         // width
-							  p_tile->card[0],                                // height
+			cudaMemcpy2DAsync(flat_tile.data,                                     // dst
+							  (flat_tile.baseExtent) * flat_tile.origAcumCard[1], // dpitch
+							  p_tile_data_cuda->p_device_data,                    // src
+							  pitch,                                              // spitch
+							  (flat_tile.baseExtent) * flat_tile.card[1],         // width
+							  flat_tile.card[0],                                  // height
 							  cudaMemcpyDeviceToHost,
 							  p_ctrl->dth_driver_stream));
 	}
 	/* CONTIGUOUS 3D TILES */
-	else if (p_tile->shape.info.sig.numDims == 3) {
+	else if (flat_tile.shape.info.sig.numDims == 3) {
 		struct cudaMemcpy3DParms params = {0};
 
 		params.srcPtr = make_cudaPitchedPtr(p_tile_data_cuda->p_device_data,
-											(p_tile->baseExtent) * p_tile->origAcumCard[2],
-											p_tile->origAcumCard[2],
-											p_tile->origAcumCard[1] / p_tile->origAcumCard[2]);
-		params.dstPtr = make_cudaPitchedPtr(p_tile->data,
-											(p_tile->baseExtent) * p_tile->origAcumCard[2],
-											p_tile->origAcumCard[2],
-											p_tile->origAcumCard[1] / p_tile->origAcumCard[2]);
-		params.extent = make_cudaExtent(p_tile->card[2] * p_tile->baseExtent, p_tile->card[1], p_tile->card[0]);
+											(flat_tile.baseExtent) * flat_tile.origAcumCard[2],
+											flat_tile.origAcumCard[2],
+											flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
+		params.dstPtr = make_cudaPitchedPtr(flat_tile.data,
+											(flat_tile.baseExtent) * flat_tile.origAcumCard[2],
+											flat_tile.origAcumCard[2],
+											flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
+		params.extent = make_cudaExtent(flat_tile.card[2] * flat_tile.baseExtent, flat_tile.card[1], flat_tile.card[0]);
 		params.kind   = cudaMemcpyDeviceToHost;
 
 		CUDA_OP(cudaMemcpy3DAsync(&params, p_ctrl->dth_driver_stream));
 	} else {
 		fprintf(stderr, "Internal Error: Number of dimensions not supported for non-owner tile in MoveFrom: %d\n",
-				p_tile->shape.info.sig.numDims);
+				flat_tile.shape.info.sig.numDims);
 	}
 }
 
@@ -665,15 +733,10 @@ void Ctrl_Cuda_Destroy(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 	p_ctrl->p_tile_list_head = NULL;
 	p_ctrl->p_tile_list_tail = NULL;
 
-	// send destroy signal to queue manager thread
-	if (p_task->flags) {
-		Ctrl_Task task = CTRL_TASK_NULL;
-		task.task_type = CTRL_TASK_TYPE_DESTROYCTRL;
-		Ctrl_TaskQueue_Push(p_ctrl->p_htd_host_stream, task);
-	}
-
 	for (int i = 0; i < p_ctrl->n_kernel_streams; i++) {
-		CUDA_OP(cudaStreamDestroy(p_ctrl->p_kernel_driver_streams[i]));
+		for (int j = 0; j < EXTRA_STREAMS; j++) {
+			CUDA_OP(cudaStreamDestroy(p_ctrl->p_kernel_driver_streams[i * EXTRA_STREAMS + j]));
+		}
 	}
 	CUDA_OP(cudaStreamDestroy(p_ctrl->htd_driver_stream));
 	CUDA_OP(cudaStreamDestroy(p_ctrl->dth_driver_stream));
@@ -698,19 +761,7 @@ void Ctrl_Cuda_Destroy(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 
 void Ctrl_Cuda_EvalTaskGlobalSync(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 	for (Ctrl_Tile_List *p_aux = p_ctrl->p_tile_list_head; p_aux != NULL; p_aux = p_aux->p_next) {
-		Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)(p_aux->p_tile_ext);
-		Ctrl_Cuda_Tile *p_tile_data_cuda = p_tile_data->p_impls[p_ctrl->global_id].tile.p_cuda;
-
-		Ctrl_GenericEvent_Wait(p_tile_data->last_host_read_event);
-		Ctrl_GenericEvent_Wait(p_tile_data->last_host_write_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_cuda->host_last_kernel_read_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_cuda->host_last_kernel_write_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_cuda->host_last_dth_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_cuda->host_last_htd_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_cuda->dev_last_kernel_read_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_cuda->dev_last_kernel_write_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_cuda->dev_last_dth_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_cuda->dev_last_htd_event);
+		Ctrl_Cuda_WaitTileInner(p_ctrl, (Ctrl_Tile *)(p_aux->p_tile_ext));
 	}
 }
 
@@ -733,7 +784,7 @@ void Ctrl_Cuda_EvalTaskKernelLaunch(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 			Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)(p_tile->ext);
 			Ctrl_Tile_Impl *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
 			Ctrl_Cuda_Tile *p_tile_data_cuda = p_tile_data_impl->tile.p_cuda;
-			KHitTile       *p_ktile          = (KHitTile *)(p_task->p_arguments + p_task->p_displacements[i]);
+			KHitTile       *p_ktile          = (KHitTile *)((char *)p_task->p_arguments + p_task->p_displacements[i]);
 
 			if (hit_tileIsNull(*p_tile)) {
 				fprintf(stderr, "Warning: Launching task %s, skipping null tile on parameter %d (starting at 0)\n", p_task->p_func_name, i);
@@ -809,7 +860,8 @@ void Ctrl_Cuda_EvalTaskKernelLaunch(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 				fflush(stderr);
 			}
 
-			if (p_ctrl->n_kernel_streams != 1) { // no need to wait for other kernels of this dev if we only have 1 driver kernel stream
+			// no need to wait for kw if last kw op was on the same stream
+			if (p_tile_data_cuda->streamid_last_kw != p_task->stream) {
 				Ctrl_GenericEvent_StreamWait(p_tile_data_cuda->host_last_kernel_write_event, p_host_kernel_queue);
 				Ctrl_GenericEvent_StreamWait(p_tile_data_cuda->dev_last_kernel_write_event, p_host_kernel_queue);
 			}
@@ -820,7 +872,8 @@ void Ctrl_Cuda_EvalTaskKernelLaunch(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 			}
 
 			if (p_task->p_roles[i] != KERNEL_IN) {
-				if (p_ctrl->n_kernel_streams != 1) { // no need to wait for other kernels of this dev if we only have 1 driver kernel stream
+				// no need to wait for kr if last kr op was on the same stream
+				if (p_tile_data_cuda->streamid_last_kr != p_task->stream) {
 					Ctrl_GenericEvent_StreamWait(p_tile_data_cuda->host_last_kernel_read_event, p_host_kernel_queue);
 					Ctrl_GenericEvent_StreamWait(p_tile_data_cuda->dev_last_kernel_read_event, p_host_kernel_queue);
 				}
@@ -878,6 +931,7 @@ void Ctrl_Cuda_EvalTaskKernelLaunch(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 				Ctrl_GenericEvent_Release(p_tile_data_cuda->dev_last_kernel_write_event);
 				p_tile_data_cuda->dev_last_kernel_write_event = kernel_event;
 				Ctrl_GenericEvent_Retain(p_tile_data_cuda->dev_last_kernel_write_event);
+				p_tile_data_cuda->streamid_last_kw = p_task->stream;
 			}
 
 			if (p_task->p_roles[i] != KERNEL_OUT) {
@@ -885,6 +939,7 @@ void Ctrl_Cuda_EvalTaskKernelLaunch(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 				Ctrl_GenericEvent_Release(p_tile_data_cuda->dev_last_kernel_read_event);
 				p_tile_data_cuda->dev_last_kernel_read_event = kernel_event;
 				Ctrl_GenericEvent_Retain(p_tile_data_cuda->dev_last_kernel_read_event);
+				p_tile_data_cuda->streamid_last_kr = p_task->stream;
 			}
 		}
 	}
@@ -982,7 +1037,7 @@ void Ctrl_Cuda_EvalTaskSelectTile(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 
 	if (p_tile->memStatus == HIT_MS_NOT_OWNER) {
 		p_tile_data_impl->device_status = p_parent_data_impl->device_status;
-		p_tile_data_cuda->p_device_data = p_parent_data_cuda->p_device_data + (p_tile->data - p_parent->data);
+		p_tile_data_cuda->p_device_data = (char *)p_parent_data_cuda->p_device_data + ((char *)p_tile->data - (char *)p_parent->data);
 
 		if (p_parent_data_cuda->pitch != 0) {
 			fprintf(stderr, "[Ctrl_Cuda_EvalTaskSelectTile] Error: subselections of tiles with padding on the device (allocated with CTRL_MEM_ALIGNED) not supported.\n");
@@ -1005,18 +1060,8 @@ void Ctrl_Cuda_EvalTaskFreeTile(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 
 	p_tile_data->valid_impls--;
 
-	// TODO @sergioalo if host stuff is not freed, should we wait for host task events?
 	// Wait for all work related to this tile to finish
-	Ctrl_GenericEvent_Wait(p_tile_data->last_host_read_event);
-	Ctrl_GenericEvent_Wait(p_tile_data->last_host_write_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_cuda->host_last_kernel_read_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_cuda->host_last_kernel_write_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_cuda->host_last_dth_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_cuda->host_last_htd_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_cuda->dev_last_kernel_read_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_cuda->dev_last_kernel_write_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_cuda->dev_last_dth_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_cuda->dev_last_htd_event);
+	Ctrl_Cuda_WaitTileInner(p_ctrl, p_tile_data);
 
 	// destroy events inside the tile
 	Ctrl_GenericEvent_Release(p_tile_data_cuda->host_last_kernel_read_event);
@@ -1132,23 +1177,11 @@ void Ctrl_Cuda_EvalTaskMoveFrom(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 }
 
 void Ctrl_Cuda_EvalTaskWaitTile(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
-	HitTile        *p_tile           = p_task->p_tile;
-	Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)(p_tile->ext);
-	Ctrl_Cuda_Tile *p_tile_data_cuda = p_tile_data->p_impls[p_ctrl->global_id].tile.p_cuda;
+	HitTile *p_tile = p_task->p_tile;
 
 	if (hit_tileIsNull(*p_tile)) return;
 
-	// Wait for all work related to this tile to finish
-	Ctrl_GenericEvent_Wait(p_tile_data->last_host_read_event);
-	Ctrl_GenericEvent_Wait(p_tile_data->last_host_write_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_cuda->host_last_kernel_read_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_cuda->host_last_kernel_write_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_cuda->host_last_dth_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_cuda->host_last_htd_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_cuda->dev_last_kernel_read_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_cuda->dev_last_kernel_write_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_cuda->dev_last_dth_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_cuda->dev_last_htd_event);
+	Ctrl_Cuda_WaitTileInner(p_ctrl, (Ctrl_Tile *)(p_tile->ext));
 }
 
 void Ctrl_Cuda_EvalTaskSetDependanceMode(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {

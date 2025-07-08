@@ -13,7 +13,7 @@
 Ctrl_NewType(float);
 
 /* 1D CELL UPDATE DEFAULT STENCIL */
-CTRL_KERNEL(updateCell_default_1D, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const KHitTile_float weight, const int begin_x, const int end_x, const float factor, const Epsilod_ext ext_params, {
+CTRL_KERNEL(updateCell_default_1D, GENERIC, DEFAULT, KHitTileR_float matrix, KHitTileR_float matrixCopy, KHitTileR_float weight, int begin_x, int end_x, float factor, Epsilod_ext ext_params, {
 	int x = thr_i;
 
 	float sum = 0;
@@ -27,7 +27,7 @@ CTRL_KERNEL(updateCell_default_1D, GENERIC, DEFAULT, KHitTile_float matrix, cons
 });
 
 /* 2D CELL UPDATE DEFAULT STENCIL */
-CTRL_KERNEL(updateCell_default_2D, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const KHitTile_float weight, const int begin_x, const int begin_y, const int end_x, const int end_y, const float factor, const Epsilod_ext ext_params, {
+CTRL_KERNEL(updateCell_default_2D, GENERIC, DEFAULT, KHitTileR_float matrix, KHitTileR_float matrixCopy, KHitTileR_float weight, int begin_x, int begin_y, int end_x, int end_y, float factor, Epsilod_ext ext_params, {
 	int x = thr_i;
 	int y = thr_j;
 
@@ -44,7 +44,7 @@ CTRL_KERNEL(updateCell_default_2D, GENERIC, DEFAULT, KHitTile_float matrix, cons
 });
 
 /* 3D CELL UPDATE DEFAULT STENCIL */
-CTRL_KERNEL(updateCell_default_3D, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const KHitTile_float weight, const int begin_x, const int begin_y, const int begin_z, const int end_x, const int end_y, const int end_z, const float factor, const Epsilod_ext ext_params, {
+CTRL_KERNEL(updateCell_default_3D, GENERIC, DEFAULT, KHitTileR_float matrix, KHitTileR_float matrixCopy, KHitTileR_float weight, int begin_x, int begin_y, int begin_z, int end_x, int end_y, int end_z, float factor, Epsilod_ext ext_params, {
 	int x = thr_i;
 	int y = thr_j;
 	int z = thr_k;

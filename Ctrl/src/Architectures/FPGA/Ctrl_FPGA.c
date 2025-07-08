@@ -1,3 +1,4 @@
+#define OPENCL_1_2_API_UNAVAILABLE
 ///@cond INTERNAL
 /**
  * @file Ctrl_FPGA.c
@@ -7,8 +8,14 @@
  * The relevant license, warranty and copyright notice is available in the Controller project repository.
  */
 
+#include <dirent.h> // For opening directories
+#include <limits.h> // For PATH_MAX
+#include <ctype.h>  // For isalnum(), isprint()
+
 #include "Architectures/FPGA/Ctrl_FPGA.h"
 #include "Core/Ctrl_Core.h"
+
+#define CTRL_FPGA_MAX_KERNEL_FILES 256
 
 /**
  * Head of the kernel params linked list.
@@ -20,9 +27,61 @@ Ctrl_FPGA_KernelParams FPGA_initial_kp = CTRL_FPGA_KERNELPARAMS_NULL;
  */
 int next_fpga_id = 0;
 
+/**
+ * Global number of kernel files (.aocx) in the kernel path directory.
+ *
+ * Used as second dimension of pp_fpga_programs (@see pp_fpga_programs).
+ */
+int n_kernel_files = 0;
+
+/**
+ * Global matrix for the built OpenCL kernel programs.
+ *
+ * Sizes are pp_fpga_programs[n_fpga_ctrl][n_kernel_files]
+ */
+cl_program **pp_fpga_programs = NULL;
+
 /*************************************************************
  ******** Prototypes of private functions ********************
  *************************************************************/
+
+/**
+ * Get the paths for all the kernel files (with .aocx extension) inside the specified FPGA kernels path.
+ *
+ * @param[in] dir_path The FPGA kernels path.
+ * @param[out] kernel_files Buffer of kernel paths containing all the kernel files in \p dir_path.
+ * @param[out] count The number of kernel files in \p dir_path.
+ */
+void Ctrl_FPGA_GetKernelFiles(const char *dir_path, char *kernel_files[CTRL_FPGA_MAX_KERNEL_FILES], int *count);
+
+/**
+ * Get the kernel names for a given FPGA kernel cl_program or binary (given its path), as
+ * semicolon separated values.
+ *
+ * If the OpenCL runtime version is >= 1.2 and the cl_program is not NULL, the \p program will be used
+ * and \p kernel_path will be ignored. Otherwise, \p kernel_path and \p program will be ignored.
+ * If both arguments are NULL, the function returns NULL.
+ *
+ * The result of this function must be freed later.
+ *
+ * @param p_ctrl Pointer to the ctrl that will be attached to the kernels we want to get the name of.
+ * @param program Pointer to the cl_program to extract the kernel names from (optionally NULL).
+ * @param kernel_path Path of the kernel binary file to extract the kernel names from (optionally NULL).
+ */
+char *Ctrl_FPGA_GetKernelNames(Ctrl_FPGA *p_ctrl, cl_program *program, char *kernel_path);
+
+/**
+ * Build the cl_program objects, and create their cl_kernel objects, from the specified kernel (binaries)
+ * paths, and add them to the FPGA ctrl.
+ *
+ * This function allocates \p pp_fpga_programs.
+ *
+ * @param p_ctrl Pointer to the ctrl attached to the kernels.
+ * @param kernel_files Paths to the kernel files to build and extract the kernels from.
+ * @param n_kernel_files Number of different paths in \p kernel_files. Shadows the global \p n_kernel_files
+ * variable (@see n_kernel_files).
+ */
+void Ctrl_FPGA_ExtractKernels(Ctrl_FPGA *p_ctrl, char *kernel_files[CTRL_FPGA_MAX_KERNEL_FILES], int n_kernel_files);
 
 /**
  * Initializate a \e Ctrl_FPGA_Tile.
@@ -32,6 +91,16 @@ int next_fpga_id = 0;
  * initialized.
  */
 void Ctrl_FPGA_InitTile(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task);
+
+/**
+ * Waits for all the work from \p p_ctrl related to \p p_tile_data .
+ *
+ * @param p_ctrl Pointer to the ctrl attached to the tile.
+ * @param p_tile_data Pointer to the ctrl tile.
+ *
+ * @see Ctrl_FPGA_EvalTaskWaitTile, Ctrl_FPGA_EvalTaskGlobalSync
+ */
+void Ctrl_FPGA_WaitTileInner(Ctrl_FPGA *p_ctrl, Ctrl_Tile *p_tile_data);
 
 /**
  * Perform memory transfer from host to device.
@@ -194,15 +263,248 @@ void Ctrl_FPGA_EvalTaskSetDependanceMode(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task);
  ******** FPGA Controller functions *********
  ********************************************/
 
+void Ctrl_FPGA_GetKernelFiles(const char *dir_path, char *kernel_files[CTRL_FPGA_MAX_KERNEL_FILES], int *count) {
+	DIR           *dir;
+	struct dirent *entry;
+	*count = 0;
+
+	dir = opendir(dir_path);
+	if (dir == NULL) {
+		fprintf(stderr, "[Ctrl_FPGA] Error: Invalid kernel directory provided.\n");
+		exit(EXIT_FAILURE);
+	}
+
+	while ((entry = readdir(dir)) != NULL) {
+		// Check if the file ends with ".aocx"
+		if (strstr(entry->d_name, ".aocx\0") != NULL) {
+			if (*count < CTRL_FPGA_MAX_KERNEL_FILES) {
+				// Allocate space for the file path
+				kernel_files[*count] = malloc(PATH_MAX);
+				if (kernel_files[*count] == NULL) {
+					fprintf(stderr, "[Ctrl_FPGA] Internal Error: Could not allocate buffer for kernel file path.\n");
+					exit(EXIT_FAILURE);
+				}
+
+				// Construct the full path
+				snprintf(kernel_files[*count], PATH_MAX, "%s%s", dir_path, entry->d_name);
+				(*count)++;
+			} else {
+				fprintf(stderr, "[Ctrl_FPGA] Warning: Found more than %d kernels in the kernel path. Some of them will be ignored.\n",
+						CTRL_FPGA_MAX_KERNEL_FILES);
+				fflush(stderr);
+				break;
+			}
+		}
+	}
+
+	closedir(dir);
+
+	if (n_kernel_files == 0) {
+		fprintf(stderr, "[Ctrl_FPGA] Error: no kernel files found in the specified directory (%s/).\n", Ctrl_FPGA_kernels_path);
+		exit(EXIT_FAILURE);
+	}
+}
+
+// NOTE: This function is called multiple times with the same files.
+// It could be optimized by hashing the names somewhere. However, it is not critical,
+// as all calls happen only at ctrl creation time.
+char *Ctrl_FPGA_GetKernelNames(Ctrl_FPGA *p_ctrl, cl_program *program, char *kernel_path) {
+	if (program == NULL && kernel_path == NULL)
+		return NULL;
+
+	char *kernel_names;
+	if (program != NULL && clGetVersion(p_ctrl->device_id) >= 12) {
+		/*
+		 * This is the intended version of extracting the kernel names, using OpenCL 1.2.0 API.
+		 * However, not all Intel FPGA SDK for OpenCL installations seem to be OpenCL 1.2.0-compliant.
+		 */
+		size_t kernel_names_len;
+		OPENCL_ASSERT_OP(clGetProgramInfo(*program, CL_PROGRAM_KERNEL_NAMES, 0, NULL, &kernel_names_len));
+		kernel_names = (char *)malloc(kernel_names_len * sizeof(char));
+		OPENCL_ASSERT_OP(clGetProgramInfo(*program, CL_PROGRAM_KERNEL_NAMES, kernel_names_len, (void *)kernel_names, NULL));
+	} else {
+		/*
+		 * This basically implements the C code that produces the same result as the following
+		 * unix commands:
+		 * `head -c $((16*1024)) *.aocx | strings -n 26 | grep ^ctrl_kernel_fpga_FPGA_[^\.]*$ | awk '!_[$0]++'`
+		 */
+		const int CTRL_FPGA_AOCX_MAX_READ_SIZE   = 16 * 1024;
+		const int CTRL_FPGA_MAX_KERNELS_PER_FILE = 256;
+		const int CTRL_FPGA_MAX_KERNEL_NAME_LEN  = 256;
+
+		FILE *kernel = fopen(kernel_path, "rb");
+
+		// We just read the first 16 KiB, as that seems to be enough in the .aocx files
+		// to find the occurences of all the kernels' names.
+		char buffer[CTRL_FPGA_AOCX_MAX_READ_SIZE + 1];
+		fread(buffer, 4096, (CTRL_FPGA_AOCX_MAX_READ_SIZE + 4095) / 4096, kernel); // `head`
+		fclose(kernel);
+
+		// Allocate memory for all the kernel names, as semicolon-separated values
+		kernel_names            = (char *)malloc(CTRL_FPGA_MAX_KERNELS_PER_FILE *
+												 (CTRL_FPGA_MAX_KERNEL_NAME_LEN + 1) * sizeof(char));
+		kernel_names[0]         = '\0';
+		int kernel_names_offset = 0; // Offset for the beginning of the next name
+
+		// Iterate over the read file contents and find valid kernel names
+		int   nstrings = 0;
+		char *start    = buffer;
+		char *end      = buffer;
+		while (end < buffer + CTRL_FPGA_AOCX_MAX_READ_SIZE) {
+			// Check the byte is a valid character: [a-zA-Z0-9_]
+			if (isalnum(*end) || *end == '_') { // `strings`
+				start = end++;
+
+				// Read until next invalid character or delimiter
+				while ((isalnum(*end) || *end == '_') && end < buffer + CTRL_FPGA_AOCX_MAX_READ_SIZE) {
+					end++;
+				}
+				*end    = '\0'; // Probably unneeded, but good for testing/debugging
+				int len = end - start;
+
+				// Check if the read string is a kernel name
+				if (len > 26) { // 26 == strlen("ctrl_kernel_fpga_FPGA_TASK")
+					if (nstrings > CTRL_FPGA_MAX_KERNELS_PER_FILE) {
+						fprintf(stderr, "[Ctrl_FPGA] Error: The maximum allowed of %d kernels per FPGA "
+										"kernel file was exceeded.\n",
+								CTRL_FPGA_MAX_KERNELS_PER_FILE);
+						exit(EXIT_FAILURE);
+					}
+					if (len > CTRL_FPGA_MAX_KERNEL_NAME_LEN) {
+						if (!strncmp(start, "ctrl_kernel_fpga_FPGA_", 11)) { // 11 == strlen("ctrl_kernel"); less comparisons
+							fprintf(stderr, "[Ctrl_FPGA] Error: The maximum allowed kernel name length of %d "
+											"characters was exceeded (name length: %d for %s).\n",
+									CTRL_FPGA_MAX_KERNEL_NAME_LEN, len, start);
+							exit(EXIT_FAILURE);
+						}
+						continue;
+					}
+
+					// Check the found string is a kernel name
+					if (!strncmp(start, "ctrl_kernel_fpga_FPGA_", 11)) { // `grep`
+						// Check the kernel name has not been already added
+						bool new_name = true;
+						// Iterate over all the previous names (extracted using strtok)
+						if (nstrings > 0) {
+							char *name = strtok(kernel_names, ";");
+							while (name != NULL) {
+								if (name != kernel_names)
+									name[-1] = ';'; // Restore the semicolons for the following iterations
+								if (new_name && !strcmp(start, name)) {
+									new_name = false;
+								}
+
+								name = strtok(NULL, ";");
+							}
+							kernel_names[kernel_names_offset - 1] = ';'; // Restore the semicolon of the last item
+						}
+						if (new_name) {
+							memcpy(kernel_names + kernel_names_offset, start, len);
+							kernel_names_offset += len + 1;
+							kernel_names[kernel_names_offset - 1] = ';';
+							kernel_names[kernel_names_offset]     = '\0';
+							nstrings++;
+						}
+					}
+				}
+				end++;
+			} else {
+				end++;
+			}
+		}
+		// Remove trailing semicolon
+		if (kernel_names_offset > 0) // To avoid a compilation warning
+			kernel_names[kernel_names_offset - 1] = '\0';
+	}
+
+	return kernel_names;
+}
+
+void Ctrl_FPGA_ExtractKernels(Ctrl_FPGA *p_ctrl, char *kernel_files[CTRL_FPGA_MAX_KERNEL_FILES], int n_kernel_files) {
+	cl_int err;
+
+	// Allocate memory in global buffer for the OpenCL program
+	pp_fpga_programs[p_ctrl->type_id] = (cl_program *)malloc(n_kernel_files * sizeof(cl_program));
+
+	// Build the OpenCL programs
+	for (int i = 0; i < n_kernel_files; i++) {
+		FILE       *binary_file;
+		const char *kernel_path = kernel_files[i];
+		if (!(binary_file = fopen(kernel_path, "rb"))) {
+			fprintf(stderr, "[Ctrl_FPGA_Create] Kernel file %s not found.\n", kernel_path);
+			exit(EXIT_FAILURE);
+		}
+		fseek(binary_file, 0, SEEK_END);
+		size_t         binary_length = ftell(binary_file);
+		unsigned char *binary_str    = (unsigned char *)malloc(binary_length * sizeof(unsigned char));
+		rewind(binary_file);
+		if (!(fread(binary_str, binary_length, 1, binary_file))) {
+			fprintf(stderr, "[Ctrl_FPGA_Create] Error reading kernel binary %s.\n", kernel_path);
+			exit(EXIT_FAILURE);
+		}
+
+		cl_program *p_program = &pp_fpga_programs[p_ctrl->type_id][i];
+
+		*p_program = clCreateProgramWithBinary(p_ctrl->context, 1, &p_ctrl->device_id,
+											   (const size_t *)&binary_length,
+											   (const unsigned char **)&binary_str, NULL, &err);
+		OPENCL_ASSERT_ERROR(err);
+		free(binary_str);
+
+		err = clBuildProgram(*p_program, 1, &p_ctrl->device_id, NULL, NULL, NULL);
+		if (err == CL_BUILD_PROGRAM_FAILURE) {
+			size_t log_size;
+			clGetProgramBuildInfo(*p_program, p_ctrl->device_id, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+			char *log = (char *)malloc(log_size);
+			clGetProgramBuildInfo(*p_program, p_ctrl->device_id, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
+			fprintf(stderr, "FPGA kernel compilation error:\n\n%s\n", log);
+			exit(EXIT_FAILURE);
+		}
+		OPENCL_ASSERT_ERROR(err);
+	}
+
+	for (Ctrl_FPGA_KernelParams *p_curr_kp = FPGA_initial_kp.p_next; p_curr_kp != NULL; p_curr_kp = p_curr_kp->p_next) {
+		bool found_kernel = false;
+		for (int i = 0; i < n_kernel_files; i++) {
+			// Extract kernel names
+			char *kernel_names = Ctrl_FPGA_GetKernelNames(p_ctrl, &pp_fpga_programs[p_ctrl->type_id][i], kernel_files[i]);
+			#ifdef _CTRL_DEBUG_
+			fprintf(stderr, "[Ctrl_FPGA] Info: Found the following kernel names in file %s: %s\n",
+					kernel_files[i], kernel_names);
+			fflush(stderr);
+			#endif // _CTRL_DEBUG_
+
+			// Create kernels and add them to the ctrl
+			char *name = strtok(kernel_names, ";");
+			while (name != NULL) {
+				if (!strcmp(p_curr_kp->p_kernel_name, name)) {
+					p_curr_kp->p_kernel[p_ctrl->type_id] = clCreateKernel(pp_fpga_programs[p_ctrl->type_id][i], (const char *)p_curr_kp->p_kernel_name, &err);
+					OPENCL_ASSERT_ERROR(err);
+					found_kernel = true;
+					break;
+				}
+
+				name = strtok(NULL, ";");
+			}
+			free(kernel_names);
+		}
+
+		if (!found_kernel) {
+			fprintf(stderr, "[Ctrl_FPGA] Error: Kernel was declared, but no implementation found: %s.\n",
+					p_curr_kp->p_kernel_name);
+			exit(EXIT_FAILURE);
+		}
+	}
+}
+
 void Ctrl_FPGA_Create(Ctrl_FPGA *p_ctrl, Ctrl_Policy policy, char *args) {
 	cl_int err;
 
 	p_ctrl->policy           = policy;
 	p_ctrl->type_id          = next_fpga_id++;
-	int platform             = atoi(strtok(args, " "));
-	int device               = atoi(strtok(NULL, " "));
-	p_ctrl->exec_mode        = atoi(strtok(NULL, " "));
-	char *streams            = strtok(NULL, "");
+	int   platform           = atoi(strtok(args, " ")); // Platform used to choose between available FPGAs, or emu.
+	int   device             = atoi(strtok(NULL, " "));
+	char *streams            = strtok(NULL, " ");
 	p_ctrl->n_kernel_streams = streams == NULL ? 1 : atoi(streams);
 
 	if (p_ctrl->n_kernel_streams <= 0) {
@@ -215,13 +517,13 @@ void Ctrl_FPGA_Create(Ctrl_FPGA *p_ctrl, Ctrl_Policy policy, char *args) {
 	p_ctrl->pp_kernel_host_streams  = (Ctrl_TaskQueue **)malloc(p_ctrl->n_kernel_streams * sizeof(Ctrl_TaskQueue *));
 	p_ctrl->dependance_mode         = CTRL_MODE_IMPLICIT;
 
-	// get OpenCL platform id from platform index
+	// Get OpenCL platform id from platform index
 	cl_platform_id *p_platform_ids = (cl_platform_id *)malloc((platform + 1) * sizeof(cl_platform_id));
 	OPENCL_ASSERT_OP(clGetPlatformIDs(platform + 1, p_platform_ids, NULL));
 	p_ctrl->platform_id = p_platform_ids[platform];
 	free(p_platform_ids);
 
-	// get OpenCL device id from device index
+	// Get OpenCL device id from device index
 	cl_device_id *p_device_ids = (cl_device_id *)malloc((device + 1) * sizeof(cl_device_id));
 	OPENCL_ASSERT_OP(clGetDeviceIDs(p_ctrl->platform_id, CL_DEVICE_TYPE_ACCELERATOR, device + 1, p_device_ids, NULL));
 	p_ctrl->device_id = p_device_ids[device];
@@ -233,7 +535,7 @@ void Ctrl_FPGA_Create(Ctrl_FPGA *p_ctrl, Ctrl_Policy policy, char *args) {
 	OPENCL_ASSERT_ERROR(err);
 
 	p_ctrl->queue_properties = 0;
-	#ifdef _CTRL_OPENCL_GPU_PROFILING_
+	#ifdef _CTRL_FPGA_PROFILING_
 	p_ctrl->queue_properties |= CL_QUEUE_PROFILING_ENABLE;
 	#endif
 
@@ -253,81 +555,28 @@ void Ctrl_FPGA_Create(Ctrl_FPGA *p_ctrl, Ctrl_Policy policy, char *args) {
 		p_ctrl->pp_kernel_host_streams[i] = Ctrl_TaskQueue_Create();
 	}
 
-	// create events
+	// Create events
 	p_ctrl->host_seq_event = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CPU, p_ctrl->global_id);
-	p_ctrl->dev_seq_event  = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_OPENCL, p_ctrl->global_id);
+	p_ctrl->dev_seq_event  = CTRL_GENERIC_EVENT_NULL;
 
-	// empty dev events created at the begining need to have a completed cl event inside
-	p_ctrl->default_event = clCreateUserEvent(p_ctrl->context, &err);
-	OPENCL_ASSERT_ERROR(err);
-	OPENCL_ASSERT_OP(clSetUserEventStatus(p_ctrl->default_event, CL_COMPLETE));
-	p_ctrl->dev_seq_event.event.p_event_cl[0] = p_ctrl->default_event;
-	OPENCL_ASSERT_OP(clRetainEvent(p_ctrl->default_event));
+	// Extract all aocx in the specified path for FPGA kernels
+	char *kernel_files[CTRL_FPGA_MAX_KERNEL_FILES];
+	Ctrl_FPGA_GetKernelFiles(Ctrl_FPGA_kernels_path, kernel_files, &n_kernel_files);
+	Ctrl_FPGA_ExtractKernels(p_ctrl, kernel_files, n_kernel_files);
+	// Free the memory used for the paths:
+	for (int i = 0; i < n_kernel_files; i++)
+		free(kernel_files[i]);
 
-	for (Ctrl_FPGA_KernelParams *p_curr_kp = FPGA_initial_kp.p_next; p_curr_kp != NULL; p_curr_kp = p_curr_kp->p_next) {
-		FILE *binary_file;
-		char *kernel_path;
-		kernel_path = (char *)malloc(CTRL_KERNEL_PATH_LENGTH * sizeof(char));
-		strcpy(kernel_path, p_curr_kp->p_binary_name);
-		switch (p_ctrl->exec_mode) {
-			case FPGA_EMULATION:
-				strcat(kernel_path, "_emu");
-				break;
-			case FPGA_PROFILING:
-				strcat(kernel_path, "_profiling");
-				break;
-			default:
-				break;
-		}
-		#ifdef _INTEL_KERNELS
-		strcat(kernel_path, "_Ctrl.aocx");
-		#endif
-
-		if (!(binary_file = fopen(kernel_path, "rb"))) {
-			printf("Kernel file not found.\n");
-			exit(ERR_NOT_FOUND);
-		}
-		fseek(binary_file, 0, SEEK_END);
-		size_t         binary_length = ftell(binary_file);
-		unsigned char *binary_str    = (unsigned char *)malloc(binary_length * sizeof(unsigned char));
-		rewind(binary_file);
-		if (!(fread(binary_str, binary_length, 1, binary_file))) {
-			printf("Error reading kernel file\n");
-			exit(ERR_READ);
-		}
-
-		p_curr_kp->p_program[p_ctrl->type_id] = clCreateProgramWithBinary(p_ctrl->context, 1, &p_ctrl->device_id,
-																		  (const size_t *)&binary_length,
-																		  (const unsigned char **)&binary_str, NULL, &err);
-		OPENCL_ASSERT_ERROR(err);
-		free(binary_str);
-
-		err = clBuildProgram(p_curr_kp->p_program[p_ctrl->type_id], 1, &p_ctrl->device_id, NULL, NULL, NULL);
-		if (err == CL_BUILD_PROGRAM_FAILURE) {
-			size_t log_size;
-			clGetProgramBuildInfo(p_curr_kp->p_program[p_ctrl->type_id], p_ctrl->device_id, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
-			char *log = (char *)malloc(log_size);
-			clGetProgramBuildInfo(p_curr_kp->p_program[p_ctrl->type_id], p_ctrl->device_id, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
-			printf("%s\n", log);
-			fflush(stdout);
-			free(log);
-		}
-		OPENCL_ASSERT_ERROR(err);
-
-		p_curr_kp->p_kernel[p_ctrl->type_id] = clCreateKernel(p_curr_kp->p_program[p_ctrl->type_id], (const char *)p_curr_kp->p_kernel_name, &err);
-		OPENCL_ASSERT_ERROR(err);
-	}
-
-	#ifdef _CTRL_OPENCL_GPU_PROFILING_
+	#ifdef _CTRL_FPGA_PROFILING_
 	p_ctrl->platform = platform;
 	p_ctrl->device   = device;
 
 	p_ctrl->profiling_info_start = CL_PROFILING_COMMAND_START;
 	p_ctrl->profiling_info_end   = CL_PROFILING_COMMAND_END;
 
-	p_ctrl->profiling_read_events   = (cl_event *)malloc(_OPENCL_GPU_PROFILING_N_READ_TASKS_ * sizeof(cl_event));
-	p_ctrl->profiling_write_events  = (cl_event *)malloc(_OPENCL_GPU_PROFILING_N_WRITE_TASKS_ * sizeof(cl_event));
-	p_ctrl->profiling_kernel_events = (cl_event *)malloc(_OPENCL_GPU_PROFILING_N_KERNEL_TASKS_ * sizeof(cl_event));
+	p_ctrl->profiling_read_events   = (cl_event *)malloc(_FPGA_PROFILING_N_READ_TASKS_ * sizeof(cl_event));
+	p_ctrl->profiling_write_events  = (cl_event *)malloc(_FPGA_PROFILING_N_WRITE_TASKS_ * sizeof(cl_event));
+	p_ctrl->profiling_kernel_events = (cl_event *)malloc(_FPGA_PROFILING_N_KERNEL_TASKS_ * sizeof(cl_event));
 
 	p_ctrl->i_read_task   = 0;
 	p_ctrl->i_write_task  = 0;
@@ -348,15 +597,15 @@ void Ctrl_FPGA_Create(Ctrl_FPGA *p_ctrl, Ctrl_Policy policy, char *args) {
 	p_ctrl->last_profiling_event = p_ctrl->default_event;
 	OPENCL_ASSERT_OP(clRetainEvent(p_ctrl->last_profiling_event));
 
-	#ifdef _CTRL_OPENCL_GPU_PROFILING_VERBOSE_
+	#ifdef _CTRL_FPGA_PROFILING_VERBOSE_
 	p_ctrl->profiling_visual_events = (visual_event *)malloc(
-		(_OPENCL_GPU_PROFILING_N_READ_TASKS_ +
-		 _OPENCL_GPU_PROFILING_N_WRITE_TASKS_ +
-		 _OPENCL_GPU_PROFILING_N_KERNEL_TASKS_) *
+		(_FPGA_PROFILING_N_READ_TASKS_ +
+		 _FPGA_PROFILING_N_WRITE_TASKS_ +
+		 _FPGA_PROFILING_N_KERNEL_TASKS_) *
 		sizeof(visual_event));
 	p_ctrl->i_visual_task = 0;
 	#endif
-	#endif // _CTRL_OPENCL_GPU_PROFILING_
+	#endif // _CTRL_FPGA_PROFILING_
 }
 
 void Ctrl_FPGA_EvalTask(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
@@ -398,9 +647,9 @@ void Ctrl_FPGA_EvalTask(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 }
 
 void Ctrl_FPGA_AllocKernel(int n_fpga_ctrls) {
+	pp_fpga_programs = (cl_program **)malloc(n_fpga_ctrls * sizeof(cl_program *));
 	for (Ctrl_FPGA_KernelParams *p_curr_kp = FPGA_initial_kp.p_next; p_curr_kp != NULL; p_curr_kp = p_curr_kp->p_next) {
-		p_curr_kp->p_program = (cl_program *)malloc(n_fpga_ctrls * sizeof(cl_program));
-		p_curr_kp->p_kernel  = (cl_kernel *)malloc(n_fpga_ctrls * sizeof(cl_kernel));
+		p_curr_kp->p_kernel = (cl_kernel *)malloc(n_fpga_ctrls * sizeof(cl_kernel));
 	}
 }
 
@@ -473,18 +722,6 @@ void Ctrl_FPGA_GetInfo(Ctrl_FPGA *p_ctrl, Ctrl_Info *p_info) {
 	char device_name[device_name_size];
 	OPENCL_ASSERT_OP(clGetDeviceInfo(p_ctrl->device_id, CL_DEVICE_NAME, device_name_size, device_name, NULL));
 
-	switch (p_ctrl->exec_mode) {
-		case FPGA_EMULATION:
-			p_info->exec_mode = "emulation";
-			break;
-		case FPGA_PROFILING:
-			p_info->exec_mode = "profiling";
-			break;
-		default:
-			p_info->exec_mode = "default";
-			break;
-	}
-
 	strncpy(p_info->platform_name, platform_name, CTRL_MAX_DEV_NAME - 1);
 	strncpy(p_info->device_name, device_name, CTRL_MAX_DEV_NAME - 1);
 	p_info->platform_name[255] = '\0';
@@ -493,8 +730,10 @@ void Ctrl_FPGA_GetInfo(Ctrl_FPGA *p_ctrl, Ctrl_Info *p_info) {
 }
 
 void Ctrl_FPGA_CreateTex(Ctrl_FPGA *p_ctrl, HitTile *p_tile, Ctrl_TexDesc tex_desc) {
-	fprintf(stderr, "[Ctrl_FPGA_CreateTex] Error: not implemented\n");
-	exit(EXIT_FAILURE);
+	#ifdef _CTRL_DEBUG_
+	fprintf(stderr, "[Ctrl_FPGA_CreateTex] Warning: not implemented\n");
+	fflush(stderr);
+	#endif // _CTRL_DEBUG_
 }
 
 /*********************************
@@ -532,48 +771,71 @@ void Ctrl_FPGA_InitTile(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 	p_tile_data_impl_fpga->host_last_kernel_write_event = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CPU, p_ctrl->global_id);
 	p_tile_data_impl_fpga->host_last_dth_event          = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CPU, p_ctrl->global_id);
 	p_tile_data_impl_fpga->host_last_htd_event          = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CPU, p_ctrl->global_id);
-	p_tile_data_impl_fpga->dev_last_kernel_read_event   = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_OPENCL, p_ctrl->global_id);
-	p_tile_data_impl_fpga->dev_last_kernel_write_event  = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_OPENCL, p_ctrl->global_id);
-	p_tile_data_impl_fpga->dev_last_dth_event           = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_OPENCL, p_ctrl->global_id);
-	p_tile_data_impl_fpga->dev_last_htd_event           = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_OPENCL, p_ctrl->global_id);
+	p_tile_data_impl_fpga->dev_last_kernel_read_event   = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_impl_fpga->dev_last_kernel_write_event  = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_impl_fpga->dev_last_dth_event           = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_impl_fpga->dev_last_htd_event           = CTRL_GENERIC_EVENT_NULL;
 
-	// empty dev events created at the begining need to have a completed cl event inside
-	p_tile_data_impl_fpga->dev_last_kernel_read_event.event.p_event_cl[0]  = p_ctrl->default_event;
-	p_tile_data_impl_fpga->dev_last_kernel_write_event.event.p_event_cl[0] = p_ctrl->default_event;
-	p_tile_data_impl_fpga->dev_last_dth_event.event.p_event_cl[0]          = p_ctrl->default_event;
-	p_tile_data_impl_fpga->dev_last_htd_event.event.p_event_cl[0]          = p_ctrl->default_event;
-	OPENCL_ASSERT_OP(clRetainEvent(p_ctrl->default_event));
-	OPENCL_ASSERT_OP(clRetainEvent(p_ctrl->default_event));
-	OPENCL_ASSERT_OP(clRetainEvent(p_ctrl->default_event));
-	OPENCL_ASSERT_OP(clRetainEvent(p_ctrl->default_event));
+	p_tile_data_impl_fpga->streamid_last_kr = 0;
+	p_tile_data_impl_fpga->streamid_last_kw = 0;
+}
+
+void Ctrl_FPGA_WaitTileInner(Ctrl_FPGA *p_ctrl, Ctrl_Tile *p_tile_data) {
+	Ctrl_FPGA_Tile *p_tile_data_fpga = p_tile_data->p_impls[p_ctrl->global_id].tile.p_fpga;
+
+	// Wait for all work related to this tile to finish
+	Ctrl_GenericEvent_Wait(p_tile_data->last_host_read_event);
+	Ctrl_GenericEvent_Wait(p_tile_data->last_host_write_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_fpga->host_last_kernel_read_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_fpga->host_last_kernel_write_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_fpga->host_last_dth_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_fpga->host_last_htd_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_fpga->dev_last_kernel_read_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_fpga->dev_last_kernel_write_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_fpga->dev_last_dth_event);
+	Ctrl_GenericEvent_Wait(p_tile_data_fpga->dev_last_htd_event);
+
+	Ctrl_GenericEvent_Release(p_tile_data_fpga->dev_last_kernel_read_event);
+	Ctrl_GenericEvent_Release(p_tile_data_fpga->dev_last_kernel_write_event);
+	Ctrl_GenericEvent_Release(p_tile_data_fpga->dev_last_dth_event);
+	Ctrl_GenericEvent_Release(p_tile_data_fpga->dev_last_htd_event);
+
+	p_tile_data_fpga->dev_last_kernel_read_event  = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_fpga->dev_last_kernel_write_event = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_fpga->dev_last_dth_event          = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_fpga->dev_last_htd_event          = CTRL_GENERIC_EVENT_NULL;
 }
 
 /* Macro to define MoveTo and MoveFrom logic */
-/* TODO: STRIDED TILES */
 #define OpenCL_Move(type)                                                                                                 \
-	HitTile *p_parent = p_tile->ref;                                                                                      \
+	HitTile flat_tile = *p_tile;                                                                                          \
+	hit_tileFlattenDims(&flat_tile);                                                                                      \
+                                                                                                                          \
+	HitTile *p_parent = flat_tile.ref;                                                                                    \
 	size_t   offset   = 0;                                                                                                \
-	if (p_tile->memStatus == HIT_MS_NOT_OWNER) {                                                                          \
+	if (flat_tile.memStatus == HIT_MS_NOT_OWNER) {                                                                        \
 		while (p_parent->memStatus == HIT_MS_NOT_OWNER)                                                                   \
 			p_parent = p_parent->ref;                                                                                     \
-		offset = (((size_t)p_tile->data) - ((size_t)p_parent->data)) / p_tile->baseExtent;                                \
+		offset = (((size_t)flat_tile.data) - ((size_t)p_parent->data)) / flat_tile.baseExtent;                            \
+	} else {                                                                                                              \
+		p_parent = &flat_tile;                                                                                            \
 	}                                                                                                                     \
-	/* TILES WITH THEIR OWN MEMORY ALLOCATION, OR CONTIGUOUS 1D TILES NEED ONLY ONE CONTIGUOUS COPY */                    \
-	if ((p_tile->memStatus == HIT_MS_OWNER) || (p_tile->shape.info.sig.numDims == 1)) {                                   \
+	/* 1D FLATTENED TILE -> CONTIGUOUS MEMORY */                                                                          \
+	if (flat_tile.shape.info.sig.numDims == 1) {                                                                          \
 		OPENCL_ASSERT_OP(                                                                                                 \
 			clEnqueue##type##Buffer(cmd_queue, p_tile_data_fpga->device_data,                                             \
-									CL_FALSE, offset * p_tile->baseExtent,                                                \
-									((size_t)(p_tile->acumCard)) * (p_tile->baseExtent),                                  \
-									p_tile->data, 0, NULL,                                                                \
+									CL_FALSE, offset * flat_tile.baseExtent,                                              \
+									((size_t)(flat_tile.acumCard)) * (flat_tile.baseExtent),                              \
+									flat_tile.data, 0, NULL,                                                              \
 									p_task->event.event.p_event_cl));                                                     \
 	} /* CONTIGUOUS 2D TILES */                                                                                           \
-	else if (p_tile->shape.info.sig.numDims == 2) {                                                                       \
+	else if (flat_tile.shape.info.sig.numDims == 2) {                                                                     \
 		size_t dev_offset[3] = {                                                                                          \
-			(hit_tileDimBegin(*p_tile, 1) - hit_tileDimBegin(*p_parent, 1)) * p_parent->baseExtent,                       \
-			hit_tileDimBegin(*p_tile, 0) - hit_tileDimBegin(*p_parent, 0),                                                \
+			(hit_tileDimBegin(flat_tile, 1) - hit_tileDimBegin(*p_parent, 1)) * p_parent->baseExtent,                     \
+			hit_tileDimBegin(flat_tile, 0) - hit_tileDimBegin(*p_parent, 0),                                              \
 			0};                                                                                                           \
 		size_t zero_offset[3] = {0, 0, 0};                                                                                \
-		size_t size[3]        = {p_tile->card[1] * p_tile->baseExtent, p_tile->card[0], 1};                               \
+		size_t size[3]        = {flat_tile.card[1] * flat_tile.baseExtent, flat_tile.card[0], 1};                         \
 		OPENCL_ASSERT_OP(                                                                                                 \
 			clEnqueue##type##BufferRect(                                                                                  \
 				cmd_queue,                                                                                                \
@@ -581,16 +843,16 @@ void Ctrl_FPGA_InitTile(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 				CL_FALSE, dev_offset, zero_offset, size,                                                                  \
 				(p_parent->baseExtent) * p_parent->origAcumCard[1], 0,                                                    \
 				(p_parent->baseExtent) * p_parent->origAcumCard[1], 0,                                                    \
-				p_tile->data, 0, NULL,                                                                                    \
+				flat_tile.data, 0, NULL,                                                                                  \
 				p_task->event.event.p_event_cl));                                                                         \
 	} /* CONTIGUOUS 3D TILES */                                                                                           \
-	else if (p_tile->shape.info.sig.numDims == 3) {                                                                       \
+	else if (flat_tile.shape.info.sig.numDims == 3) {                                                                     \
 		size_t dev_offset[3] = {                                                                                          \
-			(hit_tileDimBegin(*p_tile, 2) - hit_tileDimBegin(*p_parent, 2)) * p_parent->baseExtent,                       \
-			hit_tileDimBegin(*p_tile, 1) - hit_tileDimBegin(*p_parent, 1),                                                \
-			hit_tileDimBegin(*p_tile, 0) - hit_tileDimBegin(*p_parent, 0)};                                               \
+			(hit_tileDimBegin(flat_tile, 2) - hit_tileDimBegin(*p_parent, 2)) * p_parent->baseExtent,                     \
+			hit_tileDimBegin(flat_tile, 1) - hit_tileDimBegin(*p_parent, 1),                                              \
+			hit_tileDimBegin(flat_tile, 0) - hit_tileDimBegin(*p_parent, 0)};                                             \
 		size_t zero_offset[3] = {0, 0, 0};                                                                                \
-		size_t size[3]        = {p_tile->card[2] * p_tile->baseExtent, p_tile->card[1], p_tile->card[0]};                 \
+		size_t size[3]        = {flat_tile.card[2] * flat_tile.baseExtent, flat_tile.card[1], flat_tile.card[0]};         \
 		OPENCL_ASSERT_OP(                                                                                                 \
 			clEnqueue##type##BufferRect(                                                                                  \
 				cmd_queue,                                                                                                \
@@ -600,11 +862,11 @@ void Ctrl_FPGA_InitTile(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 				(p_parent->baseExtent) * p_parent->origAcumCard[1],                                                       \
 				(p_parent->baseExtent) * p_parent->card[2],                                                               \
 				(p_parent->baseExtent) * p_parent->origAcumCard[1],                                                       \
-				p_tile->data, 0, NULL,                                                                                    \
+				flat_tile.data, 0, NULL,                                                                                  \
 				p_task->event.event.p_event_cl));                                                                         \
 	} else {                                                                                                              \
 		fprintf(stderr, "Internal Error: Number of dimensions not supported for non-owner tile in MoveTo/MoveFrom: %d\n", \
-				p_tile->shape.info.sig.numDims);                                                                          \
+				flat_tile.shape.info.sig.numDims);                                                                        \
 	}
 
 void Ctrl_FPGA_EvalTaskMoveToInner(Ctrl_FPGA *p_ctrl, HitTile *p_tile) {
@@ -613,6 +875,8 @@ void Ctrl_FPGA_EvalTaskMoveToInner(Ctrl_FPGA *p_ctrl, HitTile *p_tile) {
 	Ctrl_FPGA_Tile *p_tile_data_fpga = p_tile_data_impl->tile.p_fpga;
 
 	for (int i = 0; i < Ctrl_GetNCtrls(); i++) {
+		if (i == p_ctrl->global_id) continue;
+
 		Ctrl_MoveToWait(&p_tile_data->p_impls[i], p_ctrl->p_htd_host_stream);
 	}
 
@@ -672,6 +936,8 @@ void Ctrl_FPGA_EvalTaskMoveFromInner(Ctrl_FPGA *p_ctrl, HitTile *p_tile) {
 	Ctrl_FPGA_Tile *p_tile_data_fpga = p_tile_data_impl->tile.p_fpga;
 
 	for (int i = 0; i < Ctrl_GetNCtrls(); i++) {
+		if (i == p_ctrl->global_id) continue;
+
 		Ctrl_MoveFromWait(&p_tile_data->p_impls[i], p_ctrl->p_dth_host_stream);
 	}
 
@@ -698,7 +964,7 @@ void Ctrl_FPGA_EvalTaskMoveFromInner(Ctrl_FPGA *p_ctrl, HitTile *p_tile) {
 	if (p_ctrl->policy == CTRL_POLICY_SYNC) {
 		Ctrl_CpuEvent_Record(&p_ctrl->host_seq_event.event.event_cpu, p_ctrl->p_dth_host_stream);
 		Ctrl_GenericEvent_Release(p_ctrl->dev_seq_event);
-		p_ctrl->dev_seq_event = p_tile_data_fpga->dev_last_htd_event;
+		p_ctrl->dev_seq_event = p_tile_data_fpga->dev_last_dth_event;
 		Ctrl_GenericEvent_Retain(p_ctrl->dev_seq_event);
 	}
 
@@ -733,8 +999,8 @@ void Ctrl_FPGA_ExecTaskMoveFrom(Ctrl_Task *p_task, Ctrl_FPGA *p_ctrl) {
  **********************************/
 
 void Ctrl_FPGA_Destroy(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
-	#ifdef _CTRL_OPENCL_GPU_PROFILING_
-	#ifdef _OPENCL_GPU_TEST_OUTPUT_
+	#ifdef _CTRL_FPGA_PROFILING_
+	#ifdef _FPGA_TEST_OUTPUT_
 	printf("%d %d\n", p_ctrl->platform, p_ctrl->device);
 	printf("%d %d %d %d %d\n", p_ctrl->i_read_task + p_ctrl->i_write_task + p_ctrl->i_kernel_task,
 		   p_ctrl->i_kernel_task, p_ctrl->i_read_task + p_ctrl->i_write_task, p_ctrl->i_read_task, p_ctrl->i_write_task);
@@ -753,9 +1019,9 @@ void Ctrl_FPGA_Destroy(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 		printf("\n POLICY SYNC");
 	}
 	printf("\n\n ---------------------------------------------------- \n");
-	#endif // _OPENCL_GPU_TEST_OUTPUT_
+	#endif // _FPGA_TEST_OUTPUT_
 
-	#ifdef _CTRL_OPENCL_GPU_PROFILING_VERBOSE_
+	#ifdef _CTRL_FPGA_PROFILING_VERBOSE_
 	FILE *f = fopen("visual_profiler_info.txt", "w");
 
 	for (int i = 0; i < p_ctrl->i_visual_task; i++) {
@@ -813,7 +1079,7 @@ void Ctrl_FPGA_Destroy(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 	OPENCL_ASSERT_OP(clReleaseEvent(p_ctrl->first_profiling_event));
 	OPENCL_ASSERT_OP(clReleaseEvent(p_ctrl->last_profiling_event));
 
-	#ifdef _OPENCL_GPU_TEST_OUTPUT_
+	#ifdef _FPGA_TEST_OUTPUT_
 	printf("%lf %lf %lf %lf %lf\n", p_ctrl->profiling_total / 1000000.0, p_ctrl->profiling_sum / 1000000.0, p_ctrl->profiling_kernel / 1000000.0, p_ctrl->profiling_offloading / 1000000.0, p_ctrl->profiling_read / 1000000.0, p_ctrl->profiling_write / 1000000.0);
 	#else
 	printf("\n -------------------- PROFILING --------------------- \n");
@@ -824,8 +1090,8 @@ void Ctrl_FPGA_Destroy(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 	printf("\n Read Time: %.3lf", p_ctrl->profiling_read / 1000000.0);
 	printf("\n Write Time: %.3lf", p_ctrl->profiling_write / 1000000.0);
 	printf("\n\n ---------------------------------------------------- \n");
-	#endif // _OPENCL_GPU_TEST_OUTPUT_
-	#endif // _CTRL_OPENCL_GPU_PROFILING_
+	#endif // _FPGA_TEST_OUTPUT_
+	#endif // _CTRL_FPGA_PROFILING_
 
 	if (p_ctrl->p_tile_list_head != NULL) {
 		fprintf(stderr, "Warning: Tiles left attached to ctrl %d\n", p_ctrl->global_id);
@@ -835,29 +1101,25 @@ void Ctrl_FPGA_Destroy(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 	p_ctrl->p_tile_list_head = NULL;
 	p_ctrl->p_tile_list_tail = NULL;
 
-	// send destroy signal to queue manager thread
-	if (p_task->flags) {
-		Ctrl_Task task = CTRL_TASK_NULL;
-		task.task_type = CTRL_TASK_TYPE_DESTROYCTRL;
-		Ctrl_TaskQueue_Push(p_ctrl->p_htd_host_stream, task);
-	}
-
-	// 1st ocl ctrl destroys and frees all ocl kernel stuff
+	// 1st fpga ctrl destroys and frees all ocl kernel stuff and global ocl program matrix
 	if (p_ctrl->type_id == 0) {
 		for (Ctrl_FPGA_KernelParams *p_curr_kp = FPGA_initial_kp.p_next; p_curr_kp != NULL; p_curr_kp = p_curr_kp->p_next) {
 			for (int i = 0; i < next_fpga_id; i++) {
 				OPENCL_ASSERT_OP(clReleaseKernel(p_curr_kp->p_kernel[i]));
-				OPENCL_ASSERT_OP(clReleaseProgram(p_curr_kp->p_program[i]));
 			}
 			free(p_curr_kp->p_kernel);
-			free(p_curr_kp->p_program);
-			free(p_curr_kp->p_binary_name);
 		}
+		for (int i = 0; i < next_fpga_id; i++) {
+			for (int j = 0; j < n_kernel_files; j++) {
+				OPENCL_ASSERT_OP(clReleaseProgram(pp_fpga_programs[i][j]));
+			}
+			free(pp_fpga_programs[i]);
+		}
+		free(pp_fpga_programs);
 	}
 
 	Ctrl_GenericEvent_Release(p_ctrl->host_seq_event);
 	Ctrl_GenericEvent_Release(p_ctrl->dev_seq_event);
-	OPENCL_ASSERT_OP(clReleaseEvent(p_ctrl->default_event));
 
 	for (int i = 0; i < p_ctrl->n_kernel_streams; i++) {
 		OPENCL_ASSERT_OP(clReleaseCommandQueue(p_ctrl->p_kernel_driver_streams[i]));
@@ -871,19 +1133,7 @@ void Ctrl_FPGA_Destroy(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 
 void Ctrl_FPGA_EvalTaskGlobalSync(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 	for (Ctrl_Tile_List *p_aux = p_ctrl->p_tile_list_head; p_aux != NULL; p_aux = p_aux->p_next) {
-		Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)(p_aux->p_tile_ext);
-		Ctrl_FPGA_Tile *p_tile_data_fpga = p_tile_data->p_impls[p_ctrl->global_id].tile.p_fpga;
-
-		Ctrl_GenericEvent_Wait(p_tile_data->last_host_read_event);
-		Ctrl_GenericEvent_Wait(p_tile_data->last_host_write_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_fpga->host_last_kernel_read_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_fpga->host_last_kernel_write_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_fpga->host_last_dth_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_fpga->host_last_htd_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_fpga->dev_last_kernel_read_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_fpga->dev_last_kernel_write_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_fpga->dev_last_dth_event);
-		Ctrl_GenericEvent_Wait(p_tile_data_fpga->dev_last_htd_event);
+		Ctrl_FPGA_WaitTileInner(p_ctrl, (Ctrl_Tile *)(p_aux->p_tile_ext));
 	}
 }
 
@@ -974,7 +1224,8 @@ void Ctrl_FPGA_EvalTaskKernelLaunch(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 				fflush(stderr);
 			}
 
-			if (p_ctrl->n_kernel_streams != 1) { // no need to wait for other kernels of this dev if we only have 1 driver kernel stream
+			// no need to wait for kw if last kw op was on the same stream
+			if (p_tile_data_fpga->streamid_last_kw != p_task->stream) {
 				Ctrl_GenericEvent_StreamWait(p_tile_data_fpga->host_last_kernel_write_event, p_host_kernel_queue);
 				Ctrl_GenericEvent_StreamWait(p_tile_data_fpga->dev_last_kernel_write_event, p_host_kernel_queue);
 			}
@@ -985,7 +1236,8 @@ void Ctrl_FPGA_EvalTaskKernelLaunch(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 			}
 
 			if (p_task->p_roles[i] != KERNEL_IN) {
-				if (p_ctrl->n_kernel_streams != 1) { // no need to wait for other kernels of this dev if we only have 1 driver kernel stream
+				// no need to wait for kw if last kw op was on the same stream
+				if (p_tile_data_fpga->streamid_last_kw != p_task->stream) {
 					Ctrl_GenericEvent_StreamWait(p_tile_data_fpga->host_last_kernel_read_event, p_host_kernel_queue);
 					Ctrl_GenericEvent_StreamWait(p_tile_data_fpga->dev_last_kernel_read_event, p_host_kernel_queue);
 				}
@@ -1040,6 +1292,7 @@ void Ctrl_FPGA_EvalTaskKernelLaunch(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 				Ctrl_GenericEvent_Release(p_tile_data_fpga->dev_last_kernel_write_event);
 				p_tile_data_fpga->dev_last_kernel_write_event = kernel_event;
 				Ctrl_GenericEvent_Retain(p_tile_data_fpga->dev_last_kernel_write_event);
+				p_tile_data_fpga->streamid_last_kw = p_task->stream;
 			}
 
 			if (p_task->p_roles[i] != KERNEL_OUT) {
@@ -1047,6 +1300,7 @@ void Ctrl_FPGA_EvalTaskKernelLaunch(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 				Ctrl_GenericEvent_Release(p_tile_data_fpga->dev_last_kernel_read_event);
 				p_tile_data_fpga->dev_last_kernel_read_event = kernel_event;
 				Ctrl_GenericEvent_Retain(p_tile_data_fpga->dev_last_kernel_read_event);
+				p_tile_data_fpga->streamid_last_kr = p_task->stream;
 			}
 		}
 	}
@@ -1144,18 +1398,8 @@ void Ctrl_FPGA_EvalTaskFreeTile(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 
 	p_tile_data->valid_impls--;
 
-	// TODO @sergioalo if host stuff is not freed, should we wait for host task events?
 	// Wait for all work related to this tile to finish
-	Ctrl_GenericEvent_Wait(p_tile_data->last_host_read_event);
-	Ctrl_GenericEvent_Wait(p_tile_data->last_host_write_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_fpga->host_last_kernel_read_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_fpga->host_last_kernel_write_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_fpga->host_last_dth_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_fpga->host_last_htd_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_fpga->dev_last_kernel_read_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_fpga->dev_last_kernel_write_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_fpga->dev_last_dth_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_fpga->dev_last_htd_event);
+	Ctrl_FPGA_WaitTileInner(p_ctrl, p_tile_data);
 
 	// destroy events inside the tile
 	Ctrl_GenericEvent_Release(p_tile_data_fpga->host_last_kernel_read_event);
@@ -1267,23 +1511,11 @@ void Ctrl_FPGA_EvalTaskMoveFrom(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 }
 
 void Ctrl_FPGA_EvalTaskWaitTile(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
-	HitTile        *p_tile           = p_task->p_tile;
-	Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)(p_tile->ext);
-	Ctrl_FPGA_Tile *p_tile_data_fpga = p_tile_data->p_impls[p_ctrl->global_id].tile.p_fpga;
+	HitTile *p_tile = p_task->p_tile;
 
 	if (hit_tileIsNull(*p_tile)) return;
 
-	// Wait for all work related to this tile to finish
-	Ctrl_GenericEvent_Wait(p_tile_data->last_host_read_event);
-	Ctrl_GenericEvent_Wait(p_tile_data->last_host_write_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_fpga->host_last_kernel_read_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_fpga->host_last_kernel_write_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_fpga->host_last_dth_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_fpga->host_last_htd_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_fpga->dev_last_kernel_read_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_fpga->dev_last_kernel_write_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_fpga->dev_last_dth_event);
-	Ctrl_GenericEvent_Wait(p_tile_data_fpga->dev_last_htd_event);
+	Ctrl_FPGA_WaitTileInner(p_ctrl, (Ctrl_Tile *)(p_tile->ext));
 }
 
 void Ctrl_FPGA_EvalTaskSetDependanceMode(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {

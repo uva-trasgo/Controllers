@@ -157,7 +157,7 @@ int main(int argc, char *argv[]) {
 
 	// 8. Sync and stop timer
 	cudaDeviceSynchronize();
-	exec_clock = exec_clock - omp_get_wtime();
+	exec_clock = omp_get_wtime() - exec_clock;
 
 	// 9. Copy result from device memory to host memory
 	cudaMemcpy(B, d_B, MATRIX_SIZE, cudaMemcpyDeviceToHost);

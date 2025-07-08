@@ -9,12 +9,6 @@
  * The relevant license, warranty and copyright notice is available in the Controller project repository.
  */
 
-#ifndef CL_USE_DEPRECATED_OPENCL_1_2_APIS
-#define CL_USE_DEPRECATED_OPENCL_1_2_APIS
-#endif // CL_USE_DEPRECATED_OPENCL_1_2_APIS
-
-#include <CL/cl.h>
-
 #include <Kernel/Ctrl_KernelArgs.h>
 
 /**
@@ -32,10 +26,6 @@
  */
 #define CTRL_KERNEL_FPGA_KERNEL_CHAR(name, type, dims, ...) \
 	CTRL_KERNEL_FPGA_KERNEL_CHAR_##type(name, dims, __VA_ARGS__)
-
-/* Task kernel model */
-#define CTRL_KERNEL_FPGA_KERNEL_CHAR_0(name, ...) \
-	Ctrl_Thread local_size_FPGA_##name = CTRL_THREAD_NULL;
 
 /**
  * Create default characterization for a \e FPGA kernel, using \e MANUAL characterization mode.
@@ -114,19 +104,20 @@
 #define CTRL_KERNEL_FPGA_KERNEL_CHAR_2(name, dims, A, B, C) \
 	Ctrl_Thread local_size_FPGA_##name = CTRL_KERNEL_FPGA_CHAR_##dims##A##B##C
 
-#define CTRL_KERNEL_FPGA_CHAR_1defdefdef          {.dims = 1, .i = 256, .j = 0, .k = 0};
-#define CTRL_KERNEL_FPGA_CHAR_2defdefdef          {.dims = 2, .i = 256, .j = 1, .k = 0};
-#define CTRL_KERNEL_FPGA_CHAR_1mediumlowlow       {.dims = 1, .i = 128, .j = 0, .k = 0};
-#define CTRL_KERNEL_FPGA_CHAR_1fulllowlow         {.dims = 1, .i = 256, .j = 0, .k = 0};
-#define CTRL_KERNEL_FPGA_CHAR_2fulllowlow         {.dims = 2, .i = 128, .j = 2, .k = 0};
-#define CTRL_KERNEL_FPGA_CHAR_2square32lowlow     {.dims = 2, .i = 16, .j = 16, .k = 0};
-#define CTRL_KERNEL_FPGA_CHAR_2fullmediummedium   {.dims = 2, .i = 128, .j = 2, .k = 0};
-#define CTRL_KERNEL_FPGA_CHAR_2fulllowhigh        {.dims = 2, .i = 64, .j = 3, .k = 0};
-#define CTRL_KERNEL_FPGA_CHAR_2mediummediummedium {.dims = 2, .i = 128, .j = 2, .k = 0};
-#define CTRL_KERNEL_FPGA_CHAR_2fixedsquare32      {.dims = 2, .i = 16, .j = 16, .k = 0};
-#define CTRL_KERNEL_FPGA_CHAR_2fixedsquare16      {.dims = 2, .i = 16, .j = 16, .k = 0};
-#define CTRL_KERNEL_FPGA_CHAR_2fixedsquare4       {.dims = 2, .i = 4, .j = 4, .k = 0};
-#define CTRL_KERNEL_FPGA_CHAR_2fixedsquare2       {.dims = 2, .i = 2, .j = 2, .k = 0};
-
+#define CTRL_KERNEL_FPGA_CHAR_1defdefdef          {.dims = 1, .i = 256, .j = 1, .k = 1};
+#define CTRL_KERNEL_FPGA_CHAR_2defdefdef          {.dims = 2, .i = 1, .j = 256, .k = 1};
+#define CTRL_KERNEL_FPGA_CHAR_1mediumlowlow       {.dims = 1, .i = 128, .j = 1, .k = 1};
+#define CTRL_KERNEL_FPGA_CHAR_1fulllowlow         {.dims = 1, .i = 256, .j = 1, .k = 1};
+#define CTRL_KERNEL_FPGA_CHAR_2fulllowlow         {.dims = 2, .i = 2, .j = 128, .k = 1};
+#define CTRL_KERNEL_FPGA_CHAR_2fullmediummedium   {.dims = 2, .i = 2, .j = 128, .k = 1};
+#define CTRL_KERNEL_FPGA_CHAR_2mediummediummedium {.dims = 2, .i = 2, .j = 128, .k = 1};
+#define CTRL_KERNEL_FPGA_CHAR_2fulllowhigh        {.dims = 2, .i = 3, .j = 64, .k = 1};
+#define CTRL_KERNEL_FPGA_CHAR_2square32lowlow     {.dims = 2, .i = 16, .j = 16, .k = 1};
+#define CTRL_KERNEL_FPGA_CHAR_2fixedsquare32      {.dims = 2, .i = 16, .j = 16, .k = 1};
+#define CTRL_KERNEL_FPGA_CHAR_2fixedsquare16      {.dims = 2, .i = 16, .j = 16, .k = 1};
+#define CTRL_KERNEL_FPGA_CHAR_2fixedsquare4       {.dims = 2, .i = 4, .j = 4, .k = 1};
+#define CTRL_KERNEL_FPGA_CHAR_2fixedsquare2       {.dims = 2, .i = 2, .j = 2, .k = 1};
+// An automatic TASK char expanding to CTRL_THREAD_NULL would be fancy, but CHARs are broken right now,
+// so it is not easy to implement.
 ///@endcond
 #endif // _CTRL_KERNEL_FPGA_CHAR_H_

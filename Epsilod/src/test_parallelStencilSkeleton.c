@@ -163,18 +163,38 @@ void outputData(HitTile_float io_tile, Epsilod_ext ext_params) {
 
 /* D. DECLARATIONS OF OPTIMIZED STENCIL KERNELS:
  * SEE test_parallelStencilSkeleton_kernels.c FILE */
+// TODO: Find a better API for border-specific kernel registering and detecting.
 REGISTER_STENCIL(updateCell_1dNC4, GENERIC, DEFAULT);
 REGISTER_STENCIL(updateCell_1dC2, GENERIC, DEFAULT);
-REGISTER_STENCIL(updateCell_4, GENERIC, DEFAULT);
-REGISTER_STENCIL(updateCell_9, GENERIC, DEFAULT);
-REGISTER_STENCIL(updateCell_NC9, GENERIC, DEFAULT);
-REGISTER_STENCIL(updateCell_F5, GENERIC, DEFAULT);
+#ifdef EPSILOD_FPGA_OPTIMIZED
+REGISTER_STENCIL(updateCell_4, GENERIC, DEFAULT, FPGA, TASK);
+REGISTER_STENCIL(updateCell_4_verticalBorder, FPGA, TASK);
+REGISTER_BORDER_DETECTOR(updateCell_4, updateCell_4, updateCell_4_verticalBorder);
+#else // !EPSILOD_FPGA_OPTMIZED
+REGISTER_STENCIL(updateCell_4, GENERIC, DEFAULT, FPGA, NDRANGE);
+REGISTER_STENCIL(updateCell_4_verticalBorder, FPGA, NDRANGE);
+REGISTER_STENCIL(updateCell_4_horizontalBorder, FPGA, NDRANGE);
+REGISTER_BORDER_DETECTOR(updateCell_4, updateCell_4_horizontalBorder, updateCell_4_verticalBorder);
+#endif // EPSILOD_FPGA_OPTMIZED
+REGISTER_STENCIL(updateCell_9, GENERIC, DEFAULT, FPGA, NDRANGE);
+REGISTER_STENCIL(updateCell_9_verticalBorder, FPGA, NDRANGE);
+REGISTER_STENCIL(updateCell_9_horizontalBorder, FPGA, NDRANGE);
+REGISTER_BORDER_DETECTOR(updateCell_9, updateCell_9_horizontalBorder, updateCell_9_verticalBorder);
+REGISTER_STENCIL(updateCell_NC9, GENERIC, DEFAULT, FPGA, NDRANGE);
+REGISTER_STENCIL(updateCell_NC9_verticalBorder, FPGA, NDRANGE);
+REGISTER_STENCIL(updateCell_NC9_horizontalBorder, FPGA, NDRANGE);
+REGISTER_BORDER_DETECTOR(updateCell_NC9, updateCell_NC9_horizontalBorder, updateCell_NC9_verticalBorder);
+REGISTER_STENCIL(updateCell_F5, GENERIC, DEFAULT, FPGA, NDRANGE);
+REGISTER_STENCIL(updateCell_F5_verticalBorder, FPGA, NDRANGE);
+REGISTER_STENCIL(updateCell_F5_horizontalBorder, FPGA, NDRANGE);
+REGISTER_BORDER_DETECTOR(updateCell_F5, updateCell_F5_horizontalBorder, updateCell_F5_verticalBorder);
 REGISTER_STENCIL(updateCell_3d27, GENERIC, DEFAULT);
 
 /* HELP: PRINT ARGUMENT USAGE */
 void print_usage(char *argv[]) {
 	if (hit_Rank == 0) {
-		fprintf(stderr, "\n=== DISTRIBUTED MULTI-GPU STENCIL COMPUTATION EXAMPLE ===\n");
+		fprintf(stderr, "\n===                             [ EPSILOD ]                              ===");
+		fprintf(stderr, "\n=== Distributed multi-GPU/CPU/FPGA iterative stencil computation example ===\n");
 		fprintf(stderr, "\nUsage: %s <stencilId> <size0> [ <size1> [ <size2> ] ] <numIterations> <device_selection_file>\n", argv[0]);
 		fprintf(stderr, "\t1dnc4\t1D Non-Compact, 4-points\n");
 		fprintf(stderr, "\t1dc2\t1D Compact, 2-points\n");
@@ -253,7 +273,7 @@ int main(int argc, char *argv[]) {
 	int d, dims, numIter;
 	int sizes[3] = {0, 0, 0};
 	dims         = argv[1][0] == '_' ? argv[1][1] - '0' : argv[1][0] - '0';
-	if (dims < 0 || dims > 3) {
+	if (dims < 1 || dims > 3) {
 		fprintf(stderr, "Error: Non-supported number of dimensions: %d, should be in the range [1:3]\n\n", dims);
 		Ctrl_Finalize();
 		exit(EXIT_FAILURE);
@@ -292,7 +312,7 @@ int main(int argc, char *argv[]) {
 		shpStencil  = shpSt_2dCompact;
 		stencilData = stencilData_4;
 		factor      = 4;
-		f_stencil   = updateCell_4;
+		f_stencil   = updateCell_4_multikernel;
 	} else if (!strcmp(stencilType, "2d9")) {
 		shpStencil  = shpSt_2dCompact;
 		stencilData = stencilData_9;

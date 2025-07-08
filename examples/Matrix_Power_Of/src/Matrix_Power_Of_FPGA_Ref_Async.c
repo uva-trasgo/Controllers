@@ -30,8 +30,6 @@
 #define SEED    6834723
 #define EPSILON 0.0001
 
-#define _CTRL_EXAMPLES_OPENCL_GPU_ERROR_CHECK_
-
 double main_clock;
 double exec_clock;
 
@@ -201,17 +199,11 @@ int main(int argc, char *argv[]) {
 			kernel_path[0]    = '\0';
 			strcat(kernel_path, STRINGIFY(REF_KERNEL_PATH));
 			strcat(kernel_path, CELL_AUTOM_KERNEL_NAME_MULT);
-			strcat(kernel_path, "/");
-			strcat(kernel_path, CELL_AUTOM_KERNEL_NAME_MULT);
 			if (EXEC_MODE == FPGA_PROFILING)
 				strcat(kernel_path, "_profiling");
 			else if (EXEC_MODE == FPGA_EMULATION)
 				strcat(kernel_path, "_emu");
-			#ifdef _INTEL_KERNELS
 			strcat(kernel_path, "_Ref.aocx");
-			#elif _XILINX_KERNELS
-			strcat(kernel_path, "_Ref.xclbin");
-			#endif
 			if (!(binary_file = fopen(kernel_path, "rb"))) {
 				printf("Kernel file not found.\n");
 				exit(ERR_NOT_FOUND);
@@ -231,8 +223,8 @@ int main(int argc, char *argv[]) {
 
 			kernel_mult = clCreateKernel(program, CELL_AUTOM_KERNEL_NAME_MULT, &err);
 
-			local_size[0] = LOCAL_SIZE_0;
-			local_size[1] = LOCAL_SIZE_1;
+			local_size[0] = LOCAL_SIZE;
+			local_size[1] = LOCAL_SIZE;
 
 			global_size[0] = global_size[1] = SIZE;
 

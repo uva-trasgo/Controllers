@@ -10,6 +10,9 @@
  * @author Javier Fresno Bausela
  * @author Carlos de Blas Carton
  * @date Mar 2013
+ * @version 1.6
+ * @author Arturo Gonzalez-Escribano
+ * @date Dec 2024 
  */
 
 /*
@@ -69,15 +72,45 @@ typedef MPI_Datatype HitType;
  */
 #define HIT_CHAR MPI_CHAR
 /**
+ * Constant for signed char basic type.
+ * @hideinitializer
+ */
+#define HIT_SIGNED_CHAR MPI_SIGNED_CHAR
+/**
+ * Constant for unsigned char basic type.
+ * @hideinitializer
+ */
+#define HIT_UNSIGNED_CHAR MPI_UNSIGNED_CHAR
+/**
+ * Constant for short integer basic type.
+ * @hideinitializer
+ */
+#define HIT_SHORT MPI_SHORT
+/**
+ * Constant for unsigned short integer basic type.
+ * @hideinitializer
+ */
+#define HIT_UNSIGNED_SHORT MPI_UNSIGNED_SHORT
+/**
  * Constant for integer basic type.
  * @hideinitializer
  */
 #define HIT_INT MPI_INT
 /**
+ * Constant for unsigned integer basic type.
+ * @hideinitializer
+ */
+#define HIT_UNSIGNED_INT MPI_UNSIGNED
+/**
  * Constant for integer long type.
  * @hideinitializer
  */
 #define HIT_LONG MPI_LONG
+/**
+ * Constant for unsigned integer long type.
+ * @hideinitializer
+ */
+#define HIT_UNSIGNED_LONG MPI_UNSIGNED_LONG
 /**
  * Constant for single precision real basic type.
  * @hideinitializer
@@ -89,12 +122,73 @@ typedef MPI_Datatype HitType;
  */
 #define HIT_DOUBLE MPI_DOUBLE
 /**
+ * Constant for long double precision real basic type.
+ * @hideinitializer
+ */
+#define HIT_LONG_DOUBLE MPI_LONG_DOUBLE
+/**
  * Constant for boolean basic type.
  * @hideinitializer
  */
-#define HIT_BOOL MPI_BOOL
+#define HIT_BOOL MPI_C_BOOL
+/**
+ * Constant for float-integer basic type.
+ * @hideinitializer
+ */
+#define HIT_FLOAT_INT MPI_FLOAT_INT
+/**
+ * Constant for double-integer basic type.
+ * @hideinitializer
+ */
+#define HIT_DOUBLE_INT MPI_DOUBLE_INT
+/**
+ * Constant for long-double basic type.
+ * @hideinitializer
+ */
+#define HIT_LONG_DOUBLE_INT MPI_LONG_DOUBLE_INT
+
+/**
+ * Constant for float complex basic type.
+ * @hideinitializer
+ */
+#define HIT_COMPLEX MPI_C_COMPLEX
+/**
+ * Constant for double complex basic type.
+ * @hideinitializer
+ */
+#define HIT_DOUBLE_COMPLEX MPI_C_DOUBLE_COMPLEX
+/**
+ * Constant for long double complex basic type.
+ * @hideinitializer
+ */
+#define HIT_LONG_DOUBLE_COMPLEX MPI_C_LONG_DOUBLE_COMPLEX
 /** Typedef for addresses. */
 typedef MPI_Aint HitAint;
+
+/**
+ * Transform a C type into the equivalent HitType for a comm object
+ * @hideinitializer
+ */
+#define hit_comTranslateType( type )	_Generic( (type){0}, \
+		char: HIT_CHAR,				\
+		signed char: HIT_SIGNED_CHAR,		\
+		unsigned char: HIT_UNSIGNED_CHAR,	\
+		short: HIT_SHORT,			\
+		unsigned short: HIT_UNSIGNED_SHORT,	\
+		int: HIT_INT,				\
+		unsigned int: HIT_UNSIGNED_INT,		\
+		long: HIT_LONG,				\
+		unsigned long: HIT_UNSIGNED_LONG,	\
+		float: HIT_FLOAT,			\
+		double: HIT_DOUBLE,			\
+		long double: HIT_LONG_DOUBLE,		\
+		_Bool: HIT_BOOL,			\
+		float _Complex: HIT_COMPLEX,		\
+		_Complex: HIT_DOUBLE_COMPLEX,		\
+		long double _Complex: HIT_LONG_DOUBLE_COMPLEX	\
+		)
+		// No default value. Error when the type is unknown
+
 /** @} */
 
 /** Extra HitTypes committed in initialization. */

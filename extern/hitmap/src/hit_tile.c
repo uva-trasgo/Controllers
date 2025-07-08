@@ -1129,8 +1129,6 @@ int hit_tileFlattenDims(void *varP) {
 	// NO DIMENSIONS TO BE FLATTENED
 	if ( i == hit_shapeDims(var->shape)-1 ) return 1;
 
-	printf("----------> %d\n", i );
-
 	/* 3. FLATTEN CARDINALITIES AND SHAPE */
 	int lastDim = i;
 	for (i = hit_tileDims(*var)-1; i>lastDim; i--) {

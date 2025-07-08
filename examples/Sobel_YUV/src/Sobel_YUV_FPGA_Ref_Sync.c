@@ -131,9 +131,6 @@ int main(int argc, char **argv) {
 
 	cl_int err;
 
-	size_t local_size[2];
-	size_t global_sizes[N_IMG][2];
-
 	cl_platform_id platform_id;
 	cl_device_id   device_id;
 
@@ -262,22 +259,6 @@ int main(int argc, char **argv) {
 
 	kernel_sobel_operation = clCreateKernel(program, SOBEL_YUV_KERNEL_NAME_SOBEL_OPERATION, &err);
 	OPENCL_ASSERT_ERROR(err);
-
-	local_size[0] = LOCAL_SIZE_0;
-	local_size[1] = LOCAL_SIZE_1;
-
-	for (int i = 0; i < N_IMG; i++) {
-		global_sizes[i][0] = Width[i];
-		global_sizes[i][1] = Height[i];
-
-		if ((Width[i] % local_size[0]) != 0) {
-			global_sizes[i][0] += (local_size[0] - (Width[i] % local_size[0]));
-		}
-
-		if ((Height[i] % local_size[1]) != 0) {
-			global_sizes[i][1] += (local_size[1] - (Height[i] % local_size[1]));
-		}
-	}
 
 	properties = 0;
 	queue      = clCreateCommandQueue(context, device_id, properties, &err);

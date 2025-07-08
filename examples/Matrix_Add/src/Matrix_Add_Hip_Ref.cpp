@@ -10,6 +10,7 @@
 #include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 #define SEED 6834723
 
@@ -142,7 +143,7 @@ int main(int argc, char *argv[]) {
 
 	// 8. Sync and stop timer
 	hipDeviceSynchronize();
-	exec_clock = exec_clock - omp_get_wtime();
+	exec_clock = omp_get_wtime() - exec_clock;
 
 	// 9. Copy result from device memory to host memory
 	hipMemcpy(C, d_C, MATRIX_SIZE, hipMemcpyDeviceToHost);

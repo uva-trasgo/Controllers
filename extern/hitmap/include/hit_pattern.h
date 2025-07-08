@@ -85,6 +85,11 @@ typedef struct {
  * @hideinitializer
  */
 #define	HIT_PAT_UNORDERED	1
+/** 
+ * End of asynchronous operations in the pattern
+ * @hideinitializer
+ */
+#define	HIT_PAT_END		-1
 
 /* Hit PATTERN: NULL VALUE */
 /**
@@ -107,7 +112,8 @@ extern HitPattern HIT_PATTERN_NULL;
  * @result \e HitPattern New empty pattern formed
  */
 static inline HitPattern hit_pattern( int defaultMode ) {
-	HitPattern newPat = { 0, defaultMode, NULL, NULL };
+	HitPattern newPat = HIT_PATTERN_NULL_STATIC;
+	newPat.defaultMode = defaultMode;
 	return newPat;
 }
 
@@ -157,6 +163,23 @@ void hit_patternDoUnordered( HitPattern pattern );
 * @param pattern A HitPattern object.
 */
 void hit_patternStartAsync( HitPattern pattern );
+
+/* Hit PATTERN: STEP OF ASYNC SEND/RECV */
+/**
+* Wait for the next completed step of asynchronous communications in a pattern.
+* @param pattern A HitPattern object.
+* @return int The index of the completed step, or HIT_PAT_END if all are completed
+*/
+int hit_patternStepAsync( HitPattern pattern );
+
+/* Hit PATTERN: STEP OF ASYNC RECV */
+/**
+* Wait for the next completed recv step of asynchronous communications in a pattern.
+* @param pattern A HitPattern object.
+* @return int The index of the completed recv step, or HIT_PAT_END if all are completed
+*/
+int hit_patternStepAsyncRecv( HitPattern pattern );
+
 
 /* Hit PATTERN: END ASYNC SEND/RECV */
 /**
@@ -257,6 +280,14 @@ void hit_patMatMultBitmapInternal(HitPattern *pattern, HitLayout lay, HitShape o
 /** @endcond */
 
 
+
+// FUNCTIONS NEEDED FOR ALB
+
+typedef HitShape (*expandBorderFunction)(HitTile* globalMat, int* borderLow, int* borderHigh, HitShape shape);
+HitPattern hit_patternLayRedistributeGeneric2(	HitLayout lay1, HitLayout lay2, void *tileP1, void *tileP2, HitType baseType,
+			expandBorderFunction f_for_inbound, expandBorderFunction f_for_outbound);
+HitPattern hit_patternLayRedistributeGeneric(	HitLayout lay1, HitLayout lay2, void *tileP1, void *tileP2, HitType baseType,
+			expandBorderFunction f_for_inbound, expandBorderFunction f_for_outbound);
 
 
 #ifdef __cplusplus
