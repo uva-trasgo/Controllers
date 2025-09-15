@@ -11,98 +11,92 @@
 
 Ctrl_NewType(float);
 
-/* A.1. 1D NON-COMPACT RADIUS 2 */
+// 1D non-compact radius 2
 CTRL_KERNEL(updateCell_1dNC4, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
-	int x = thr_i;
-
-	hit(matrix, x) = (0.5 * (hit(matrixCopy, x - 2) + hit(matrixCopy, x + 2)) +
-					  hit(matrixCopy, x - 1) + hit(matrixCopy, x + 1)) /
-					 3;
+	hit(matrix, thr_i) = (0.5 * (hit(matrixCopy, thr_i - 2) + hit(matrixCopy, thr_i + 2)) +
+						  hit(matrixCopy, thr_i - 1) + hit(matrixCopy, thr_i + 1)) /
+						 3;
 });
 
-/* A.1. 1D COMPACT RADIUS 1 */
+// 1D compact radius 1
 CTRL_KERNEL(updateCell_1dC2, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
-	int x = thr_i;
-
-	hit(matrix, x) = (hit(matrixCopy, x - 1) + hit(matrixCopy, x + 1)) / 2;
+	hit(matrix, thr_i) = (hit(matrixCopy, thr_i - 1) + hit(matrixCopy, thr_i + 1)) / 2;
 });
 
-/* B.1. 2D COMPACT, RADIUS 1: 4-POINT STAR, NO CORNERS */
-CTRL_KERNEL(updateCell_4, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
-	int x = thr_i;
-	int y = thr_j;
-
-	hit(matrix, x, y) = (hit(matrixCopy, x - 1, y) +
-						 hit(matrixCopy, x + 1, y) +
-						 hit(matrixCopy, x, y - 1) +
-						 hit(matrixCopy, x, y + 1)) /
-						4;
+// 2D compact, radius 1: 4-point star, no corners
+CTRL_KERNEL(updateCell_2d4, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
+	hit(matrix, thr_i, thr_j) = (hit(matrixCopy, thr_i - 1, thr_j) +
+								 hit(matrixCopy, thr_i + 1, thr_j) +
+								 hit(matrixCopy, thr_i, thr_j - 1) +
+								 hit(matrixCopy, thr_i, thr_j + 1)) /
+								4;
 });
 
-/* B.2. 2D COMPACT, RADIUS 1: 9-POINT STAR, CORNERS INCLUDED */
-CTRL_KERNEL(updateCell_9, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
-	int x = thr_i;
-	int y = thr_j;
-
-	hit(matrix, x, y) = (4 * (hit(matrixCopy, x - 1, y) + hit(matrixCopy, x + 1, y) + hit(matrixCopy, x, y - 1) + hit(matrixCopy, x, y + 1)) +
-						 (hit(matrixCopy, x - 1, y - 1) + hit(matrixCopy, x + 1, y - 1) + hit(matrixCopy, x - 1, y + 1) + hit(matrixCopy, x + 1, y + 1))) /
-						20;
+// 2D compact, radius 1: 8-point star, corners included
+CTRL_KERNEL(updateCell_2d8, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
+	hit(matrix, thr_i, thr_j) = (4 * (hit(matrixCopy, thr_i - 1, thr_j) + hit(matrixCopy, thr_i + 1, thr_j) + hit(matrixCopy, thr_i, thr_j - 1) + hit(matrixCopy, thr_i, thr_j + 1)) +
+								 (hit(matrixCopy, thr_i - 1, thr_j - 1) + hit(matrixCopy, thr_i + 1, thr_j - 1) + hit(matrixCopy, thr_i - 1, thr_j + 1) + hit(matrixCopy, thr_i + 1, thr_j + 1))) /
+								20;
 });
 
-/* B.3. 2D NON-COMPACT, RADIUS 2: 9-POINT STAR, NO CORNERS */
-CTRL_KERNEL(updateCell_NC9, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
-	int x = thr_i;
-	int y = thr_j;
-
-	hit(matrix, x, y) = ((hit(matrixCopy, x - 2, y) + hit(matrixCopy, x + 2, y) + hit(matrixCopy, x, y - 2) + hit(matrixCopy, x, y + 2)) +
-						 4 * (hit(matrixCopy, x - 1, y) + hit(matrixCopy, x + 1, y) + hit(matrixCopy, x, y - 1) + hit(matrixCopy, x, y + 1))) /
-						20;
+// 2D non-compact, radius 2: 8-point star, no corners
+CTRL_KERNEL(updateCell_2dNC8, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
+	hit(matrix, thr_i, thr_j) = ((hit(matrixCopy, thr_i - 2, thr_j) + hit(matrixCopy, thr_i + 2, thr_j) + hit(matrixCopy, thr_i, thr_j - 2) + hit(matrixCopy, thr_i, thr_j + 2)) +
+								 4 * (hit(matrixCopy, thr_i - 1, thr_j) + hit(matrixCopy, thr_i + 1, thr_j) + hit(matrixCopy, thr_i, thr_j - 1) + hit(matrixCopy, thr_i, thr_j + 1))) /
+								20;
 });
 
-/* B.3. 2D NON-COMPACT, NON-SYMMETRIC. RADIUS 2: 5-POINT STAR
- * FORWARD-DOWN WITH ONE CORNER ELEMENT */
-CTRL_KERNEL(updateCell_F5, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
-	int x = thr_i;
-	int y = thr_j;
-
-	hit(matrix, x, y) = (2.0f * (hit(matrixCopy, x - 1, y) + hit(matrixCopy, x, y - 1)) +
-						 (hit(matrixCopy, x - 2, y) + hit(matrixCopy, x, y - 2)) +
-						 .5f * hit(matrixCopy, x - 1, y - 1)) /
-						6.5f;
+// 2D non-compact, non-symmetric. radius 2: 5-point star forward-down with one corner element
+CTRL_KERNEL(updateCell_2dF5, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
+	hit(matrix, thr_i, thr_j) = (2.0f * (hit(matrixCopy, thr_i - 1, thr_j) + hit(matrixCopy, thr_i, thr_j - 1)) +
+								 (hit(matrixCopy, thr_i - 2, thr_j) + hit(matrixCopy, thr_i, thr_j - 2)) +
+								 .5f * hit(matrixCopy, thr_i - 1, thr_j - 1)) /
+								6.5f;
 });
 
-/* C.1. 3D COMPACT. RADIUS 1: 27-POINT STAR */
+// 3D compact. radius 1: 27-point star
 CTRL_KERNEL(updateCell_3d27, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
-	int x = thr_i;
-	int y = thr_j;
-	int z = thr_k;
+	hit(matrix, thr_i, thr_j, thr_k) = (hit(matrixCopy, thr_i - 1, thr_j - 1, thr_k - 1) +
+										hit(matrixCopy, thr_i - 1, thr_j - 1, thr_k) +
+										hit(matrixCopy, thr_i - 1, thr_j - 1, thr_k + 1) +
+										hit(matrixCopy, thr_i - 1, thr_j, thr_k - 1) +
+										hit(matrixCopy, thr_i - 1, thr_j, thr_k) +
+										hit(matrixCopy, thr_i - 1, thr_j, thr_k + 1) +
+										hit(matrixCopy, thr_i - 1, thr_j + 1, thr_k - 1) +
+										hit(matrixCopy, thr_i - 1, thr_j + 1, thr_k) +
+										hit(matrixCopy, thr_i - 1, thr_j + 1, thr_k + 1) +
+										hit(matrixCopy, thr_i, thr_j - 1, thr_k - 1) +
+										hit(matrixCopy, thr_i, thr_j - 1, thr_k) +
+										hit(matrixCopy, thr_i, thr_j - 1, thr_k + 1) +
+										hit(matrixCopy, thr_i, thr_j, thr_k - 1) +
+										hit(matrixCopy, thr_i, thr_j, thr_k) +
+										hit(matrixCopy, thr_i, thr_j, thr_k + 1) +
+										hit(matrixCopy, thr_i, thr_j + 1, thr_k - 1) +
+										hit(matrixCopy, thr_i, thr_j + 1, thr_k) +
+										hit(matrixCopy, thr_i, thr_j + 1, thr_k + 1) +
+										hit(matrixCopy, thr_i + 1, thr_j - 1, thr_k - 1) +
+										hit(matrixCopy, thr_i + 1, thr_j - 1, thr_k) +
+										hit(matrixCopy, thr_i + 1, thr_j - 1, thr_k + 1) +
+										hit(matrixCopy, thr_i + 1, thr_j, thr_k - 1) +
+										hit(matrixCopy, thr_i + 1, thr_j, thr_k) +
+										hit(matrixCopy, thr_i + 1, thr_j, thr_k + 1) +
+										hit(matrixCopy, thr_i + 1, thr_j + 1, thr_k - 1) +
+										hit(matrixCopy, thr_i + 1, thr_j + 1, thr_k) +
+										hit(matrixCopy, thr_i + 1, thr_j + 1, thr_k + 1)) /
+									   27;
+});
 
-	hit(matrix, x, y, z) = (hit(matrixCopy, x - 1, y - 1, z - 1) +
-							hit(matrixCopy, x - 1, y - 1, z) +
-							hit(matrixCopy, x - 1, y - 1, z + 1) +
-							hit(matrixCopy, x - 1, y, z - 1) +
-							hit(matrixCopy, x - 1, y, z) +
-							hit(matrixCopy, x - 1, y, z + 1) +
-							hit(matrixCopy, x - 1, y + 1, z - 1) +
-							hit(matrixCopy, x - 1, y + 1, z) +
-							hit(matrixCopy, x - 1, y + 1, z + 1) +
-							hit(matrixCopy, x, y - 1, z - 1) +
-							hit(matrixCopy, x, y - 1, z) +
-							hit(matrixCopy, x, y - 1, z + 1) +
-							hit(matrixCopy, x, y, z - 1) +
-							hit(matrixCopy, x, y, z) +
-							hit(matrixCopy, x, y, z + 1) +
-							hit(matrixCopy, x, y + 1, z - 1) +
-							hit(matrixCopy, x, y + 1, z) +
-							hit(matrixCopy, x, y + 1, z + 1) +
-							hit(matrixCopy, x + 1, y - 1, z - 1) +
-							hit(matrixCopy, x + 1, y - 1, z) +
-							hit(matrixCopy, x + 1, y - 1, z + 1) +
-							hit(matrixCopy, x + 1, y, z - 1) +
-							hit(matrixCopy, x + 1, y, z) +
-							hit(matrixCopy, x + 1, y, z + 1) +
-							hit(matrixCopy, x + 1, y + 1, z - 1) +
-							hit(matrixCopy, x + 1, y + 1, z) +
-							hit(matrixCopy, x + 1, y + 1, z + 1)) /
-						   27;
+// 4D compact. radius 1: 8-point star
+CTRL_KERNEL(updateCell_4d8, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
+	for (int l = 0; l < hit_tileDimCard(matrix, 3); l++)
+		hit(matrix, thr_i, thr_j, thr_k, l) =
+			(hit(matrixCopy, thr_i - 1, thr_j, thr_k, l) +
+			 hit(matrixCopy, thr_i + 1, thr_j, thr_k, l) +
+			 hit(matrixCopy, thr_i, thr_j - 1, thr_k, l) +
+			 hit(matrixCopy, thr_i, thr_j + 1, thr_k, l) +
+			 hit(matrixCopy, thr_i, thr_j, thr_k - 1, l) +
+			 hit(matrixCopy, thr_i, thr_j, thr_k + 1, l) +
+			 hit(matrixCopy, thr_i, thr_j, thr_k, l - 1) +
+			 hit(matrixCopy, thr_i, thr_j, thr_k, l + 1)) /
+			8;
 });

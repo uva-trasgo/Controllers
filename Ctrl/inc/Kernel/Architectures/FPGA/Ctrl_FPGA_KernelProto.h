@@ -29,29 +29,31 @@
 #define CTRL_KERNEL_FN_FPGA(name, type, subtype, ...) \
 	CTRL_KERNEL_FN_FPGA_##subtype(name, type, subtype, __VA_ARGS__)
 
-#define CTRL_KERNEL_FN_FPGA_TASK(name, type, subtype, ...)                                                                          \
-	__attribute__((max_global_work_dim(0)))                                                                                         \
-	__kernel void ctrl_kernel_fpga_##type##_##subtype##_##name(Ctrl_Thread ctrl_threads CTRL_KERNEL_FPGA_PARSE_ARGS(__VA_ARGS__)) { \
+#define CTRL_KERNEL_FN_FPGA_TASK(name, type, subtype, ...)                                                            \
+	__attribute__((max_global_work_dim(0)))                                                                           \
+	__kernel void                                                                                                     \
+	ctrl_kernel_fpga_##type##_##subtype##_##name(Ctrl_Thread ctrl_threads CTRL_KERNEL_FPGA_PARSE_ARGS(__VA_ARGS__)) { \
 		CTRL_KERNEL_FPGA_INIT_ARGS(__VA_ARGS__)
 
-#define CTRL_KERNEL_FN_FPGA_NDRANGE(name, type, subtype, ...)                                                                       \
-	__attribute__((uses_global_work_offset(0)))                                                                                     \
-	__kernel void ctrl_kernel_fpga_##type##_##subtype##_##name(Ctrl_Thread ctrl_threads CTRL_KERNEL_FPGA_PARSE_ARGS(__VA_ARGS__)) { \
-		CTRL_KERNEL_FPGA_INIT_ARGS(__VA_ARGS__)                                                                                     \
-		unsigned int thr_i = 0;                                                                                                     \
-		unsigned int thr_j = 0;                                                                                                     \
-		unsigned int thr_k = 0;                                                                                                     \
-		if (ctrl_threads.dims == 3) {                                                                                               \
-			thr_k = get_global_id(0);                                                                                               \
-			thr_j = get_global_id(1);                                                                                               \
-			thr_i = get_global_id(2);                                                                                               \
-		} else if (ctrl_threads.dims == 2) {                                                                                        \
-			thr_j = get_global_id(0);                                                                                               \
-			thr_i = get_global_id(1);                                                                                               \
-		} else {                                                                                                                    \
-			thr_i = get_global_id(0);                                                                                               \
-		}                                                                                                                           \
-		if (thr_i >= ctrl_threads.i || thr_j >= ctrl_threads.j || thr_k >= ctrl_threads.k)                                          \
+#define CTRL_KERNEL_FN_FPGA_NDRANGE(name, type, subtype, ...)                                                         \
+	__attribute__((uses_global_work_offset(0)))                                                                       \
+	__kernel void                                                                                                     \
+	ctrl_kernel_fpga_##type##_##subtype##_##name(Ctrl_Thread ctrl_threads CTRL_KERNEL_FPGA_PARSE_ARGS(__VA_ARGS__)) { \
+		CTRL_KERNEL_FPGA_INIT_ARGS(__VA_ARGS__)                                                                       \
+		int thr_i = 0;                                                                                                \
+		int thr_j = 0;                                                                                                \
+		int thr_k = 0;                                                                                                \
+		if (ctrl_threads.dims == 3) {                                                                                 \
+			thr_k = get_global_id(0);                                                                                 \
+			thr_j = get_global_id(1);                                                                                 \
+			thr_i = get_global_id(2);                                                                                 \
+		} else if (ctrl_threads.dims == 2) {                                                                          \
+			thr_j = get_global_id(0);                                                                                 \
+			thr_i = get_global_id(1);                                                                                 \
+		} else {                                                                                                      \
+			thr_i = get_global_id(0);                                                                                 \
+		}                                                                                                             \
+		if (thr_i >= (int)ctrl_threads.i || thr_j >= (int)ctrl_threads.j || thr_k >= (int)ctrl_threads.k)             \
 			return;
 /*
 	@author: Gabriel Rodriguez-Canal

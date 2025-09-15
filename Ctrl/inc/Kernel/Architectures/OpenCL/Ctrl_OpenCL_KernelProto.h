@@ -155,21 +155,21 @@
 
 #define CTRL_KERNEL_OPENCL_MOUNT_INNER_TILES(string, n, ...) CTRL_KERNEL_OPENCL_MOUNT_INNER_TILES_##n(string, __VA_ARGS__)
 
-#define CTRL_KERNEL_OPENCL_PARSE_THREADS "                                                 \
-		unsigned int thr_i = 0;                                                            \
-		unsigned int thr_j = 0;                                                            \
-		unsigned int thr_k = 0;                                                            \
-		if (ctrl_threads.dims == 3) {                                                      \
-			thr_k = get_global_id(0);                                                      \
-			thr_j = get_global_id(1);                                                      \
-			thr_i = get_global_id(2);                                                      \
-		} else if (ctrl_threads.dims == 2) {                                               \
-			thr_j = get_global_id(0);                                                      \
-			thr_i = get_global_id(1);                                                      \
-		} else {                                                                           \
-			thr_i = get_global_id(0);                                                      \
-		}                                                                                  \
-		if (thr_i >= ctrl_threads.i || thr_j >= ctrl_threads.j || thr_k >= ctrl_threads.k) \
+#define CTRL_KERNEL_OPENCL_PARSE_THREADS "                                                                \
+		int thr_i = 0;                                                                                    \
+		int thr_j = 0;                                                                                    \
+		int thr_k = 0;                                                                                    \
+		if (ctrl_threads.dims == 3) {                                                                     \
+			thr_k = get_global_id(0);                                                                     \
+			thr_j = get_global_id(1);                                                                     \
+			thr_i = get_global_id(2);                                                                     \
+		} else if (ctrl_threads.dims == 2) {                                                              \
+			thr_j = get_global_id(0);                                                                     \
+			thr_i = get_global_id(1);                                                                     \
+		} else {                                                                                          \
+			thr_i = get_global_id(0);                                                                     \
+		}                                                                                                 \
+		if (thr_i >= (int)ctrl_threads.i || thr_j >= (int)ctrl_threads.j || thr_k >= (int)ctrl_threads.k) \
 			return; "
 
 /**

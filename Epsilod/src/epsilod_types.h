@@ -13,7 +13,7 @@
 
 /* Default stencil base type */
 #ifndef EPSILOD_BASE_TYPE
-	#define EPSILOD_BASE_TYPE float
+#define EPSILOD_BASE_TYPE float
 #endif
 
 /* Definitions to declare compound types */
@@ -38,27 +38,27 @@
 
 /* Default extra parameters type */
 #ifndef EPSILOD_USER_TYPES
-	#define EPSILOD_USER_TYPES \
-		typedef struct {       \
-			int foo;           \
-		} Epsilod_ext;
+#define EPSILOD_USER_TYPES \
+	typedef struct {       \
+		int foo;           \
+	} Epsilod_ext;
 #endif
 
 /* Other types used in user declared functions */
-#define EPSILOD_MAX_DIMS 3
+#define EPSILOD_MAX_DIMS 4
 #ifndef CTRL_USER_TYPES
-	#define CTRL_USER_TYPES                          \
-		EPSILOD_USER_TYPES                           \
-		typedef struct {                             \
-			int low[EPSILOD_MAX_DIMS];               \
-			int high[EPSILOD_MAX_DIMS];              \
-		} EpsilodBorders;                            \
-		typedef struct {                             \
-			int            dims;                     \
-			int            size[EPSILOD_MAX_DIMS];   \
-			int            offset[EPSILOD_MAX_DIMS]; \
-			EpsilodBorders borders;                  \
-		} EpsilodCoords;
+#define CTRL_USER_TYPES                          \
+	EPSILOD_USER_TYPES                           \
+	typedef struct {                             \
+		int low[EPSILOD_MAX_DIMS];               \
+		int high[EPSILOD_MAX_DIMS];              \
+	} EpsilodBorders;                            \
+	typedef struct {                             \
+		int            dims;                     \
+		int            size[EPSILOD_MAX_DIMS];   \
+		int            offset[EPSILOD_MAX_DIMS]; \
+		EpsilodBorders borders;                  \
+	} EpsilodCoords;
 #endif
 
 #endif // _EPSILOD_TYPES_H_

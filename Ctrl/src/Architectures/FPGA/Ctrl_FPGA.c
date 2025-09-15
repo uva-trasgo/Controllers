@@ -807,63 +807,85 @@ void Ctrl_FPGA_WaitTileInner(Ctrl_FPGA *p_ctrl, Ctrl_Tile *p_tile_data) {
 }
 
 /* Macro to define MoveTo and MoveFrom logic */
-#define OpenCL_Move(type)                                                                                                 \
-	HitTile *p_parent = flat_tile.ref;                                                                                    \
-	size_t   offset   = 0;                                                                                                \
-	if (flat_tile.memStatus == HIT_MS_NOT_OWNER) {                                                                        \
-		while (p_parent->memStatus == HIT_MS_NOT_OWNER)                                                                   \
-			p_parent = p_parent->ref;                                                                                     \
-		offset = (((size_t)flat_tile.data) - ((size_t)p_parent->data)) / flat_tile.baseExtent;                            \
-	} else {                                                                                                              \
-		p_parent = &flat_tile;                                                                                            \
-	}                                                                                                                     \
-	/* 1D FLATTENED TILE -> CONTIGUOUS MEMORY */                                                                          \
-	if (flat_tile.shape.info.sig.numDims == 1) {                                                                          \
-		OPENCL_ASSERT_OP(                                                                                                 \
-			clEnqueue##type##Buffer(cmd_queue, p_tile_data_fpga->device_data,                                             \
-									CL_FALSE, offset * flat_tile.baseExtent,                                              \
-									((size_t)(flat_tile.acumCard)) * (flat_tile.baseExtent),                              \
-									flat_tile.data, 0, NULL,                                                              \
-									p_task->event.event.p_event_cl));                                                     \
-	} /* CONTIGUOUS 2D TILES */                                                                                           \
-	else if (flat_tile.shape.info.sig.numDims == 2) {                                                                     \
-		size_t dev_offset[3] = {                                                                                          \
-			(hit_tileDimBegin(flat_tile, 1) - hit_tileDimBegin(*p_parent, 1)) * p_parent->baseExtent,                     \
-			hit_tileDimBegin(flat_tile, 0) - hit_tileDimBegin(*p_parent, 0),                                              \
-			0};                                                                                                           \
-		size_t zero_offset[3] = {0, 0, 0};                                                                                \
-		size_t size[3]        = {flat_tile.card[1] * flat_tile.baseExtent, flat_tile.card[0], 1};                         \
-		OPENCL_ASSERT_OP(                                                                                                 \
-			clEnqueue##type##BufferRect(                                                                                  \
-				cmd_queue,                                                                                                \
-				p_tile_data_fpga->device_data,                                                                            \
-				CL_FALSE, dev_offset, zero_offset, size,                                                                  \
-				(p_parent->baseExtent) * p_parent->origAcumCard[1], 0,                                                    \
-				(p_parent->baseExtent) * p_parent->origAcumCard[1], 0,                                                    \
-				flat_tile.data, 0, NULL,                                                                                  \
-				p_task->event.event.p_event_cl));                                                                         \
-	} /* CONTIGUOUS 3D TILES */                                                                                           \
-	else if (flat_tile.shape.info.sig.numDims == 3) {                                                                     \
-		size_t dev_offset[3] = {                                                                                          \
-			(hit_tileDimBegin(flat_tile, 2) - hit_tileDimBegin(*p_parent, 2)) * p_parent->baseExtent,                     \
-			hit_tileDimBegin(flat_tile, 1) - hit_tileDimBegin(*p_parent, 1),                                              \
-			hit_tileDimBegin(flat_tile, 0) - hit_tileDimBegin(*p_parent, 0)};                                             \
-		size_t zero_offset[3] = {0, 0, 0};                                                                                \
-		size_t size[3]        = {flat_tile.card[2] * flat_tile.baseExtent, flat_tile.card[1], flat_tile.card[0]};         \
-		OPENCL_ASSERT_OP(                                                                                                 \
-			clEnqueue##type##BufferRect(                                                                                  \
-				cmd_queue,                                                                                                \
-				p_tile_data_fpga->device_data,                                                                            \
-				CL_FALSE, dev_offset, zero_offset, size,                                                                  \
-				(p_parent->baseExtent) * p_parent->card[2],                                                               \
-				(p_parent->baseExtent) * p_parent->origAcumCard[1],                                                       \
-				(p_parent->baseExtent) * p_parent->card[2],                                                               \
-				(p_parent->baseExtent) * p_parent->origAcumCard[1],                                                       \
-				flat_tile.data, 0, NULL,                                                                                  \
-				p_task->event.event.p_event_cl));                                                                         \
-	} else {                                                                                                              \
-		fprintf(stderr, "Internal Error: Number of dimensions not supported for non-owner tile in MoveTo/MoveFrom: %d\n", \
-				flat_tile.shape.info.sig.numDims);                                                                        \
+#define OpenCL_Move(type)                                                                              \
+	HitTile flat_tile = *p_tile;                                                                       \
+	hit_tileFlattenDims(&flat_tile);                                                                   \
+	HitTile *p_parent = flat_tile.ref;                                                                 \
+	if (flat_tile.memStatus == HIT_MS_NOT_OWNER)                                                       \
+		while (p_parent->memStatus == HIT_MS_NOT_OWNER)                                                \
+			p_parent = p_parent->ref;                                                                  \
+	else                                                                                               \
+		p_parent = &flat_tile;                                                                         \
+	size_t parent_offset[HIT_MAXDIMS]; /* ijkl */                                                      \
+	for (int i = 0; i < HIT_MAXDIMS; i++)                                                              \
+		parent_offset[i] = hit_tileDimBegin(flat_tile, i) - hit_tileDimBegin(*p_parent, i);            \
+	size_t zero_offset[3] = {0};       /* xyz */                                                       \
+	size_t dev_offset[3]  = {0};       /* xyz */                                                       \
+	size_t size[3]        = {1, 1, 1}; /* xyz */                                                       \
+	int    transfer_dims  = ((hit_tileDims(flat_tile) < 3) ? hit_tileDims(flat_tile) : 3);             \
+	for (int i = 0; i < transfer_dims; i++) {                                                          \
+		dev_offset[i] = parent_offset[hit_tileDims(flat_tile) - 1 - i];                                \
+		size[i]       = flat_tile.card[hit_tileDims(flat_tile) - 1 - i];                               \
+	}                                                                                                  \
+	dev_offset[0] *= flat_tile.baseExtent;                                                             \
+	size[0] *= flat_tile.baseExtent;                                                                   \
+	switch (hit_tileDims(flat_tile)) {                                                                 \
+		case 1:                                                                                        \
+			OPENCL_ASSERT_OP(                                                                          \
+				clEnqueue##type##Buffer(cmd_queue, p_tile_data_fpga->device_data,                      \
+										CL_FALSE, parent_offset[0] * flat_tile.baseExtent,             \
+										(size_t)flat_tile.acumCard * flat_tile.baseExtent,             \
+										flat_tile.data, 0, NULL,                                       \
+										p_task->event.event.p_event_cl));                              \
+			break;                                                                                     \
+		case 2:                                                                                        \
+			OPENCL_ASSERT_OP(                                                                          \
+				clEnqueue##type##BufferRect(                                                           \
+					cmd_queue,                                                                         \
+					p_tile_data_fpga->device_data,                                                     \
+					CL_FALSE, dev_offset, zero_offset, size,                                           \
+					flat_tile.baseExtent * flat_tile.origAcumCard[1], 0,                               \
+					flat_tile.baseExtent * flat_tile.origAcumCard[1], 0,                               \
+					flat_tile.data, 0, NULL,                                                           \
+					p_task->event.event.p_event_cl));                                                  \
+			break;                                                                                     \
+		case 3:                                                                                        \
+			OPENCL_ASSERT_OP(                                                                          \
+				clEnqueue##type##BufferRect(                                                           \
+					cmd_queue,                                                                         \
+					p_tile_data_fpga->device_data,                                                     \
+					CL_FALSE, dev_offset, zero_offset, size,                                           \
+					flat_tile.baseExtent * flat_tile.origAcumCard[2],                                  \
+					flat_tile.baseExtent * flat_tile.origAcumCard[1],                                  \
+					flat_tile.baseExtent * flat_tile.origAcumCard[2],                                  \
+					flat_tile.baseExtent * flat_tile.origAcumCard[1],                                  \
+					flat_tile.data, 0, NULL,                                                           \
+					p_task->event.event.p_event_cl));                                                  \
+			break;                                                                                     \
+		case 4:                                                                                        \
+			dev_offset[0] += parent_offset[0] * flat_tile.origAcumCard[1] * flat_tile.baseExtent;      \
+			char *p_host_data = (char *)flat_tile.data;                                                \
+			for (int i = 0; i < hit_tileDimCard(flat_tile, 0); i++) {                                  \
+				OPENCL_ASSERT_OP(                                                                      \
+					clEnqueue##type##BufferRect(                                                       \
+						cmd_queue,                                                                     \
+						p_tile_data_fpga->device_data,                                                 \
+						CL_FALSE, dev_offset, zero_offset, size,                                       \
+						flat_tile.baseExtent * flat_tile.origAcumCard[3],                              \
+						flat_tile.baseExtent * flat_tile.origAcumCard[2],                              \
+						flat_tile.baseExtent * flat_tile.origAcumCard[3],                              \
+						flat_tile.baseExtent * flat_tile.origAcumCard[2],                              \
+						(void *)p_host_data, 0, NULL,                                                  \
+						p_task->event.event.p_event_cl));                                              \
+				dev_offset[0] += flat_tile.origAcumCard[1] * flat_tile.baseExtent;                     \
+				p_host_data += flat_tile.origAcumCard[1] * flat_tile.baseExtent;                       \
+			}                                                                                          \
+			break;                                                                                     \
+		default:                                                                                       \
+			fprintf(stderr, "[Ctrl_FPGA] Internal Error: "                                             \
+							"Number of dimensions not supported for non-owner tile in mem move: %d\n", \
+					hit_tileDims(flat_tile));                                                          \
+			exit(EXIT_FAILURE);                                                                        \
 	}
 
 void Ctrl_FPGA_EvalTaskMoveToInner(Ctrl_FPGA *p_ctrl, HitTile *p_tile) {
@@ -920,9 +942,6 @@ void Ctrl_FPGA_ExecTaskMoveTo(Ctrl_Task *p_task, Ctrl_FPGA *p_ctrl) {
 	Ctrl_FPGA_Tile *p_tile_data_fpga = p_tile_data->p_impls[p_ctrl->global_id].tile.p_fpga;
 
 	cl_command_queue cmd_queue = p_ctrl->htd_driver_stream;
-
-	HitTile flat_tile = *p_tile;
-	hit_tileFlattenDims(&flat_tile);
 
 	// Enqueue the transfer operation
 	OpenCL_Move(Write);

@@ -531,81 +531,73 @@ void Ctrl_Cpu_StreamConsume(Ctrl_TaskQueue *p_stream, Ctrl_Cpu *p_ctrl) {
 	Ctrl_TaskQueue_Destroy(p_stream);
 }
 
+#define CTRL_CPU_MOVEHTD 0
+#define CTRL_CPU_MOVEDTH 1
+
+void Ctrl_Cpu_ExecMemcpy(HitTile *p_tile, Ctrl_Cpu *p_ctrl, int direction) {
+	Ctrl_Tile     *p_tile_data     = (Ctrl_Tile *)p_tile->ext;
+	Ctrl_Cpu_Tile *p_tile_data_cpu = p_tile_data->p_impls[p_ctrl->global_id].tile.p_cpu;
+
+	HitTile flat_tile = *p_tile;
+	hit_tileFlattenDims(&flat_tile);
+
+	void *src, *dst;
+	switch (direction) {
+		case CTRL_CPU_MOVEHTD:
+			src = flat_tile.data;
+			dst = p_tile_data_cpu->p_device_data;
+			break;
+		case CTRL_CPU_MOVEDTH:
+			dst = flat_tile.data;
+			src = p_tile_data_cpu->p_device_data;
+			break;
+		default:
+			fprintf(stderr, "[Ctrl_Cpu] Internal error: invalid memcpy direction %d\n", direction);
+			exit(EXIT_FAILURE);
+	}
+
+	switch (hit_tileDims(flat_tile)) {
+		case 1:
+			memcpy(dst, src, (size_t)flat_tile.acumCard * flat_tile.baseExtent);
+			break;
+		case 2:
+			for (int i = 0; i < flat_tile.card[0]; i++)
+				memcpy((void *)((char *)dst + flat_tile.baseExtent * i * flat_tile.origAcumCard[1]),
+					   (void *)((char *)src + flat_tile.baseExtent * i * flat_tile.origAcumCard[1]),
+					   (size_t)flat_tile.card[1] * flat_tile.baseExtent);
+			break;
+		case 3:
+			for (int i = 0; i < flat_tile.card[0]; i++)
+				for (int j = 0; j < flat_tile.card[1]; j++)
+					memcpy((void *)((char *)dst + flat_tile.baseExtent * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2])),
+						   (void *)((char *)src + flat_tile.baseExtent * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2])),
+						   (size_t)flat_tile.card[2] * flat_tile.baseExtent);
+			break;
+		case 4:
+			for (int i = 0; i < flat_tile.card[0]; i++)
+				for (int j = 0; j < flat_tile.card[1]; j++)
+					for (int k = 0; k < flat_tile.card[2]; k++)
+						memcpy((void *)((char *)dst + flat_tile.baseExtent * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2] + k * flat_tile.origAcumCard[3])),
+							   (void *)((char *)src + flat_tile.baseExtent * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2] + k * flat_tile.origAcumCard[3])),
+							   (size_t)flat_tile.card[3] * flat_tile.baseExtent);
+			break;
+		default:
+			fprintf(stderr, "[Ctrl_Cpu] Error: Number of dimensions not supported for non-owner tile in mem move: %d\n", flat_tile.shape.info.sig.numDims);
+			exit(EXIT_FAILURE);
+	}
+}
+
 void Ctrl_Cpu_EvalTaskInner(Ctrl_Task *p_task, Ctrl_Cpu *p_ctrl) {
 	switch (p_task->task_type) {
 		case CTRL_TASK_TYPE_KERNEL:
 			p_task->pfn_kernel_wrapper(p_task->request, p_task->device_id, CTRL_TYPE_CPU, p_task->threads, p_task->blocksize, p_task->p_arguments);
 			break;
-		case CTRL_TASK_TYPE_MOVETO: {
-			HitTile       *p_tile          = &p_task->tile;
-			Ctrl_Tile     *p_tile_data     = (Ctrl_Tile *)p_tile->ext;
-			Ctrl_Cpu_Tile *p_tile_data_cpu = p_tile_data->p_impls[p_ctrl->global_id].tile.p_cpu;
-
-			HitTile flat_tile = *p_tile;
-			hit_tileFlattenDims(&flat_tile);
-
-			/* 1D OF FLATTENED TILE -> CONTIGUOUS MEMORY */
-			if (flat_tile.shape.info.sig.numDims == 1) {
-				memcpy(p_tile_data_cpu->p_device_data, flat_tile.data, ((size_t)(flat_tile.acumCard)) * (flat_tile.baseExtent));
-			}
-			/* 2D TILES */
-			else if (flat_tile.shape.info.sig.numDims == 2) {
-				for (int i = 0; i < flat_tile.card[0]; i++) {
-					memcpy((void *)((char *)p_tile_data_cpu->p_device_data + (flat_tile.baseExtent) * (i * flat_tile.origAcumCard[1])),
-						   (void *)((char *)flat_tile.data + (flat_tile.baseExtent) * (i * flat_tile.origAcumCard[1])),
-						   ((size_t)(flat_tile.card[1])) * (flat_tile.baseExtent));
-				}
-			}
-			/* 3D TILES */
-			else if (flat_tile.shape.info.sig.numDims == 3) {
-				for (int i = 0; i < flat_tile.card[0]; i++) {
-					for (int j = 0; j < flat_tile.card[1]; j++) {
-						memcpy((void *)((char *)p_tile_data_cpu->p_device_data + (flat_tile.baseExtent) * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2])),
-							   (void *)((char *)flat_tile.data + (flat_tile.baseExtent) * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2])),
-							   ((size_t)(flat_tile.card[2])) * (flat_tile.baseExtent));
-					}
-				}
-			} else {
-				fprintf(stderr, "[Ctrl_Cpu] error: Number of dimensions not supported for non-owner tile in MoveTo: %d\n",
-						flat_tile.shape.info.sig.numDims);
-			}
+		case CTRL_TASK_TYPE_MOVETO:
+			Ctrl_Cpu_ExecMemcpy(&p_task->tile, p_ctrl, CTRL_CPU_MOVEHTD);
 			break;
-		}
-		case CTRL_TASK_TYPE_MOVEFROM: {
-			HitTile       *p_tile          = &p_task->tile;
-			Ctrl_Tile     *p_tile_data     = (Ctrl_Tile *)p_tile->ext;
-			Ctrl_Cpu_Tile *p_tile_data_cpu = p_tile_data->p_impls[p_ctrl->global_id].tile.p_cpu;
-
-			HitTile flat_tile = *p_tile;
-			hit_tileFlattenDims(&flat_tile);
-
-			/* TILES WITH THEIR OWN MEMORY ALLOCATION, OR CONTIGUOUS 1D TILES NEED ONLY ONE CONTIGUOUS COPY */
-			if (flat_tile.shape.info.sig.numDims == 1) {
-				memcpy(flat_tile.data, p_tile_data_cpu->p_device_data, ((size_t)(flat_tile.acumCard)) * (flat_tile.baseExtent));
-			}
-			/* CONTIGUOUS 2D TILES */
-			else if (flat_tile.shape.info.sig.numDims == 2) {
-				for (int i = 0; i < flat_tile.card[0]; i++) {
-					memcpy((void *)((char *)flat_tile.data + (flat_tile.baseExtent) * (i * flat_tile.origAcumCard[1])),
-						   (void *)((char *)p_tile_data_cpu->p_device_data + (flat_tile.baseExtent) * (i * flat_tile.origAcumCard[1])),
-						   ((size_t)(flat_tile.card[1])) * (flat_tile.baseExtent));
-				}
-			}
-			/* CONTIGUOUS 3D TILES */
-			else if (flat_tile.shape.info.sig.numDims == 3) {
-				for (int i = 0; i < flat_tile.card[0]; i++) {
-					for (int j = 0; j < flat_tile.card[1]; j++) {
-						memcpy((void *)((char *)flat_tile.data + (flat_tile.baseExtent) * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2])),
-							   (void *)((char *)p_tile_data_cpu->p_device_data + (flat_tile.baseExtent) * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2])),
-							   ((size_t)(flat_tile.card[2])) * (flat_tile.baseExtent));
-					}
-				}
-			} else {
-				fprintf(stderr, "[Ctrl_Cpu] error: Number of dimensions not supported for non-owner tile in MoveFrom: %d\n",
-						flat_tile.shape.info.sig.numDims);
-			}
+		case CTRL_TASK_TYPE_MOVEFROM:
+			Ctrl_Cpu_ExecMemcpy(&p_task->tile, p_ctrl, CTRL_CPU_MOVEDTH);
 			break;
-		}
 		case CTRL_TASK_TYPE_WAITEVENT:
 			Ctrl_GenericEvent_Wait(p_task->event);
 			Ctrl_GenericEvent_Release(p_task->event);

@@ -9,74 +9,86 @@
 #include "epsilod_kernels.h"
 
 #if EPSILOD_IS_FLOAT(EPSILOD_BASE_TYPE)
-/* 1D CELL UPDATE DEFAULT STENCIL */
+/* 1D cell update default stencil */
 CTRL_KERNEL(updateCell_default_1D, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, EpsilodCoords global_coords, const KHitTile_float weight, const float factor, const Epsilod_ext ext_params, {
-	int x       = thr_i;
-	int begin_x = -global_coords.borders.low[0];
-	int end_x   = global_coords.borders.high[0];
+	int begin_i = -global_coords.borders.low[0];
+	int end_i   = global_coords.borders.high[0];
 
 	float sum = 0;
 
-	int i;
-	for (i = begin_x; i <= end_x; i++) {
-		if (!hit(weight, i - begin_x)) continue;
-		sum += hit(matrixCopy, x + i) * hit(weight, i - begin_x);
+	for (int i = begin_i; i <= end_i; i++) {
+		if (!hit(weight, i - begin_i)) continue;
+		sum += hit(matrixCopy, thr_i + i) * hit(weight, i - begin_i);
 	}
-	hit(matrix, x) = sum / factor;
+	hit(matrix, thr_i) = sum / factor;
 });
 
-/* 2D CELL UPDATE DEFAULT STENCIL */
+/* 2D cell update default stencil */
 CTRL_KERNEL(updateCell_default_2D, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, EpsilodCoords global_coords, const KHitTile_float weight, const float factor, const Epsilod_ext ext_params, {
-	int x       = thr_i;
-	int y       = thr_j;
-	int begin_x = -global_coords.borders.low[0];
-	int end_x   = global_coords.borders.high[0];
-	int begin_y = -global_coords.borders.low[1];
-	int end_y   = global_coords.borders.high[1];
+	int begin_i = -global_coords.borders.low[0];
+	int end_i   = global_coords.borders.high[0];
+	int begin_j = -global_coords.borders.low[1];
+	int end_j   = global_coords.borders.high[1];
 
 	float sum = 0;
 
-	int i;
-	int j;
-	for (i = begin_x; i <= end_x; i++)
-		for (j = begin_y; j <= end_y; j++) {
-			if (!hit(weight, i - begin_x, j - begin_y)) continue;
-			sum += hit(matrixCopy, x + i, y + j) * hit(weight, i - begin_x, j - begin_y);
+	for (int i = begin_i; i <= end_i; i++)
+		for (int j = begin_j; j <= end_j; j++) {
+			if (!hit(weight, i - begin_i, j - begin_j)) continue;
+			sum += hit(matrixCopy, thr_i + i, thr_j + j) * hit(weight, i - begin_i, j - begin_j);
 		}
-	hit(matrix, x, y) = sum / factor;
+	hit(matrix, thr_i, thr_j) = sum / factor;
 });
 
-/* 3D CELL UPDATE DEFAULT STENCIL */
+/* 3D cell update default stencil */
 CTRL_KERNEL(updateCell_default_3D, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, EpsilodCoords global_coords, const KHitTile_float weight, const float factor, const Epsilod_ext ext_params, {
-	int x       = thr_i;
-	int y       = thr_j;
-	int z       = thr_k;
-	int begin_x = -global_coords.borders.low[0];
-	int end_x   = global_coords.borders.high[0];
-	int begin_y = -global_coords.borders.low[1];
-	int end_y   = global_coords.borders.high[1];
-	int begin_z = -global_coords.borders.low[2];
-	int end_z   = global_coords.borders.high[2];
+	int begin_i = -global_coords.borders.low[0];
+	int end_i   = global_coords.borders.high[0];
+	int begin_j = -global_coords.borders.low[1];
+	int end_j   = global_coords.borders.high[1];
+	int begin_k = -global_coords.borders.low[2];
+	int end_k   = global_coords.borders.high[2];
 
 	float sum = 0;
 
-	int i;
-	int j;
-	int k;
-	for (i = begin_x; i <= end_x; i++)
-		for (j = begin_y; j <= end_y; j++)
-			for (k = begin_z; k <= end_z; k++) {
-				if (!hit(weight, i - begin_x, j - begin_y, k - begin_z)) continue;
-				sum += hit(matrixCopy, x + i, y + j, z + k) * hit(weight, i - begin_x, j - begin_y, k - begin_z);
+	for (int i = begin_i; i <= end_i; i++)
+		for (int j = begin_j; j <= end_j; j++)
+			for (int k = begin_k; k <= end_k; k++) {
+				if (!hit(weight, i - begin_i, j - begin_j, k - begin_k)) continue;
+				sum += hit(matrixCopy, thr_i + i, thr_j + j, thr_k + k) * hit(weight, i - begin_i, j - begin_j, k - begin_k);
 			}
-	hit(matrix, x, y, z) = sum / factor;
+	hit(matrix, thr_i, thr_j, thr_k) = sum / factor;
+});
+
+/* 4D cell update default stencil */
+CTRL_KERNEL(updateCell_default_4D, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, EpsilodCoords global_coords, const KHitTile_float weight, const float factor, const Epsilod_ext ext_params, {
+	int begin_i = -global_coords.borders.low[0];
+	int end_i   = global_coords.borders.high[0];
+	int begin_j = -global_coords.borders.low[1];
+	int end_j   = global_coords.borders.high[1];
+	int begin_k = -global_coords.borders.low[2];
+	int end_k   = global_coords.borders.high[2];
+	int begin_l = -global_coords.borders.low[3];
+	int end_l   = global_coords.borders.high[3];
+
+	for (int gl = 0; gl < hit_tileDimCard(matrix, 3); gl++) {
+		float sum = 0;
+		for (int i = begin_i; i <= end_i; i++)
+			for (int j = begin_j; j <= end_j; j++)
+				for (int k = begin_k; k <= end_k; k++)
+					for (int l = begin_l; l <= end_l; l++) {
+						if (!hit(weight, i - begin_i, j - begin_j, k - begin_k, l - begin_l)) continue;
+						sum += hit(matrixCopy, thr_i + i, thr_j + j, thr_k + k, gl + l) * hit(weight, i - begin_i, j - begin_j, k - begin_k, l - begin_l);
+					}
+		hit(matrix, thr_i, thr_j, thr_k, gl) = sum / factor;
+	}
 });
 #endif
 
-/* COPY KERNEL FOR DEVICE INITIALIZATION */
+/* Copy kernel for device initialization */
 CTRL_KERNEL(epsilod_dev_copy, GENERIC, DEFAULT, KHitTile(EPSILOD_BASE_TYPE) matrix, const KHitTile(EPSILOD_BASE_TYPE) matrix_out, {
 	hit(matrix_out, thr_i) = hit(matrix, thr_i);
 });
 
-/* EMPTY KERNEL: TO SIGNAL SUBSELECTION AND ROOT TILES AS MODIFIED TO TRACK DEPENDENCIES */
+/* Empty kernel: to signal subselection and root tiles as modified to track dependencies */
 CTRL_KERNEL(epsilod_dev_touch, GENERIC, DEFAULT, KHitTile(EPSILOD_BASE_TYPE) matrix, { ; });

@@ -28,9 +28,9 @@
 #define CTRL_KERNEL_HIP(name, type, subtype, ...)                                                                                  \
 	C_GUARD                                                                                                                        \
 	__global__ void Ctrl_Kernel_Hip_##type##_##subtype##_##name(Ctrl_Thread ctrl_threads, CTRL_KERNEL_EXTRACT_ARGS(__VA_ARGS__)) { \
-		unsigned int thr_i = 0;                                                                                                    \
-		unsigned int thr_j = 0;                                                                                                    \
-		unsigned int thr_k = 0;                                                                                                    \
+		int thr_i = 0;                                                                                                             \
+		int thr_j = 0;                                                                                                             \
+		int thr_k = 0;                                                                                                             \
 		if (ctrl_threads.dims == 3) {                                                                                              \
 			thr_k = blockIdx.x * blockDim.x + threadIdx.x;                                                                         \
 			thr_j = blockIdx.y * blockDim.y + threadIdx.y;                                                                         \
@@ -41,7 +41,7 @@
 		} else {                                                                                                                   \
 			thr_i = blockIdx.x * blockDim.x + threadIdx.x;                                                                         \
 		}                                                                                                                          \
-		if (thr_i >= ctrl_threads.i || thr_j >= ctrl_threads.j || thr_k >= ctrl_threads.k)                                         \
+		if (thr_i >= (int)ctrl_threads.i || thr_j >= (int)ctrl_threads.j || thr_k >= (int)ctrl_threads.k)                          \
 			return;                                                                                                                \
 		CTRL_KERNEL_EXTRACT_KERNEL_NO_STR(__VA_ARGS__)                                                                             \
 	}
@@ -57,23 +57,23 @@
  *
  * @see Ctrl_ImplType, CTRL_KERNEL_FN, CTRL_KERNEL_WRAP_HIP
  */
-#define CTRL_KERNEL_FN_HIP(name, type, subtype, ...)                                                     \
-	C_GUARD                                                                                              \
-	__global__ void Ctrl_Kernel_Hip_##type##_##subtype##_##name(Ctrl_Thread ctrl_threads, __VA_ARGS__) { \
-		unsigned int thr_i = 0;                                                                          \
-		unsigned int thr_j = 0;                                                                          \
-		unsigned int thr_k = 0;                                                                          \
-		if (ctrl_threads.dims == 3) {                                                                    \
-			thr_k = blockIdx.x * blockDim.x + threadIdx.x;                                               \
-			thr_j = blockIdx.y * blockDim.y + threadIdx.y;                                               \
-			thr_i = blockIdx.z * blockDim.z + threadIdx.z;                                               \
-		} else if (ctrl_threads.dims == 2) {                                                             \
-			thr_j = blockIdx.x * blockDim.x + threadIdx.x;                                               \
-			thr_i = blockIdx.y * blockDim.y + threadIdx.y;                                               \
-		} else {                                                                                         \
-			thr_i = blockIdx.x * blockDim.x + threadIdx.x;                                               \
-		}                                                                                                \
-		if (thr_i >= ctrl_threads.i || thr_j >= ctrl_threads.j || thr_k >= ctrl_threads.k)               \
+#define CTRL_KERNEL_FN_HIP(name, type, subtype, ...)                                                      \
+	C_GUARD                                                                                               \
+	__global__ void Ctrl_Kernel_Hip_##type##_##subtype##_##name(Ctrl_Thread ctrl_threads, __VA_ARGS__) {  \
+		int thr_i = 0;                                                                                    \
+		int thr_j = 0;                                                                                    \
+		int thr_k = 0;                                                                                    \
+		if (ctrl_threads.dims == 3) {                                                                     \
+			thr_k = blockIdx.x * blockDim.x + threadIdx.x;                                                \
+			thr_j = blockIdx.y * blockDim.y + threadIdx.y;                                                \
+			thr_i = blockIdx.z * blockDim.z + threadIdx.z;                                                \
+		} else if (ctrl_threads.dims == 2) {                                                              \
+			thr_j = blockIdx.x * blockDim.x + threadIdx.x;                                                \
+			thr_i = blockIdx.y * blockDim.y + threadIdx.y;                                                \
+		} else {                                                                                          \
+			thr_i = blockIdx.x * blockDim.x + threadIdx.x;                                                \
+		}                                                                                                 \
+		if (thr_i >= (int)ctrl_threads.i || thr_j >= (int)ctrl_threads.j || thr_k >= (int)ctrl_threads.k) \
 			return;
 
 #ifdef _CTRL_DEBUG_

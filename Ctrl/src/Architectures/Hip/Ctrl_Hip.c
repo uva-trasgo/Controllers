@@ -545,47 +545,68 @@ void Ctrl_Hip_ExecTaskMoveTo(Ctrl_Task *p_task, Ctrl_Hip *p_ctrl) {
 		pitch = (flat_tile.baseExtent) * flat_tile.origAcumCard[1];
 	}
 
-	// Send memcpy to hip stream
-	/* TILES WITH THEIR OWN MEMORY ALLOCATION, OR CONTIGUOUS 1D TILES NEED ONLY ONE CONTIGUOUS COPY */
-	if (flat_tile.shape.info.sig.numDims == 1) {
-		HIP_OP(
-			hipMemcpyAsync(p_tile_data_hip->p_device_data,
-						   flat_tile.data,
-						   ((size_t)(flat_tile.acumCard)) * (flat_tile.baseExtent),
-						   hipMemcpyHostToDevice,
-						   p_ctrl->htd_driver_stream));
-	}
-	/* 2D TILES */
-	else if (flat_tile.shape.info.sig.numDims == 2) {
-		HIP_OP(
-			hipMemcpy2DAsync(p_tile_data_hip->p_device_data,
-							 pitch,
-							 flat_tile.data,
-							 (flat_tile.baseExtent) * flat_tile.origAcumCard[1],
-							 (flat_tile.baseExtent) * flat_tile.card[1],
-							 flat_tile.card[0],
-							 hipMemcpyHostToDevice,
-							 p_ctrl->htd_driver_stream));
-	}
-	/* 3D TILES */
-	else if (flat_tile.shape.info.sig.numDims == 3) {
-		struct hipMemcpy3DParms params = {0};
+	switch (hit_tileDims(flat_tile)) {
+		case 1:
+			HIP_OP(
+				hipMemcpyAsync(p_tile_data_hip->p_device_data,
+							   flat_tile.data,
+							   (size_t)flat_tile.acumCard * flat_tile.baseExtent,
+							   hipMemcpyHostToDevice,
+							   p_ctrl->htd_driver_stream));
+			break;
+		case 2:
+			HIP_OP(
+				hipMemcpy2DAsync(p_tile_data_hip->p_device_data,
+								 pitch,
+								 flat_tile.data,
+								 flat_tile.baseExtent * flat_tile.origAcumCard[1],
+								 flat_tile.baseExtent * flat_tile.card[1],
+								 flat_tile.card[0],
+								 hipMemcpyHostToDevice,
+								 p_ctrl->htd_driver_stream));
+			break;
+		case 3: {
+			struct hipMemcpy3DParms params = {0};
 
-		params.srcPtr = make_hipPitchedPtr(flat_tile.data,
-										   (flat_tile.baseExtent) * flat_tile.origAcumCard[2],
-										   flat_tile.origAcumCard[2],
-										   flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
-		params.dstPtr = make_hipPitchedPtr(p_tile_data_hip->p_device_data,
-										   (flat_tile.baseExtent) * flat_tile.origAcumCard[2],
-										   flat_tile.origAcumCard[2],
-										   flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
-		params.extent = make_hipExtent(flat_tile.card[2] * flat_tile.baseExtent, flat_tile.card[1], flat_tile.card[0]);
-		params.kind   = hipMemcpyHostToDevice;
+			params.srcPtr = make_hipPitchedPtr(flat_tile.data,
+											   flat_tile.baseExtent * flat_tile.origAcumCard[2],
+											   flat_tile.baseExtent * flat_tile.origAcumCard[2],
+											   flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
+			params.dstPtr = make_hipPitchedPtr(p_tile_data_hip->p_device_data,
+											   flat_tile.baseExtent * flat_tile.origAcumCard[2],
+											   flat_tile.baseExtent * flat_tile.origAcumCard[2],
+											   flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
+			params.extent = make_hipExtent(flat_tile.card[2] * flat_tile.baseExtent, flat_tile.card[1], flat_tile.card[0]);
+			params.kind   = hipMemcpyHostToDevice;
 
-		HIP_OP(hipMemcpy3DAsync(&params, p_ctrl->htd_driver_stream));
-	} else {
-		fprintf(stderr, "Internal Error: Number of dimensions not supported for non-owner tile in MoveTo: %d\n",
-				flat_tile.shape.info.sig.numDims);
+			HIP_OP(hipMemcpy3DAsync(&params, p_ctrl->htd_driver_stream));
+			break;
+		}
+		case 4:
+			for (int i = 0; i < hit_tileDimCard(flat_tile, 0); i++) {
+				size_t matrix_offset = flat_tile.baseExtent * i * flat_tile.origAcumCard[1];
+
+				struct hipMemcpy3DParms params = {0};
+
+				params.srcPtr = make_hipPitchedPtr((void *)((char *)flat_tile.data + matrix_offset),
+												   flat_tile.baseExtent * flat_tile.origAcumCard[3],
+												   flat_tile.baseExtent * flat_tile.origAcumCard[3],
+												   flat_tile.origAcumCard[2] / flat_tile.origAcumCard[3]);
+				params.dstPtr = make_hipPitchedPtr((void *)((char *)p_tile_data_hip->p_device_data + matrix_offset),
+												   flat_tile.baseExtent * flat_tile.origAcumCard[3],
+												   flat_tile.baseExtent * flat_tile.origAcumCard[3],
+												   flat_tile.origAcumCard[2] / flat_tile.origAcumCard[3]);
+				params.extent = make_hipExtent(flat_tile.card[3] * flat_tile.baseExtent, flat_tile.card[2], flat_tile.card[1]);
+				params.kind   = hipMemcpyHostToDevice;
+
+				HIP_OP(hipMemcpy3DAsync(&params, p_ctrl->htd_driver_stream));
+			}
+			break;
+
+		default:
+			fprintf(stderr, "Internal Error: Number of dimensions not supported for non-owner tile in MoveFrom: %d\n", hit_tileDims(flat_tile));
+			exit(EXIT_FAILURE);
+			break;
 	}
 }
 
@@ -652,47 +673,68 @@ void Ctrl_Hip_ExecTaskMoveFrom(Ctrl_Task *p_task, Ctrl_Hip *p_ctrl) {
 		pitch = (flat_tile.baseExtent) * flat_tile.origAcumCard[1];
 	}
 
-	// Send memcpy to hip stream
-	/* 1D FLATTENED TILE -> CONTIGUOUS MEMORY */
-	if (flat_tile.shape.info.sig.numDims == 1) {
-		HIP_OP(
-			hipMemcpyAsync(flat_tile.data,
-						   p_tile_data_hip->p_device_data,
-						   ((size_t)(flat_tile.acumCard)) * (flat_tile.baseExtent),
-						   hipMemcpyDeviceToHost,
-						   p_ctrl->dth_driver_stream));
-	}
-	/* CONTIGUOUS 2D TILES */
-	else if (flat_tile.shape.info.sig.numDims == 2) {
-		HIP_OP(
-			hipMemcpy2DAsync(flat_tile.data,                                     // dst
-							 (flat_tile.baseExtent) * flat_tile.origAcumCard[1], // dpitch
-							 p_tile_data_hip->p_device_data,                     // src
-							 pitch,                                              // spitch
-							 (flat_tile.baseExtent) * flat_tile.card[1],         // width
-							 flat_tile.card[0],                                  // height
-							 hipMemcpyDeviceToHost,
-							 p_ctrl->dth_driver_stream));
-	}
-	/* CONTIGUOUS 3D TILES */
-	else if (flat_tile.shape.info.sig.numDims == 3) {
-		struct hipMemcpy3DParms params = {0};
+	switch (hit_tileDims(flat_tile)) {
+		case 1:
+			HIP_OP(
+				hipMemcpyAsync(flat_tile.data,
+							   p_tile_data_hip->p_device_data,
+							   (size_t)flat_tile.acumCard * flat_tile.baseExtent,
+							   hipMemcpyDeviceToHost,
+							   p_ctrl->dth_driver_stream));
+			break;
+		case 2:
+			HIP_OP(
+				hipMemcpy2DAsync(flat_tile.data,                                   // dst
+								 flat_tile.baseExtent * flat_tile.origAcumCard[1], // dpitch
+								 p_tile_data_hip->p_device_data,                   // src
+								 pitch,                                            // spitch
+								 flat_tile.baseExtent * flat_tile.card[1],         // width
+								 flat_tile.card[0],                                // height
+								 hipMemcpyDeviceToHost,
+								 p_ctrl->dth_driver_stream));
+			break;
+		case 3: {
+			struct hipMemcpy3DParms params = {0};
 
-		params.srcPtr = make_hipPitchedPtr(p_tile_data_hip->p_device_data,
-										   (flat_tile.baseExtent) * flat_tile.origAcumCard[2],
-										   flat_tile.origAcumCard[2],
-										   flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
-		params.dstPtr = make_hipPitchedPtr(flat_tile.data,
-										   (flat_tile.baseExtent) * flat_tile.origAcumCard[2],
-										   flat_tile.origAcumCard[2],
-										   flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
-		params.extent = make_hipExtent(flat_tile.card[2] * flat_tile.baseExtent, flat_tile.card[1], flat_tile.card[0]);
-		params.kind   = hipMemcpyDeviceToHost;
+			params.srcPtr = make_hipPitchedPtr(p_tile_data_hip->p_device_data,
+											   flat_tile.baseExtent * flat_tile.origAcumCard[2],
+											   flat_tile.baseExtent * flat_tile.origAcumCard[2],
+											   flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
+			params.dstPtr = make_hipPitchedPtr(flat_tile.data,
+											   flat_tile.baseExtent * flat_tile.origAcumCard[2],
+											   flat_tile.baseExtent * flat_tile.origAcumCard[2],
+											   flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
+			params.extent = make_hipExtent(flat_tile.card[2] * flat_tile.baseExtent, flat_tile.card[1], flat_tile.card[0]);
+			params.kind   = hipMemcpyDeviceToHost;
 
-		HIP_OP(hipMemcpy3DAsync(&params, p_ctrl->dth_driver_stream));
-	} else {
-		fprintf(stderr, "Internal Error: Number of dimensions not supported for non-owner tile in MoveFrom: %d\n",
-				flat_tile.shape.info.sig.numDims);
+			HIP_OP(hipMemcpy3DAsync(&params, p_ctrl->dth_driver_stream));
+			break;
+		}
+		case 4:
+			for (int i = 0; i < hit_tileDimCard(flat_tile, 0); i++) {
+				size_t matrix_offset = flat_tile.baseExtent * i * flat_tile.origAcumCard[1];
+
+				struct hipMemcpy3DParms params = {0};
+
+				params.srcPtr = make_hipPitchedPtr((void *)((char *)p_tile_data_hip->p_device_data + matrix_offset),
+												   flat_tile.baseExtent * flat_tile.origAcumCard[3],
+												   flat_tile.baseExtent * flat_tile.origAcumCard[3],
+												   flat_tile.origAcumCard[2] / flat_tile.origAcumCard[3]);
+				params.dstPtr = make_hipPitchedPtr((void *)((char *)flat_tile.data + matrix_offset),
+												   flat_tile.baseExtent * flat_tile.origAcumCard[3],
+												   flat_tile.baseExtent * flat_tile.origAcumCard[3],
+												   flat_tile.origAcumCard[2] / flat_tile.origAcumCard[3]);
+				params.extent = make_hipExtent(flat_tile.card[3] * flat_tile.baseExtent, flat_tile.card[2], flat_tile.card[1]);
+				params.kind   = hipMemcpyDeviceToHost;
+
+				HIP_OP(hipMemcpy3DAsync(&params, p_ctrl->dth_driver_stream));
+			}
+			break;
+
+		default:
+			fprintf(stderr, "Internal Error: Number of dimensions not supported for non-owner tile in MoveFrom: %d\n", hit_tileDims(flat_tile));
+			exit(EXIT_FAILURE);
+			break;
 	}
 }
 

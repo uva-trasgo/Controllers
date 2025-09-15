@@ -13,9 +13,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#ifdef _CTRL_ARCH_CUDA_
-	#include <cuda_runtime_api.h>
-#endif // _CTRL_ARCH_CUDA_
 
 #include EPSILOD_TYPES_INCLUDE
 #include <epsilod_types.h>

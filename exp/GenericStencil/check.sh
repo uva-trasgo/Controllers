@@ -8,14 +8,14 @@
 # 1. EXPERIMENT INFORMATION
 # 1.1. APP NAME AND DEFAULT EXECUTABLES LIST
 APP_NAME="GenericStencil"
-EXE_NAMES="../../build/ParallelStencilSkeleton/test_parallelStencilSkeleton"
+EXE_NAMES="../../build/Epsilod/test_parallelStencilSkeleton"
 DEVICE_FILE_PATH="../../examples/Device_Selection_Files/dev_epsilod_exp"
 
 # 1.2. APP/EXPERIMENT SPECIFIC PARAMETERS
 PROCS="1 4"
-SIZES="32 100"
+SIZES="32"
 ITERATIONS="1 100"
-STENCILS="1dc2 1dnc4 2d4 2d9 2dnc9 2df5 3d27"
+STENCILS="1dc2 1dnc4 2d4 2d8 2dnc8 2df5 3d27 4d8"
 
 # 1.3. DIRECTORY WITH THE FILES CONTAINING THE EXPECTED RESULTS
 RESULT_DIR=CorrectResults
@@ -75,6 +75,9 @@ function doTest() {
 		elif [ $dims == "3" ]; then
 			$MPI_RUN -n $2 ./$1 $5 $3 $3 $3 $4 $DEVICE_FILE_PATH >/dev/null 2>check.err
 			echo -e "\t$partition $MPI_RUN -n $2 ./$1 $5 $3 $3 $3 $4 $DEVICE_FILE_PATH 2>check.err"
+		elif [ $dims == "4" ]; then
+			$MPI_RUN -n $2 ./$1 $5 $3 $3 $3 $3 $4 $DEVICE_FILE_PATH >/dev/null 2>check.err
+			echo -e "\t$partition $MPI_RUN -n $2 ./$1 $5 $3 $3 $3 $3 $4 $DEVICE_FILE_PATH 2>check.err"
 		fi
 
 		# EXECUTION ERRORS, SKIP TESTING RESULT FILE

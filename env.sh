@@ -2,7 +2,7 @@
 cwdfront
 
 # load modules
-# module purge
+module purge
 module load mpi/mpich-4.2.1
 module load rocm/6.1.0
-module load cuda
+module load cuda/cuda-12.6.2

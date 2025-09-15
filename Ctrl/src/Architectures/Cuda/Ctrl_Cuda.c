@@ -569,47 +569,68 @@ void Ctrl_Cuda_ExecTaskMoveTo(Ctrl_Task *p_task, Ctrl_Cuda *p_ctrl) {
 		pitch = (flat_tile.baseExtent) * flat_tile.origAcumCard[1];
 	}
 
-	// Send memcpy to cuda stream
-	/* 1D FLATTENED TILE -> CONTIGUOUS MEMORY */
-	if (flat_tile.shape.info.sig.numDims == 1) {
-		CUDA_OP(
-			cudaMemcpyAsync(p_tile_data_cuda->p_device_data,
-							flat_tile.data,
-							((size_t)(flat_tile.acumCard)) * (flat_tile.baseExtent),
-							cudaMemcpyHostToDevice,
-							p_ctrl->htd_driver_stream));
-	}
-	/* 2D TILES */
-	else if (flat_tile.shape.info.sig.numDims == 2) {
-		CUDA_OP(
-			cudaMemcpy2DAsync(p_tile_data_cuda->p_device_data,
-							  pitch,
-							  flat_tile.data,
-							  (flat_tile.baseExtent) * flat_tile.origAcumCard[1],
-							  (flat_tile.baseExtent) * flat_tile.card[1],
-							  flat_tile.card[0],
-							  cudaMemcpyHostToDevice,
-							  p_ctrl->htd_driver_stream));
-	}
-	/* 3D TILES */
-	else if (flat_tile.shape.info.sig.numDims == 3) {
-		struct cudaMemcpy3DParms params = {0};
+	switch (hit_tileDims(flat_tile)) {
+		case 1:
+			CUDA_OP(
+				cudaMemcpyAsync(p_tile_data_cuda->p_device_data,
+								flat_tile.data,
+								(size_t)flat_tile.acumCard * flat_tile.baseExtent,
+								cudaMemcpyHostToDevice,
+								p_ctrl->htd_driver_stream));
+			break;
+		case 2:
+			CUDA_OP(
+				cudaMemcpy2DAsync(p_tile_data_cuda->p_device_data,
+								  pitch,
+								  flat_tile.data,
+								  flat_tile.baseExtent * flat_tile.origAcumCard[1],
+								  flat_tile.baseExtent * flat_tile.card[1],
+								  flat_tile.card[0],
+								  cudaMemcpyHostToDevice,
+								  p_ctrl->htd_driver_stream));
+			break;
+		case 3: {
+			struct cudaMemcpy3DParms params = {0};
 
-		params.srcPtr = make_cudaPitchedPtr(flat_tile.data,
-											(flat_tile.baseExtent) * flat_tile.origAcumCard[2],
-											flat_tile.origAcumCard[2],
-											flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
-		params.dstPtr = make_cudaPitchedPtr(p_tile_data_cuda->p_device_data,
-											(flat_tile.baseExtent) * flat_tile.origAcumCard[2],
-											flat_tile.origAcumCard[2],
-											flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
-		params.extent = make_cudaExtent(flat_tile.card[2] * flat_tile.baseExtent, flat_tile.card[1], flat_tile.card[0]);
-		params.kind   = cudaMemcpyHostToDevice;
+			params.srcPtr = make_cudaPitchedPtr(flat_tile.data,
+												flat_tile.baseExtent * flat_tile.origAcumCard[2],
+												flat_tile.baseExtent * flat_tile.origAcumCard[2],
+												flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
+			params.dstPtr = make_cudaPitchedPtr(p_tile_data_cuda->p_device_data,
+												flat_tile.baseExtent * flat_tile.origAcumCard[2],
+												flat_tile.baseExtent * flat_tile.origAcumCard[2],
+												flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
+			params.extent = make_cudaExtent(flat_tile.card[2] * flat_tile.baseExtent, flat_tile.card[1], flat_tile.card[0]);
+			params.kind   = cudaMemcpyHostToDevice;
 
-		CUDA_OP(cudaMemcpy3DAsync(&params, p_ctrl->htd_driver_stream));
-	} else {
-		fprintf(stderr, "Internal Error: Number of dimensions not supported for non-owner tile in MoveTo: %d\n",
-				flat_tile.shape.info.sig.numDims);
+			CUDA_OP(cudaMemcpy3DAsync(&params, p_ctrl->htd_driver_stream));
+			break;
+		}
+		case 4:
+			for (int i = 0; i < hit_tileDimCard(flat_tile, 0); i++) {
+				size_t matrix_offset = flat_tile.baseExtent * i * flat_tile.origAcumCard[1];
+
+				struct cudaMemcpy3DParms params = {0};
+
+				params.srcPtr = make_cudaPitchedPtr((void *)((char *)flat_tile.data + matrix_offset),
+													flat_tile.baseExtent * flat_tile.origAcumCard[3],
+													flat_tile.baseExtent * flat_tile.origAcumCard[3],
+													flat_tile.origAcumCard[2] / flat_tile.origAcumCard[3]);
+				params.dstPtr = make_cudaPitchedPtr((void *)((char *)p_tile_data_cuda->p_device_data + matrix_offset),
+													flat_tile.baseExtent * flat_tile.origAcumCard[3],
+													flat_tile.baseExtent * flat_tile.origAcumCard[3],
+													flat_tile.origAcumCard[2] / flat_tile.origAcumCard[3]);
+				params.extent = make_cudaExtent(flat_tile.card[3] * flat_tile.baseExtent, flat_tile.card[2], flat_tile.card[1]);
+				params.kind   = cudaMemcpyHostToDevice;
+
+				CUDA_OP(cudaMemcpy3DAsync(&params, p_ctrl->htd_driver_stream));
+			}
+			break;
+
+		default:
+			fprintf(stderr, "Internal Error: Number of dimensions not supported for non-owner tile in MoveFrom: %d\n", hit_tileDims(flat_tile));
+			exit(EXIT_FAILURE);
+			break;
 	}
 }
 
@@ -676,47 +697,68 @@ void Ctrl_Cuda_ExecTaskMoveFrom(Ctrl_Task *p_task, Ctrl_Cuda *p_ctrl) {
 		pitch = (flat_tile.baseExtent) * flat_tile.origAcumCard[1];
 	}
 
-	// Send memcpy to cuda stream
-	/* TILES WITH THEIR OWN MEMORY ALLOCATION, OR CONTIGUOUS 1D TILES NEED ONLY ONE CONTIGUOUS COPY */
-	if (flat_tile.shape.info.sig.numDims == 1) {
-		CUDA_OP(
-			cudaMemcpyAsync(flat_tile.data,
-							p_tile_data_cuda->p_device_data,
-							((size_t)(flat_tile.acumCard)) * (flat_tile.baseExtent),
-							cudaMemcpyDeviceToHost,
-							p_ctrl->dth_driver_stream));
-	}
-	/* CONTIGUOUS 2D TILES */
-	else if (flat_tile.shape.info.sig.numDims == 2) {
-		CUDA_OP(
-			cudaMemcpy2DAsync(flat_tile.data,                                     // dst
-							  (flat_tile.baseExtent) * flat_tile.origAcumCard[1], // dpitch
-							  p_tile_data_cuda->p_device_data,                    // src
-							  pitch,                                              // spitch
-							  (flat_tile.baseExtent) * flat_tile.card[1],         // width
-							  flat_tile.card[0],                                  // height
-							  cudaMemcpyDeviceToHost,
-							  p_ctrl->dth_driver_stream));
-	}
-	/* CONTIGUOUS 3D TILES */
-	else if (flat_tile.shape.info.sig.numDims == 3) {
-		struct cudaMemcpy3DParms params = {0};
+	switch (hit_tileDims(flat_tile)) {
+		case 1:
+			CUDA_OP(
+				cudaMemcpyAsync(flat_tile.data,
+								p_tile_data_cuda->p_device_data,
+								(size_t)flat_tile.acumCard * flat_tile.baseExtent,
+								cudaMemcpyDeviceToHost,
+								p_ctrl->dth_driver_stream));
+			break;
+		case 2:
+			CUDA_OP(
+				cudaMemcpy2DAsync(flat_tile.data,                                   // dst
+								  flat_tile.baseExtent * flat_tile.origAcumCard[1], // dpitch
+								  p_tile_data_cuda->p_device_data,                  // src
+								  pitch,                                            // spitch
+								  flat_tile.baseExtent * flat_tile.card[1],         // width
+								  flat_tile.card[0],                                // height
+								  cudaMemcpyDeviceToHost,
+								  p_ctrl->dth_driver_stream));
+			break;
+		case 3: {
+			struct cudaMemcpy3DParms params = {0};
 
-		params.srcPtr = make_cudaPitchedPtr(p_tile_data_cuda->p_device_data,
-											(flat_tile.baseExtent) * flat_tile.origAcumCard[2],
-											flat_tile.origAcumCard[2],
-											flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
-		params.dstPtr = make_cudaPitchedPtr(flat_tile.data,
-											(flat_tile.baseExtent) * flat_tile.origAcumCard[2],
-											flat_tile.origAcumCard[2],
-											flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
-		params.extent = make_cudaExtent(flat_tile.card[2] * flat_tile.baseExtent, flat_tile.card[1], flat_tile.card[0]);
-		params.kind   = cudaMemcpyDeviceToHost;
+			params.srcPtr = make_cudaPitchedPtr(p_tile_data_cuda->p_device_data,
+												flat_tile.baseExtent * flat_tile.origAcumCard[2],
+												flat_tile.baseExtent * flat_tile.origAcumCard[2],
+												flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
+			params.dstPtr = make_cudaPitchedPtr(flat_tile.data,
+												flat_tile.baseExtent * flat_tile.origAcumCard[2],
+												flat_tile.baseExtent * flat_tile.origAcumCard[2],
+												flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
+			params.extent = make_cudaExtent(flat_tile.card[2] * flat_tile.baseExtent, flat_tile.card[1], flat_tile.card[0]);
+			params.kind   = cudaMemcpyDeviceToHost;
 
-		CUDA_OP(cudaMemcpy3DAsync(&params, p_ctrl->dth_driver_stream));
-	} else {
-		fprintf(stderr, "Internal Error: Number of dimensions not supported for non-owner tile in MoveFrom: %d\n",
-				flat_tile.shape.info.sig.numDims);
+			CUDA_OP(cudaMemcpy3DAsync(&params, p_ctrl->dth_driver_stream));
+			break;
+		}
+		case 4:
+			for (int i = 0; i < hit_tileDimCard(flat_tile, 0); i++) {
+				size_t matrix_offset = flat_tile.baseExtent * i * flat_tile.origAcumCard[1];
+
+				struct cudaMemcpy3DParms params = {0};
+
+				params.srcPtr = make_cudaPitchedPtr((void *)((char *)p_tile_data_cuda->p_device_data + matrix_offset),
+													flat_tile.baseExtent * flat_tile.origAcumCard[3],
+													flat_tile.baseExtent * flat_tile.origAcumCard[3],
+													flat_tile.origAcumCard[2] / flat_tile.origAcumCard[3]);
+				params.dstPtr = make_cudaPitchedPtr((void *)((char *)flat_tile.data + matrix_offset),
+													flat_tile.baseExtent * flat_tile.origAcumCard[3],
+													flat_tile.baseExtent * flat_tile.origAcumCard[3],
+													flat_tile.origAcumCard[2] / flat_tile.origAcumCard[3]);
+				params.extent = make_cudaExtent(flat_tile.card[3] * flat_tile.baseExtent, flat_tile.card[2], flat_tile.card[1]);
+				params.kind   = cudaMemcpyDeviceToHost;
+
+				CUDA_OP(cudaMemcpy3DAsync(&params, p_ctrl->dth_driver_stream));
+			}
+			break;
+
+		default:
+			fprintf(stderr, "Internal Error: Number of dimensions not supported for non-owner tile in MoveFrom: %d\n", hit_tileDims(flat_tile));
+			exit(EXIT_FAILURE);
+			break;
 	}
 }
 
@@ -1015,6 +1057,7 @@ void Ctrl_Cuda_EvalTaskAllocTile(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 		} else {
 			CUDA_OP(cudaMalloc(&(p_tile_data_cuda->p_device_data), ((size_t)(p_tile->origAcumCard[0])) * (p_tile->baseExtent)));
 		}
+
 		p_tile_data_impl->device_status = CTRL_TILE_INVALID;
 	}
 

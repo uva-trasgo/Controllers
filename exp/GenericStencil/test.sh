@@ -15,7 +15,7 @@ DEVICE_FILE_PATH="../../examples/Device_Selection_Files/dev_epsilod_exp"
 PROCS="1 2 3 4"
 SIZES="100"
 ITERATIONS="1 10 100"
-STENCILS="1dc2 1dnc4 2d4 2d9 2dnc9 2df5 3d27"
+STENCILS="1dc2 1dnc4 2d4 2d8 2dnc8 2df5 3d27"
 
 # 1.3. DIRECTORY WITH THE FILES CONTAINING THE EXPECTED RESULTS
 RESULT_DIR=CorrectResults

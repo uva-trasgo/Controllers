@@ -14,13 +14,19 @@
 // #define _PSS_SHP_INFO_DEBUG_
 #define _PSS_TOPO_INFO_
 #define _PSS_WEIGHTS_INFO_
-// #define _PSS_MANUAL_REDISTRIBUTION_
 #endif // _CTRL_EXAMPLES_EXP_MODE_
 
-// GLOBAL VARIABLE: USE OF CUDA/HIP-AWARE MPI
+#define EPSILOD_COMM_SORT
+#define EPSILOD_COMM_ANY
+// #define EPSILOD_COMM_ANY_RECV_FIRST
+// #define EPSILOD_INITIALIZE_COPY_IN_HOST
+
+#define validShape(s) (hit_shapeDims((s)) != (-1))
+
+// use of cuda/hip-aware mpi
 int mpi_dev_aware;
 
-/* A. KERNEL CHARACTERIZATIONS */
+/* A. Kernel characterizations */
 Ctrl_Thread INNER_CHAR[3] = {
 	{.dims = 1, .i = 256, .j = 1, .k = 1},
 	{.dims = 2, .i = 4, .j = 64, .k = 1},
@@ -59,19 +65,12 @@ Ctrl_Thread CPU_BORDER_CHAR[3][3] = {
 	 {.dims = 3, .i = 1, .j = 1, .k = 1024},
 	 {.dims = 3, .i = 1, .j = 1024, .k = 1}}};
 
-// #define INNER_CHAR ((Ctrl_Thread){.dims = 2, .x = 64, .y = 4, .z = 1})
-// #define CHAR_1D    ((Ctrl_Thread){.dims = 1, .x = 256, .y = 1, .z = 1})
-// #define CHAR_CPU   ((Ctrl_Thread){.dims = 2, .x = 32, .y = 32, .z = 1})
-// Ctrl_Thread BORDER_CHAR[3] = {
-// 	{.dims = 1, .x = 256, .y = 1, .z = 1},
-// 	{.dims = 2, .x = 1, .y = 256, .z = 1},
-// 	{.dims = 3, .x = 1, .y = 256, .z = 1}};
-
-/* B. GENERIC KERNEL PROTOTYPE AND WRAPPER LAUNCHERS */
+/* B. Generic kernel prototype and wrapper launchers */
 #if EPSILOD_IS_FLOAT(EPSILOD_BASE_TYPE)
 CTRL_KERNEL_CHAR(updateCell_default_1D, MANUAL, 0, 0, 0);
 CTRL_KERNEL_CHAR(updateCell_default_2D, MANUAL, 0, 0, 0);
 CTRL_KERNEL_CHAR(updateCell_default_3D, MANUAL, 0, 0, 0);
+CTRL_KERNEL_CHAR(updateCell_default_4D, MANUAL, 0, 0, 0);
 
 CTRL_KERNEL_PROTO(updateCell_default_1D,
 				  1, GENERIC, DEFAULT, 6,
@@ -111,7 +110,20 @@ CTRL_KERNEL_PROTO(updateCell_default_3D,
 void updateCell_default_3D(PCtrl ctrl, Ctrl_Thread threads, Ctrl_Thread blockSize, int stream, HitTile(EPSILOD_BASE_TYPE) mat, HitTile(EPSILOD_BASE_TYPE) copy, EpsilodCoords global, HitTile_float weight, float factor, Epsilod_ext *ext_params) {
 	Ctrl_LaunchToStream(ctrl, updateCell_default_3D, threads, blockSize, stream, mat, copy, global, weight, factor, *ext_params);
 }
-#endif // EPSILOD_BASE_TYPE IS NOT float
+
+CTRL_KERNEL_PROTO(updateCell_default_4D,
+				  1, GENERIC, DEFAULT, 6,
+				  OUT, HitTile(EPSILOD_BASE_TYPE), matrix,
+				  IN, HitTile(EPSILOD_BASE_TYPE), matrixCopy,
+				  INVAL, EpsilodCoords, global_coords,
+				  IN, HitTile(float), weight,
+				  INVAL, float, factor,
+				  INVAL, Epsilod_ext, ext_params);
+
+void updateCell_default_4D(PCtrl ctrl, Ctrl_Thread threads, Ctrl_Thread blockSize, int stream, HitTile(EPSILOD_BASE_TYPE) mat, HitTile(EPSILOD_BASE_TYPE) copy, EpsilodCoords global, HitTile_float weight, float factor, Epsilod_ext *ext_params) {
+	Ctrl_LaunchToStream(ctrl, updateCell_default_4D, threads, blockSize, stream, mat, copy, global, weight, factor, *ext_params);
+}
+#endif // EPSILOD_BASE_TYPE != float
 
 CTRL_KERNEL_CHAR(epsilod_dev_copy, MANUAL, 0, 0, 0);
 CTRL_KERNEL_PROTO(epsilod_dev_copy,
@@ -119,7 +131,7 @@ CTRL_KERNEL_PROTO(epsilod_dev_copy,
 				  IN, HitTile(EPSILOD_BASE_TYPE), matrix,
 				  OUT, HitTile(EPSILOD_BASE_TYPE), matrix_out);
 
-/* D. FALSE INITIALIZATION OF SELECTIONS TO AVOID NON-INITIALIZED WARNINGS */
+/* D. False initialization of selections to avoid non-initialized warnings */
 CTRL_KERNEL_CHAR(epsilod_dev_touch, MANUAL, 0, 0, 0);
 CTRL_KERNEL_PROTO(epsilod_dev_touch,
 				  1, GENERIC, DEFAULT,
@@ -128,7 +140,7 @@ CTRL_KERNEL_PROTO(epsilod_dev_touch,
 CTRL_HOST_TASK(epsilod_host_touch, HitTile(EPSILOD_BASE_TYPE) matrix) { ; }
 CTRL_HOST_TASK_PROTO(epsilod_host_touch, 1, OUT, HitTile(EPSILOD_BASE_TYPE), matrix);
 
-/* E. OUTPUT HOST-TASK WRAPPER */
+/* E. Output host-task wrapper */
 CTRL_HOST_TASK(Ctrl_Write_Output, outputDataFunction f_output, HitTile(EPSILOD_BASE_TYPE) matrix, Epsilod_ext *ext_params) {
 	f_output(matrix, ext_params);
 }
@@ -138,96 +150,26 @@ CTRL_HOST_TASK_PROTO(Ctrl_Write_Output, 3,
 					 IN, HitTile(EPSILOD_BASE_TYPE), matrix,
 					 INVAL, Epsilod_ext *, ext_params);
 
-/* F. DEBUG: WRITE OUTPUT ON STDOUT */
-/*
-CTRL_HOST_TASK(print_matrix, HitTile( EPSILOD_BASE_TYPE ) mat, Epsilod_ext *ext_params) {
-	printf("Matrix for [%d]:\n", hit_Rank);
-	int i, j, k;
-	switch (mat.shape.info.sig.numDims) {
-		case 1:
-			for (i = 0; i < hit_tileDimCard(mat, 0); i++) {
-				printf("%g ", hit(mat, i));
-			}
-			break;
-		case 2:
-			for (i = 0; i < hit_tileDimCard(mat, 0); i++) {
-				for (j = 0; j < hit_tileDimCard(mat, 1); j++) {
-					printf("%g ", hit(mat, i, j));
-				}
-				printf("\n");
-			}
-			break;
-		case 3:
-			for (i = 0; i < hit_tileDimCard(mat, 0); i++) {
-				for (j = 0; j < hit_tileDimCard(mat, 1); j++) {
-					for (k = 0; k < hit_tileDimCard(mat, 2); k++) {
-						printf("%g ", hit(mat, i, j, k));
-						// printf("\n");
-					}
-					printf("\n");
-				}
-				printf("\n");
-			}
-			break;
-	}
-	printf("\n");
-	fflush(stdout);
-}
-
-CTRL_HOST_TASK_PROTO(print_matrix, 2, IN, HitTile( EPSILOD_BASE_TYPE ), mat, INVAL, Epsilod_ext *, ext_params);
-*/
-
-/* G. STENCIL PATTERN TRANSFERENCE HOST-TASK */
+/* F. Stencil pattern transference host-task */
 CTRL_HOST_TASK(Ctrl_Copy_Stencil, HitTile_float stencil, float *stencil_data) {
-	int i;
-	int j;
-	int k;
-	int dataind = 0;
-	int dims    = hit_tileDims(stencil);
-	switch (dims) {
-		case 1:
-			for (i = 0; i < hit_tileDimCard(stencil, 0); i++)
-				hit(stencil, i) = stencil_data[i];
-			break;
-		case 2:
-			for (i = 0; i < hit_tileDimCard(stencil, 0); i++)
-				for (j = 0; j < hit_tileDimCard(stencil, 1); j++)
-					hit(stencil, i, j) = stencil_data[dataind++];
-
-			break;
-		case 3:
-			for (i = 0; i < hit_tileDimCard(stencil, 0); i++)
-				for (j = 0; j < hit_tileDimCard(stencil, 1); j++)
-					for (k = 0; k < hit_tileDimCard(stencil, 2); k++)
-						hit(stencil, i, j, k) = stencil_data[dataind++];
-			break;
-		default:
-			fprintf(stderr, "[Parallel Stencil Skeleton] %d dims are not supported in the stencil definition, max. 3 dims\n", dims);
-			exit(EXIT_FAILURE);
-	}
+	for (int i = 0; i < hit_tileCard(stencil); i++)
+		hit(stencil, i) = stencil_data[i];
 }
 
 CTRL_HOST_TASK_PROTO(Ctrl_Copy_Stencil, 2,
 					 OUT, HitTile_float, stencil,
 					 INVAL, float *, stencil_data);
 
-#define validShape(s) (hit_shapeDims((s)) != (-1))
-
-typedef struct
-{
+typedef struct {
 	int index;
 	HitTile(EPSILOD_BASE_TYPE) tile;
 } CommCompIndex;
 
 /**
- * Compare tiles to order communications.
- * Compares by number of elements.
- * This doesn't take into account that memory transfers for tiles with non-consecutive elements in memory
- * may take longer even if the number of elements is smaller.
+ * Compare tiles to order communications by number of elements.
+ * qsort sorts in ascending order a less than b -> return negative
  */
 int compare_comm_tiles(const void *a, const void *b) {
-	// qsort sorts in ascending order
-	// a less than b -> return negative
 	CommCompIndex index_a = *(CommCompIndex *)a;
 	CommCompIndex index_b = *(CommCompIndex *)b;
 	if (index_a.tile.acumCard > index_b.tile.acumCard)
@@ -237,14 +179,13 @@ int compare_comm_tiles(const void *a, const void *b) {
 	return 0;
 }
 
-/* H. EXPERIMENTATION: GLOBAL clocks */
+/* H. Experimentation: global clocks */
 HitClock mainClock;
 HitClock initClock;
 HitClock loopClock;
-/// HitClock	redistributeClock;
 HitClock commClock;
 
-/* HELP. PRINT EXTRA OPTIONS OF EPSILOD USING ENVIRONMENT VARIABLES */
+/* Print extra options of epsilod using environment variables */
 void epsilod_print_usage() {
 	if (hit_Rank == 0) {
 		fprintf(stderr, "\nEPSILOD environment variables:\n");
@@ -286,7 +227,6 @@ void printClockInfo() {
 	hit_clockPrintMax(mainClock);
 	hit_clockPrintMax(initClock);
 	hit_clockPrintMax(loopClock);
-	/// hit_clockPrintMax( redistributeClock );
 	hit_clockPrintMax(commClock);
 	#endif // _CTRL_EXAMPLES_EXP_MODE_
 	fflush(stdout);
@@ -296,12 +236,10 @@ void reduceClocks(HitLayout layout) {
 	hit_clockReduce(layout, mainClock);
 	hit_clockReduce(layout, initClock);
 	hit_clockReduce(layout, loopClock);
-	/// hit_clockReduce(layout, redistributeClock);
 	hit_clockReduce(layout, commClock);
 }
 
 void markTiles(PCtrl comm, EpsilodProperties props, Ctrl_Thread threads_touch, Ctrl_Thread blocksize_touch, EpsilodTiles *tiles, EpsilodTiles *copy_tiles, EpsilodCommArgs *comm_args) {
-
 	for (int i = 0; i < props.dims; i++) {
 		if (validShape(tiles->border_out_dev[i][0].shape)) {
 			Ctrl_Launch(comm, epsilod_dev_touch, threads_touch, blocksize_touch, tiles->border_out_dev[i][0]);
@@ -317,10 +255,9 @@ void markTiles(PCtrl comm, EpsilodProperties props, Ctrl_Thread threads_touch, C
 		Ctrl_Launch(comm, epsilod_dev_touch, threads_touch, blocksize_touch, *copy_tiles->inner_local);
 	}
 	for (int i = 0; i < comm_args->border_count; i++) {
-		// SKIP EMPTY BORDERS
+		// Skip empty borders
 		if (!comm_args->border_in_active[i]) continue;
 		Ctrl_Launch(comm, epsilod_dev_touch, threads_touch, blocksize_touch, comm_args->tile_border_in[i]);
-		// Ctrl_Launch(comm, epsilod_dev_touch, threads_touch, blocksize_touch, tileCopyBorderIn[i]);
 	}
 }
 
@@ -336,21 +273,17 @@ Ctrl_Thread initCtrlThreadFromTile(int dims, HitTile(EPSILOD_BASE_TYPE) * p_tile
 							hit_tileDimCard(*p_tile, 0),
 							hit_tileDimCard(*p_tile, 1));
 			break;
-		case 3:
+		default:
 			Ctrl_ThreadInit(tile_threads,
 							hit_tileDimCard(*p_tile, 0),
 							hit_tileDimCard(*p_tile, 1),
 							hit_tileDimCard(*p_tile, 2));
 			break;
-		default:
-			fprintf(stderr, "[Epsilod ERROR] Controller thread initialization not implemented for %d dimensions.\n", dims);
-			exit(EXIT_FAILURE);
 	}
 	return tile_threads;
 }
 
 void doComms(PCtrl comm, EpsilodProperties *props, EpsilodTiles *tiles, EpsilodCommArgs *args) {
-
 	if (!mpi_dev_aware) {
 		for (int i = 0; i < props->dims; i++) {
 			for (int j = 0; j < 2; j++) {
@@ -369,9 +302,6 @@ void doComms(PCtrl comm, EpsilodProperties *props, EpsilodTiles *tiles, EpsilodC
 		}
 	}
 
-#define EPSILOD_COMM_ANY
-	// #define EPSILOD_COMM_ANY_RECV_FIRST
-
 	#ifdef EPSILOD_COMM_ANY_RECV_FIRST
 	hit_clockStart(commClock);
 	if (mpi_dev_aware) {
@@ -383,7 +313,7 @@ void doComms(PCtrl comm, EpsilodProperties *props, EpsilodTiles *tiles, EpsilodC
 			 endComm != HIT_PAT_END;
 			 endComm = hit_patternStepAsyncRecv(*args->comm_pattern)) {
 
-			// START MOVE-TO FOR RECV
+			// Start move-to for recv
 			int border = args->index_comm_border[endComm];
 
 			Ctrl_HostTask(epsilod_host_touch, args->tile_border_in[border]);
@@ -392,7 +322,7 @@ void doComms(PCtrl comm, EpsilodProperties *props, EpsilodTiles *tiles, EpsilodC
 		hit_patternEndAsync(*args->comm_pattern);
 
 		for (int i = 0; i < args->border_count; i++) {
-			// SKIP EMPTY BORDERS
+			// Skip empty borders
 			if (!args->border_in_active[i]) continue;
 			Ctrl_WaitTile(comm, args->tile_border_in[i]);
 		}
@@ -410,10 +340,10 @@ void doComms(PCtrl comm, EpsilodProperties *props, EpsilodTiles *tiles, EpsilodC
 			 endComm != HIT_PAT_END;
 			 endComm = hit_patternStepAsync(*args->comm_pattern)) {
 
-			// SKIP SENDS
+			// Skip sends
 			if (endComm % 2 == 0) continue;
 
-			// START MOVE-TO FOR RECV
+			// Start move-to for recv
 			int border = args->index_comm_border[endComm / 2];
 
 			Ctrl_HostTask(epsilod_host_touch, args->tile_border_in[border]);
@@ -421,7 +351,7 @@ void doComms(PCtrl comm, EpsilodProperties *props, EpsilodTiles *tiles, EpsilodC
 		}
 
 		for (int i = 0; i < args->border_count; i++) {
-			// SKIP EMPTY BORDERS
+			// Skip empty borders
 			if (!args->border_in_active[i]) continue;
 			Ctrl_WaitTile(comm, args->tile_border_in[i]);
 		}
@@ -434,13 +364,13 @@ void doComms(PCtrl comm, EpsilodProperties *props, EpsilodTiles *tiles, EpsilodC
 
 	if (!mpi_dev_aware) {
 		for (int i = 0; i < args->border_count; i++) {
-			// SKIP EMPTY BORDERS
+			// Skip empty borders
 			if (!args->border_in_active[i]) continue;
 			Ctrl_HostTask(epsilod_host_touch, args->tile_border_in[i]);
 			Ctrl_MoveTo(comm, args->tile_border_in[i]);
 		}
 		for (int i = 0; i < args->border_count; i++) {
-			// SKIP EMPTY BORDERS
+			// Skip empty borders
 			if (!args->border_in_active[i]) continue;
 			Ctrl_WaitTile(comm, args->tile_border_in[i]);
 		}
@@ -451,7 +381,6 @@ void doComms(PCtrl comm, EpsilodProperties *props, EpsilodTiles *tiles, EpsilodC
 }
 
 void swap(EpsilodSwapStructs *a, EpsilodSwapStructs *b) {
-
 	for (int i = 0; i < a->tile_list_count; i++) {
 		HitTile(EPSILOD_BASE_TYPE) *p_tile_a = a->tile_list[i];
 		HitTile(EPSILOD_BASE_TYPE) *p_tile_b = b->tile_list[i];
@@ -467,7 +396,6 @@ void swap(EpsilodSwapStructs *a, EpsilodSwapStructs *b) {
 }
 
 void compute(PCtrl comm, EpsilodProperties *props, EpsilodComputationArgs *computation_args) {
-
 	stencilDeviceFunction f_updateCell = computation_args->f_updateCell;
 	EpsilodTiles         *tiles        = computation_args->tiles;
 	EpsilodTiles         *copy_tiles   = computation_args->copy_tiles;
@@ -478,7 +406,7 @@ void compute(PCtrl comm, EpsilodProperties *props, EpsilodComputationArgs *compu
 	float                 factor       = computation_args->factor;
 	Epsilod_ext          *ext_params   = computation_args->ext_params;
 
-	/* 4.8.2. COMPUTE BORDERS */
+	// Compute borders
 	for (int i = 0; i < props->dims; i++) {
 		if (validShape(tiles->border_out_dev[i][0].shape) && validShape(copy_tiles->border_out_dev[i][0].shape)) {
 			f_updateCell(comm, threads->border_out_dev[i][0], chars->border_out_dev[i], 2 * i, tiles->border_out_dev[i][0], copy_tiles->border_out_dev[i][0], coords->border_out_dev[i][0], *stencil, factor, ext_params);
@@ -488,7 +416,7 @@ void compute(PCtrl comm, EpsilodProperties *props, EpsilodComputationArgs *compu
 		}
 	}
 
-	/* SYNC BORDERS BEFORE INNER */
+	// Sync borders before inner
 	for (int i = 0; i < props->dims; i++) {
 		if (validShape(tiles->border_out_dev[i][0].shape) && validShape(copy_tiles->border_out_dev[i][0].shape)) {
 			Ctrl_WaitTile(comm, tiles->border_out_dev[i][0]);
@@ -498,7 +426,7 @@ void compute(PCtrl comm, EpsilodProperties *props, EpsilodComputationArgs *compu
 		}
 	}
 
-	/* COMPUTE INNER */
+	// Compute inner
 	if (validShape(tiles->inner_local->shape) && validShape(copy_tiles->inner_local->shape)) {
 		f_updateCell(comm, threads->inner, chars->inner, 0, *tiles->inner_local, *copy_tiles->inner_local, coords->inner, *stencil, factor, ext_params);
 	}
@@ -511,7 +439,7 @@ void doStep(
 	EpsilodTiles *tiles      = computation_args->tiles;
 	EpsilodTiles *copy_tiles = computation_args->copy_tiles;
 
-	/* UPDATE TILE COPY */
+	// Update tile copy
 	if (validShape(copy_tiles->mat->shape) && validShape(tiles->mat->shape)) {
 		swap(swap_structs, swap_structs_copy);
 	}
@@ -536,7 +464,7 @@ void doStepNoComms(
 
 	compute(comm, props, computation_args);
 
-	// Wait for kernels to finish:
+	// Wait for kernels to finish
 	for (int i = 0; i < props->dims; i++)
 		for (int j = 0; j < 2; j++)
 			if (validShape(tiles->border_out_dev[i][j].shape))
@@ -544,7 +472,6 @@ void doStepNoComms(
 	Ctrl_WaitTile(comm, *tiles->inner_local);
 }
 
-/* I. STENCIL COMPUTATION FUNCTION: */
 void stencilComputation(
 	int                    sizes[],
 	HitShape               stencilShape,
@@ -559,7 +486,7 @@ void stencilComputation(
 	Epsilod_ext           *ext_params_arg,
 	char                  *device_selection_file) {
 
-	/* HITMAP COMM. TYPE */
+	// Hitmap comm. type
 	HitType HIT_CELL;
 	#if HIT2_COUNTPARAM(EPSILOD_BASE_TYPE_COMPOUND) < 2
 	HIT_CELL = hit_comTranslateType(EPSILOD_BASE_TYPE);
@@ -575,13 +502,12 @@ void stencilComputation(
 	#endif
 	#endif
 
-	/* EXTERNAL/EXTRA PARAMETERS: USE FOO VARIABLE FOR NULL ARGUMENT */
-	Epsilod_ext  foo;
-	Epsilod_ext *ext_params = (ext_params_arg == NULL) ? &foo : ext_params_arg;
+	// External/extra parameters
+	Epsilod_ext *ext_params = (ext_params_arg == NULL) ? &(Epsilod_ext){0} : ext_params_arg;
 
 	int dims = hit_shapeDims(stencilShape);
 
-	/* CHECK IF GENERIC KERNEL HAS BEEN CHOSEN */
+	// Check if generic kernel has been chosen
 	if (f_updateCell == NULL) {
 		#if !EPSILOD_IS_FLOAT(EPSILOD_BASE_TYPE)
 		fprintf(stderr, "[Parallel Stencil Skeleton ERROR] Generic update kernel is only defined for float base type.\n\tFor other types a custom update kernel should be provided as argument.\n");
@@ -598,6 +524,9 @@ void stencilComputation(
 			case 3:
 				f_updateCell = updateCell_default_3D;
 				break;
+			case 4:
+				f_updateCell = updateCell_default_4D;
+				break;
 			default:
 				fprintf(stderr, "[Parallel Stencil Skeleton ERROR] Stencil with invalid number of dimensions. The skeleton only supports 1D, 2D or 3D stencils.\n");
 				fflush(stderr);
@@ -606,17 +535,15 @@ void stencilComputation(
 		#endif // float
 	}
 
-	/* READ ENVIRONMENT: USE CUDA/HIP MPI AWARE */
+	// Read env: use CUDA/HIP MPI aware
 	mpi_dev_aware = hit_envNoYes("EPSILOD_MPI_DEV_AWARE");
 	printOnce("Epsilod Using Device-Aware MPI: %c\n", (mpi_dev_aware) ? 'y' : 'n');
 	if (mpi_dev_aware)
 		printOnce("Note: Device-Aware MPI only works if it is suported and activated in the MPI layer\n");
 
-	/* INITIALIZE DEVICE Controllers */
+	// Initialize device Controllers
 	__ctrl_block__(device_selection_file) {
-		int i, j, k;
-
-		/* INIT CLOCKS */
+		// init clocks
 		hit_clockSynchronizeAll();
 		hit_clockStart(mainClock);
 		hit_clockStart(initClock);
@@ -630,39 +557,34 @@ void stencilComputation(
 
 		Ctrl_SetDependanceMode(comm, CTRL_MODE_EXPLICIT);
 
-		/* 0. BUILD THE STENCIL TILE */
+		/* 0. Build the stencil tile */
 		HitTile_float stencil = Ctrl_DomainAlloc(comm, float, stencilShape);
 		Ctrl_HostTask(Ctrl_Copy_Stencil, stencil, stencilData);
 		Ctrl_MoveTo(comm, stencil);
 		Ctrl_WaitTile(comm, stencil);
 
-		/* 1. BUILD ORIGINAL SHAPE */
+		/* 1. Build original shape */
 		HitShape shp = HIT_SHAPE_NULL;
 		hit_shapeDimsSet(shp, dims);
-		for (i = 0; i < dims; i++) {
+		for (int i = 0; i < dims; i++) {
 			hit_shapeSig(shp, i) = hit_sig(0, sizes[i] - 1, 1);
 		}
 
-		/* 2. SHORTCUTS FOR BORDER SIZES */
-		// v1.2 @Arturo, new predefined size type for borders
-		// int *borderLow  = (int *)malloc(dims * sizeof(int));
-		// int *borderHigh = (int *)malloc(dims * sizeof(int));
+		/* 2. Shortcuts for border sizes */
 		EpsilodBorders borders;
-		// printf("Borders:\n");
-		for (i = 0; i < dims; i++) {
+		for (int i = 0; i < dims; i++) {
 			borders.low[i]  = -hit_tileDimBegin(stencil, i);
 			borders.high[i] = hit_tileDimEnd(stencil, i);
-			// printf("\tDim %d: %d %d\n", i, borders.low[i], borders.high[i]);
 		}
 
-		/* 3.1. SHAPE TO DISTRIBUTE COMPUTATION (WITHOUT BORDERS) */
+		/* 3.1. Shape to distribute computation (without borders) */
 		HitShape shpInner = shp;
-		for (i = 0; i < dims; i++) {
+		for (int i = 0; i < dims; i++) {
 			shpInner = hit_shapeTransform(shpInner, i, HIT_SHAPE_BEGIN, +borders.low[i]);
 			shpInner = hit_shapeTransform(shpInner, i, HIT_SHAPE_END, -borders.high[i]);
 		}
 
-		/* 3.2. SELECT AND BUILD PARTITION/DISTRIBUTION */
+		/* 3.2. Select and build partition/distribution */
 		int   partition_dim       = 0;
 		int   partition_dim_count = -1;
 		bool  use_weights         = false;
@@ -707,37 +629,32 @@ void stencilComputation(
 					exit(EXIT_FAILURE);
 			}
 		}
-		// if (partition_dim >= dims) {
-		// 	fprintf(stderr, "\nError in EPSILOD_PARTITION environment string: Dimension %d, should be in the range of [0:stencil_dimensions-1]. String: %s\n\n", partition_dim, partition_str);
-		// 	MPI_Abort(MPI_COMM_WORLD, MPI_ERR_OTHER);
-		// 	exit(EXIT_FAILURE);
-		// }
 
-		// printf("Partition dim count: %d\n", partition_dim_count);
-
-		/* 3.2. BUILD DISTRIBUTED SHAPE */
+		/* 3.2. Build distributed shape */
 		int         topoDims;
 		HitTopology topo;
 		HitLayout   lay;
 		HitWeights  weights = Ctrl_ConfigWeights();
 
-		// TOPOLOGY
+		// Topology
 		if (partition_dim_count == -1) {
 			topoDims = 1;
 			topo     = hit_topology(plug_topPlain);
 
-			// WEIGHTED DISTRIBUTION
+			// Weighted distribution
 			if (use_weights) {
 				lay = hit_layout(plug_layDimWeighted_Blocks, topo, shpInner, partition_dim, weights);
 			}
-			// REGULAR DISTRIBUTION
+			// Regular distribution
 			else {
 				// TODO: use the proper layout
 				lay = hit_layout(plug_layDimBlocks, topo, shpInner, partition_dim);
 			}
 		} else {
-			if (partition_dim_count < 1 || partition_dim_count > 3) {
-				fprintf(stderr, "\nError EPSILOD: Number of dimensions for processes topology should be in the range [1:3]. Current value:%d \n\n", dims);
+			if (partition_dim_count < 1 || partition_dim_count > dims) {
+				fprintf(stderr, "\nError EPSILOD: Number of dimensions for processes topology should be in the range [1:dims]. "
+								"Current dims: %d Current topology dims: %d\n\n",
+						dims, partition_dim_count);
 				MPI_Abort(MPI_COMM_WORLD, MPI_ERR_OTHER);
 				exit(EXIT_FAILURE);
 			}
@@ -776,8 +693,8 @@ void stencilComputation(
 		/* 4. ACTIVE PROCESSES */
 		if (hit_layImActive(lay)) {
 
-			// 4.1. STOP IF THERE IS NOT ENOUGH INNER DATA FOR A BORDER
-			for (i = 0; i < dims; i++) {
+			// 4.1. Stop if there is not enough inner data for a border
+			for (int i = 0; i < dims; i++) {
 				if (hit_shapeSigCard(shpLayout, i) < borders.low[i] ||
 					hit_shapeSigCard(shpLayout, i) < borders.high[i]) {
 					if (hit_Rank == 0) {
@@ -788,14 +705,14 @@ void stencilComputation(
 				}
 			}
 
-			/* 4.2. EXPANDED SHAPE */
+			/* 4.2. Expanded shape */
 			HitShape shpExpanded = shpLayout;
-			for (i = 0; i < dims; i++) {
+			for (int i = 0; i < dims; i++) {
 				shpExpanded = hit_shapeTransform(shpExpanded, i, HIT_SHAPE_BEGIN, -borders.low[i]);
 				shpExpanded = hit_shapeTransform(shpExpanded, i, HIT_SHAPE_END, borders.high[i]);
 			}
 
-			/* 4.3. BORDER SHAPES: IN/OUT */
+			/* 4.3. Border shapes: in/out */
 			int      numBorders = (int)pow(3, dims);
 			HitShape shpBorderIn[numBorders];
 			HitShape shpBorderOut[numBorders];
@@ -805,22 +722,22 @@ void stencilComputation(
 			int      borderOutActive[numBorders];
 			int      indexCommBorder[numBorders];
 			int      indexCommBorderCount = 0;
-			for (i = 0; i < numBorders; i++)
+			for (int i = 0; i < numBorders; i++)
 				borderInActive[i] = 0;
 
-			// TRAVERSE THE STENCIL TO DETECT ACTIVE AND INACTIVE BORDERS DUE TO WEIGHTS
+			// Traverse the stencil to detect active and inactive borders due to weights
 			int indeces[dims];
 			int displacement = 0;
-			for (j = 0; j < dims; j++)
+			for (int j = 0; j < dims; j++)
 				indeces[j] = 0;
 			int endAnalysis = 0;
 			while (!endAnalysis) {
-				// CHECK IF THERE IS A WEIGHT IN THE STENCIL POSITION
+				// Check if there is a weight in the stencil position
 				if (stencilData[displacement] != 0) {
-					// ACTIVE BORDER, COMPUTE ITS NUMBER TO RAISE THE FLAG
+					// Active border, compute its number to raise the flag
 					int acum   = 1;
 					int border = 0;
-					for (j = dims - 1; j >= 0; j--) {
+					for (int j = dims - 1; j >= 0; j--) {
 						if (indeces[j] > borders.low[j])
 							border += 2 * acum;
 						else if (indeces[j] == borders.low[j])
@@ -829,9 +746,9 @@ void stencilComputation(
 					}
 					borderInActive[border] = 1;
 				}
-				// ADVANCE TO THE NEXT STENCIL POSITION
+				// Advance to the next stencil position
 				displacement++;
-				for (k = dims - 1; k >= 0; k--) {
+				for (int k = dims - 1; k >= 0; k--) {
 					indeces[k]++;
 					if (k == 0 && indeces[0] == hit_tileDimCard(stencil, 0)) endAnalysis = 1;
 					if (indeces[k] >= hit_tileDimCard(stencil, k))
@@ -840,15 +757,15 @@ void stencilComputation(
 						break;
 				}
 			}
-			// ALWAYS SKIP FALSE BORDER: TILE INNER
+			// Always skip false border: tile inner
 			borderInActive[numBorders / 2] = 0;
 
-			// BUILD BORDER SHAPES AND THE SHORTCUTS OF THE NEIGHBOR SHIFTS
-			for (i = 0; i < numBorders; i++) {
+			// Build border shapes and the shortcuts of the neighbor shifts
+			for (int i = 0; i < numBorders; i++) {
 				shiftsIn[i]  = HIT_RANKS_NULL;
 				shiftsOut[i] = HIT_RANKS_NULL;
 
-				// NON-ACTIVE BORDERS, NULL SHAPES, NULL RANKS
+				// Non-active borders, null shapes, null ranks
 				if (!borderInActive[i]) {
 					shpBorderIn[i]  = HIT_SHAPE_NULL;
 					shpBorderOut[i] = HIT_SHAPE_NULL;
@@ -857,14 +774,14 @@ void stencilComputation(
 				shpBorderIn[i]  = shpLayout;
 				shpBorderOut[i] = shpLayout;
 
-				// EXTRACT RANKS FOR THIS BORDER
+				// Extract ranks for this border
 				int digits = i;
-				for (j = 0; j < dims; j++) {
+				for (int j = 0; j < dims; j++) {
 					shiftsIn[i].rank[j]  = digits % 3 - 1;
 					shiftsOut[i].rank[j] = -shiftsIn[i].rank[j];
 					digits /= 3;
 
-					// SHAPE IN
+					// Shape in
 					if (shiftsIn[i].rank[j] == -1) {
 						shpBorderIn[i] = hit_shapeTransform(shpBorderIn[i], j, HIT_SHAPE_FIRST, borders.low[j]);
 						shpBorderIn[i] = hit_shapeTransform(shpBorderIn[i], j, HIT_SHAPE_MOVE, -borders.low[j]);
@@ -873,7 +790,7 @@ void stencilComputation(
 						shpBorderIn[i] = hit_shapeTransform(shpBorderIn[i], j, HIT_SHAPE_MOVE, borders.high[j]);
 					}
 
-					// SHAPE OUT (REVERSERD TARGET)
+					// Shape out (reverserd target)
 					if (shiftsIn[i].rank[j] == -1) {
 						shpBorderOut[i] = hit_shapeTransform(shpBorderOut[i], j, HIT_SHAPE_LAST, borders.low[j]);
 					} else if (shiftsIn[i].rank[j] == 1) {
@@ -882,44 +799,44 @@ void stencilComputation(
 				}
 			}
 
-			/* 4.4. NON-OVERLAPED BORDERS IN THE INNER PART
-				a) TO EXTRACT DATA FROM DEVICE WITHOUT REPLICATION
-				b) TO DETERMINE THE THREADS-GRID CARDINALITIES FOR THE COMPUTING KERNELS
+			/* 4.4. Non-overlaped borders in the inner part
+				a) To extract data from device without replication
+				b) To determine the threads-grid cardinalities for the computing kernels
 				@arturo Aug 2024: Skip dimensions not selected in the topology
 			*/
 			HitShape shpInnerLocal = shpLayout;
 			HitShape shpBorderOutDev[dims][2];
-			for (j = 0; j < dims; j++) {
+			for (int j = 0; j < dims; j++) {
 				if (j < topoDims) {
 					shpInnerLocal = hit_shapeTransform(shpInnerLocal, j, HIT_SHAPE_BEGIN, borders.high[j]);
 					shpInnerLocal = hit_shapeTransform(shpInnerLocal, j, HIT_SHAPE_END, -borders.low[j]);
 
 					shpBorderOutDev[j][0] = hit_shapeTransform(shpLayout, j, HIT_SHAPE_FIRST, borders.high[j]);
 					shpBorderOutDev[j][1] = hit_shapeTransform(shpLayout, j, HIT_SHAPE_LAST, borders.low[j]);
-					// TAKE OUT THE PARTS WHICH ARE OVERLAPPED WITH PREVIOUS DIMS
-					for (k = 0; k < j; k++) {
+					// Take out the parts which are overlapped with previous dims
+					for (int k = 0; k < j; k++) {
 						shpBorderOutDev[j][0] = hit_shapeTransform(shpBorderOutDev[j][0], k, HIT_SHAPE_BEGIN, borders.high[k]);
 						shpBorderOutDev[j][0] = hit_shapeTransform(shpBorderOutDev[j][0], k, HIT_SHAPE_END, -borders.low[k]);
 						shpBorderOutDev[j][1] = hit_shapeTransform(shpBorderOutDev[j][1], k, HIT_SHAPE_BEGIN, borders.high[k]);
 						shpBorderOutDev[j][1] = hit_shapeTransform(shpBorderOutDev[j][1], k, HIT_SHAPE_END, -borders.low[k]);
 					}
 				} else {
-					// NULL SIGNATURE
+					// NULL signature
 					shpBorderOutDev[j][0] = HIT_SIG_SHAPE_NULL;
 					shpBorderOutDev[j][1] = HIT_SIG_SHAPE_NULL;
 				}
 			}
 
-			for (j = 0; j < dims; j++) {
-				for (k = 0; k < dims; k++) {
+			for (int j = 0; j < dims; j++) {
+				for (int k = 0; k < dims; k++) {
 					if (hit_shapeSig(shpBorderOutDev[j][0], k).begin > hit_shapeSig(shpBorderOutDev[j][0], k).end) {
 						shpBorderOutDev[j][0] = HIT_SIG_SHAPE_NULL;
 						break;
 					}
 				}
 			}
-			for (j = 0; j < dims; j++) {
-				for (k = 0; k < dims; k++) {
+			for (int j = 0; j < dims; j++) {
+				for (int k = 0; k < dims; k++) {
 					if (hit_shapeSig(shpBorderOutDev[j][1], k).begin > hit_shapeSig(shpBorderOutDev[j][1], k).end) {
 						shpBorderOutDev[j][1] = HIT_SIG_SHAPE_NULL;
 						break;
@@ -927,7 +844,7 @@ void stencilComputation(
 				}
 			}
 
-			/* 4.5. BUILD TILES */
+			/* 4.5. Build tiles */
 			int num_tiles_total = 1 + 1 + 2 * numBorders + dims * 2;
 			HitTile(EPSILOD_BASE_TYPE) * tileList[num_tiles_total];
 			HitTile(EPSILOD_BASE_TYPE) * copyList[num_tiles_total];
@@ -943,14 +860,14 @@ void stencilComputation(
 
 			HitTile(EPSILOD_BASE_TYPE) tileMat, tileCopy;
 
-			tileMat  = Ctrl_Select(EPSILOD_BASE_TYPE, globalMat, shpExpanded, CTRL_SELECT_ARR_COORD); //-------------//select tileMat
-			tileCopy = Ctrl_Select(EPSILOD_BASE_TYPE, globalMat, shpExpanded, CTRL_SELECT_ARR_COORD); //-------------//select tileCopy
+			tileMat  = Ctrl_Select(EPSILOD_BASE_TYPE, globalMat, shpExpanded, CTRL_SELECT_ARR_COORD);
+			tileCopy = Ctrl_Select(EPSILOD_BASE_TYPE, globalMat, shpExpanded, CTRL_SELECT_ARR_COORD);
 
 			tileList[0] = &tileMat;
 			copyList[0] = &tileCopy;
 
-			Ctrl_Alloc(comm, tileMat);  //---------------------//alloc tileMat
-			Ctrl_Alloc(comm, tileCopy); //---------------------//alloc tileCopy
+			Ctrl_Alloc(comm, tileMat);
+			Ctrl_Alloc(comm, tileCopy);
 
 			HitTile(EPSILOD_BASE_TYPE) tileInnerLocal     = Ctrl_Select(EPSILOD_BASE_TYPE, tileMat, shpInnerLocal, CTRL_SELECT_ARR_COORD);
 			HitTile(EPSILOD_BASE_TYPE) tileCopyInnerLocal = Ctrl_Select(EPSILOD_BASE_TYPE, tileCopy, shpInnerLocal, CTRL_SELECT_ARR_COORD);
@@ -958,11 +875,11 @@ void stencilComputation(
 			tileList[1] = &tileInnerLocal;
 			copyList[1] = &tileCopyInnerLocal;
 
-			for (i = 0; i < numBorders; i++) {
-				tileBorderIn[i]      = Ctrl_Select(EPSILOD_BASE_TYPE, tileMat, shpBorderIn[i], CTRL_SELECT_ARR_COORD);   //-------------------//select
-				tileCopyBorderIn[i]  = Ctrl_Select(EPSILOD_BASE_TYPE, tileCopy, shpBorderIn[i], CTRL_SELECT_ARR_COORD);  //-------------------//select
-				tileBorderOut[i]     = Ctrl_Select(EPSILOD_BASE_TYPE, tileMat, shpBorderOut[i], CTRL_SELECT_ARR_COORD);  //-------------------//select
-				tileCopyBorderOut[i] = Ctrl_Select(EPSILOD_BASE_TYPE, tileCopy, shpBorderOut[i], CTRL_SELECT_ARR_COORD); //-------------------//select
+			for (int i = 0; i < numBorders; i++) {
+				tileBorderIn[i]      = Ctrl_Select(EPSILOD_BASE_TYPE, tileMat, shpBorderIn[i], CTRL_SELECT_ARR_COORD);
+				tileCopyBorderIn[i]  = Ctrl_Select(EPSILOD_BASE_TYPE, tileCopy, shpBorderIn[i], CTRL_SELECT_ARR_COORD);
+				tileBorderOut[i]     = Ctrl_Select(EPSILOD_BASE_TYPE, tileMat, shpBorderOut[i], CTRL_SELECT_ARR_COORD);
+				tileCopyBorderOut[i] = Ctrl_Select(EPSILOD_BASE_TYPE, tileCopy, shpBorderOut[i], CTRL_SELECT_ARR_COORD);
 
 				tileList[2 + 2 * i]     = &tileBorderIn[i];
 				copyList[2 + 2 * i]     = &tileCopyBorderIn[i];
@@ -970,35 +887,33 @@ void stencilComputation(
 				copyList[2 + 2 * i + 1] = &tileCopyBorderOut[i];
 			}
 
-			/* ELIMINATE BORDERS EXCEPT IF THEY ARE GLOBAL FOR IO SELECTION */
+			// Eliminate borders except if they are global for io selection
 			HitTile(EPSILOD_BASE_TYPE) io_tile, io_copy;
 			HitShape io_shape = hit_tileShape(tileMat);
-			for (i = 0; i < dims; i++) {
-				/* DIM i FIRST BORDER IS NOT MINE */
+			for (int i = 0; i < dims; i++) {
+				// Dim i first border is not mine
 				if (!hit_sigIn(hit_shapeSig(io_shape, i), hit_tileDimBegin(globalMat, i))) {
 					io_shape = hit_shapeTransform(io_shape, i, HIT_SHAPE_BEGIN, borders.low[i]);
 				}
-				/* DIM i LAST BORDER IS NOT MINE */
+				// Dim i last border is not mine
 				if (!hit_sigIn(hit_shapeSig(io_shape, i), hit_tileDimEnd(globalMat, i))) {
 					io_shape = hit_shapeTransform(io_shape, i, HIT_SHAPE_END, -borders.high[i]);
 				}
 			}
-			// hit_tileSelectArrayCoords(&io_tile, &tileMat, io_shape);
-			// hit_tileSelectArrayCoords(&io_copy, &tileCopy, io_shape);
 			io_tile = Ctrl_Select(EPSILOD_BASE_TYPE, tileMat, io_shape, CTRL_SELECT_ARR_COORD);
 			io_copy = Ctrl_Select(EPSILOD_BASE_TYPE, tileCopy, io_shape, CTRL_SELECT_ARR_COORD);
 
-			for (i = 0; i < dims; i++) {
+			for (int i = 0; i < dims; i++) {
 				if (validShape(shpBorderOutDev[i][0])) {
-					tileBorderOutDev[i][0]     = Ctrl_Select(EPSILOD_BASE_TYPE, tileMat, shpBorderOutDev[i][0], CTRL_SELECT_ARR_COORD);  //-------------------//select
-					tileCopyBorderOutDev[i][0] = Ctrl_Select(EPSILOD_BASE_TYPE, tileCopy, shpBorderOutDev[i][0], CTRL_SELECT_ARR_COORD); //-------------------//select
+					tileBorderOutDev[i][0]     = Ctrl_Select(EPSILOD_BASE_TYPE, tileMat, shpBorderOutDev[i][0], CTRL_SELECT_ARR_COORD);
+					tileCopyBorderOutDev[i][0] = Ctrl_Select(EPSILOD_BASE_TYPE, tileCopy, shpBorderOutDev[i][0], CTRL_SELECT_ARR_COORD);
 				} else {
 					tileBorderOutDev[i][0]     = *(HitTile(EPSILOD_BASE_TYPE) *)&HIT_TILE_NULL;
 					tileCopyBorderOutDev[i][0] = *(HitTile(EPSILOD_BASE_TYPE) *)&HIT_TILE_NULL;
 				}
 				if (validShape(shpBorderOutDev[i][1])) {
-					tileBorderOutDev[i][1]     = Ctrl_Select(EPSILOD_BASE_TYPE, tileMat, shpBorderOutDev[i][1], CTRL_SELECT_ARR_COORD);  //-------------------//select
-					tileCopyBorderOutDev[i][1] = Ctrl_Select(EPSILOD_BASE_TYPE, tileCopy, shpBorderOutDev[i][1], CTRL_SELECT_ARR_COORD); //-------------------//select
+					tileBorderOutDev[i][1]     = Ctrl_Select(EPSILOD_BASE_TYPE, tileMat, shpBorderOutDev[i][1], CTRL_SELECT_ARR_COORD);
+					tileCopyBorderOutDev[i][1] = Ctrl_Select(EPSILOD_BASE_TYPE, tileCopy, shpBorderOutDev[i][1], CTRL_SELECT_ARR_COORD);
 				} else {
 					tileBorderOutDev[i][1]     = *(HitTile(EPSILOD_BASE_TYPE) *)&HIT_TILE_NULL;
 					tileCopyBorderOutDev[i][1] = *(HitTile(EPSILOD_BASE_TYPE) *)&HIT_TILE_NULL;
@@ -1013,7 +928,7 @@ void stencilComputation(
 			// Display extra shape information to help debugging
 			#ifdef _PSS_SHP_INFO_DEBUG_
 			HitShape temp_shp;
-			for (i = 0; i < dims; i++) {
+			for (int i = 0; i < dims; i++) {
 				temp_shp = shpBorderOutDev[i][0];
 				printf("[%d] shpBorderOutDev low dim %d: ", hit_Rank, i);
 				if (validShape(temp_shp)) {
@@ -1031,7 +946,7 @@ void stencilComputation(
 				}
 				fflush(stdout);
 			}
-			for (i = 0; i < numBorders; i++) {
+			for (int i = 0; i < numBorders; i++) {
 				if (!borderInActive[i])
 					continue;
 				printf("[%d] Border IN (%d): ", hit_Rank, i);
@@ -1049,32 +964,31 @@ void stencilComputation(
 			fflush(stdout);
 			#endif // _PSS_SHP_INFO_DEBUG_
 
-			/* 4.6. BUILD DISTRIBUTED-MEMORY COMMUNICATION PATTERN */
+			/* 4.6. Build distributed-memory communication pattern */
 			HitPattern    neighSync     = hit_pattern(HIT_PAT_UNORDERED);
 			HitPattern    neighSyncCopy = hit_pattern(HIT_PAT_UNORDERED);
 			CommCompIndex sorted_comm_indices[numBorders];
-			for (i = 0; i < numBorders; i++) {
+			for (int i = 0; i < numBorders; i++) {
 				CommCompIndex comm_index = {i, tileBorderIn[i]};
 				sorted_comm_indices[i]   = comm_index;
 			}
-#define EPSILOD_COMM_SORT
 			#ifdef EPSILOD_COMM_SORT
 			qsort(sorted_comm_indices, numBorders, sizeof(CommCompIndex), compare_comm_tiles);
 			#endif
-			for (i = sorted_comm_indices[j = 0].index; j < numBorders; i = sorted_comm_indices[++j].index) {
+			for (int j = 0, i = sorted_comm_indices[j].index; j < numBorders; i = sorted_comm_indices[++j].index) {
 				printOnce("Border comm: index=%d size=%d\n", i, tileBorderIn[i].acumCard);
 
-				// KEEP TRACK OF ACTIVE INPUT/OUTPUT COMMs SEPARATELY
+				// Keep track of active input/output comms separately
 				borderOutActive[i] = borderInActive[i];
 
-				// SKIP EMPTY BORDERS
+				// Skip empty borders
 				if (!borderInActive[i]) continue;
 
-				// LOCATE NEIGHBORS IN THE LAYOUT GRID
+				// Locate neighbors in the layout grid
 				HitRanks neighIn  = hit_layNeighborN(lay, shiftsIn[i]);
 				HitRanks neighOut = hit_layNeighborN(lay, shiftsOut[i]);
 
-				// IF NEIGHBOR DOES NOT EXIST, DEACTIVATE BORDER COMMs.
+				// If neighbor does not exist, deactivate border comms
 				if (neighIn.rank[0] == HIT_RANK_NULL) {
 					// Free tiles before overwriting them
 					Ctrl_Free(comm, tileBorderIn[i], tileCopyBorderIn[i]);
@@ -1090,11 +1004,11 @@ void stencilComputation(
 					tileCopyBorderOut[i] = *(HitTile(EPSILOD_BASE_TYPE) *)&HIT_TILE_NULL;
 				}
 
-				// IF BOTH NEIGHBORS DO NOT EXIST, SKIP ADDING COMMs
+				// If both neighbors do not exist, skip adding comms
 				if (!borderInActive[i] && !borderOutActive[i])
 					continue;
 
-				// USE CUDA/HIP MPI AWARE
+				// Use CUDA/HIP MPI aware
 				if (mpi_dev_aware) {
 					tileBorderIn[i].data      = Ctrl_GetDevPtr(comm, tileBorderIn[i]);
 					tileBorderOut[i].data     = Ctrl_GetDevPtr(comm, tileBorderOut[i]);
@@ -1102,27 +1016,19 @@ void stencilComputation(
 					tileCopyBorderOut[i].data = Ctrl_GetDevPtr(comm, tileCopyBorderOut[i]);
 				}
 
-				// ADD COMMs TO THE PATTERNS
-				// printf("CTRL[%d] Border[%d] Adding comm. to the pattern\n", hit_Rank, i);
+				// Add comms to the patterns
 				hit_patternAdd(&neighSync, hit_comSendRecv(lay, neighOut, &tileBorderOut[i], neighIn, &tileBorderIn[i], HIT_CELL));
 				hit_patternAdd(&neighSyncCopy, hit_comSendRecv(lay, neighOut, &tileCopyBorderOut[i], neighIn, &tileCopyBorderIn[i], HIT_CELL));
 
-				// ANNOTATE THE INDEX OF THE BORDER IN THE PATTERN
+				// Annotate the index of the border in the pattern
 				indexCommBorder[indexCommBorderCount] = i;
 				indexCommBorderCount++;
 			}
 
-			/* 4.7. INITIALIZE REDISTRIBUTION STRUCTURES */
-			/// HitTile *redistributedTiles[2];
-			/// HitPattern *redistributedPatterns[2];
-
-			/// HitAvg avgs = hit_avgSimple(49); // TODO: change windows from 49 (50 - 1) to something that makes more sense.
-
-			/* Kernels characterization */
-			/* Inner tile characterization CPUs/GPUs */
-			Ctrl_Thread inner_char = comm->type == CTRL_TYPE_CPU ? CPU_INNER_CHAR[dims - 1] : INNER_CHAR[dims - 1];
-			/* Borders characterization CPUs/GPUs */
-			Ctrl_Thread *border_char = comm->type == CTRL_TYPE_CPU ? &CPU_BORDER_CHAR[dims - 1][0] : &BORDER_CHAR[dims - 1][0];
+			// Kernel characterizations
+			int          char_dims   = (dims > 3) ? 3 : dims;
+			Ctrl_Thread  inner_char  = comm->type == CTRL_TYPE_CPU ? CPU_INNER_CHAR[char_dims - 1] : INNER_CHAR[char_dims - 1];
+			Ctrl_Thread *border_char = comm->type == CTRL_TYPE_CPU ? &CPU_BORDER_CHAR[char_dims - 1][0] : &BORDER_CHAR[char_dims - 1][0];
 
 			EpsilodThreads computation_threads;
 			computation_threads.inner = initCtrlThreadFromTile(dims, &tileInnerLocal);
@@ -1134,55 +1040,29 @@ void stencilComputation(
 				}
 			}
 
-			/* 4.8. INITIALIZE ARRAY */
+			/* 4.8. Initialize array */
 			printOnce("Init stage\n");
 			fflush(stdout);
 
-			EpsilodCoords global;
-			global.dims      = dims;
-			global.size[0]   = sizes[0];
-			global.size[1]   = (dims > 1) ? sizes[1] : 0;
-			global.size[2]   = (dims > 2) ? sizes[2] : 0;
-			global.offset[0] = hit_shapeSig(shpExpanded, 0).begin;
-			global.offset[1] = hit_shapeSig(shpExpanded, 1).begin;
-			global.offset[2] = hit_shapeSig(shpExpanded, 2).begin;
-			global.borders   = borders;
+			EpsilodCoords global = {0};
+			global.dims          = dims;
+			for (int i = 0; i < dims; i++) {
+				global.size[i]   = sizes[i];
+				global.offset[i] = hit_shapeSig(shpExpanded, i).begin;
+			}
+			global.borders = borders;
 
 			EpsilodCoords global_inner_local = global;
-			global_inner_local.offset[0]     = hit_shapeSig(shpInnerLocal, 0).begin;
-			global_inner_local.offset[1]     = hit_shapeSig(shpInnerLocal, 1).begin;
-			global_inner_local.offset[2]     = hit_shapeSig(shpInnerLocal, 2).begin;
-
 			EpsilodCoords global_border_out_dev[dims][2];
 			for (int i = 0; i < dims; i++) {
+				global_inner_local.offset[i] = hit_shapeSig(shpInnerLocal, i).begin;
 				for (int j = 0; j < 2; j++) {
 					global_border_out_dev[i][j]           = global;
-					global_border_out_dev[i][j].offset[0] = hit_shapeSig(shpBorderOutDev[i][j], 0).begin;
-					global_border_out_dev[i][j].offset[1] = hit_shapeSig(shpBorderOutDev[i][j], 1).begin;
-					global_border_out_dev[i][j].offset[2] = hit_shapeSig(shpBorderOutDev[i][j], 2).begin;
+					global_border_out_dev[i][j].offset[i] = hit_shapeSig(shpBorderOutDev[i][j], i).begin;
 				}
 			}
 
-			// printf(
-			// 	"Global coords:\n"
-			// 	"\toffset io: %d %d %d\n"
-			// 	"\toffset inner: %d %d %d\n"
-			// 	"\toffset border out dev low: %d %d %d\n"
-			// 	"\toffset border out dev high: %d %d %d\n",
-			// 	global.offset[0],
-			// 	global.offset[1],
-			// 	global.offset[2],
-			// 	global_inner_local.offset[0],
-			// 	global_inner_local.offset[1],
-			// 	global_inner_local.offset[2],
-			// 	global_border_out_dev_low[0].offset[0],
-			// 	global_border_out_dev_low[0].offset[1],
-			// 	global_border_out_dev_low[0].offset[2],
-			// 	global_border_out_dev_high[0].offset[0],
-			// 	global_border_out_dev_high[0].offset[1],
-			// 	global_border_out_dev_high[0].offset[2]);
-
-			/* BUILD COMPUTATION STRUCTS */
+			// Build computation structs
 			EpsilodTiles           tiles;
 			EpsilodTiles           copy_tiles;
 			EpsilodProperties      props;
@@ -1230,7 +1110,7 @@ void stencilComputation(
 			comm_args.border_in_active  = borderInActive;
 			comm_args.index_comm_border = indexCommBorder;
 
-			/* 4.8.1. FIRST STAGE (Optional): INITIALIZATION IN HOST */
+			/* 4.8.1. First stage (Optional): initialization in host */
 			if (f_init != NULL) {
 				printOnce("\tInitializing in host.\n");
 				fflush(stdout);
@@ -1240,7 +1120,7 @@ void stencilComputation(
 				Ctrl_WaitTile(comm, tileMat);
 			}
 
-			/* 4.8.2. SECOND STAGE (Optional): INITIALIZATION IN DEVICE */
+			/* 4.8.2. Second stage (Optional): initialization in device */
 			Ctrl_Thread threads_touch   = {.dims = 1, .i = 1, .j = 0, .k = 0};
 			Ctrl_Thread blocksize_touch = {.dims = 1, .i = 1, .j = 1, .k = 1};
 			if (f_dev_init != NULL) {
@@ -1251,9 +1131,8 @@ void stencilComputation(
 			}
 
 			bool tiles_marked = false;
-			/* 4.8.3. INITIALIZE COPY */
+			/* 4.8.3. Initialize copy */
 			if (f_init_copy == NULL) {
-				// #define EPSILOD_INITIALIZE_COPY_IN_HOST
 				#ifdef EPSILOD_INITIALIZE_COPY_IN_HOST
 				printOnce("\tInitializing copy in host.\n");
 				fflush(stdout);
@@ -1266,22 +1145,15 @@ void stencilComputation(
 				// Send tileCopy to the device
 				Ctrl_MoveTo(comm, tileCopy);
 				Ctrl_WaitTile(comm, tileCopy);
-				#else // INITIALIZE COPY IN DEVICE
+				#else // EPSILOD_INITIALIZE_COPY_IN_HOST
 				printOnce("\tInitializing copy in device.\n");
 				fflush(stdout);
 				Ctrl_Launch(comm, epsilod_dev_touch, threads_touch, blocksize_touch, tileMat);
 				Ctrl_Thread threads_flat = {.dims = 1, .i = tileMat.acumCard, .j = 1, .k = 1};
-				// TODO: the number of threads was reduced from 512 to 256 to support OpenMP.
-				// It should be queried
+				// TODO: the number of threads was reduced from 512 to 256 to support OpenCL. It should be queried instead.
 				Ctrl_Thread blocksize_flat = {.dims = 1, .i = 256, .j = 1, .k = 1};
 				Ctrl_Launch(comm, epsilod_dev_copy, threads_flat, blocksize_flat, tileMat, tileCopy);
-				// TODO: remove when Ctrl_MoveTo's of tileBorderIn are properly optimised
-				// The Ctrl_MoveTo's are currently overwriting border data in the device
-				Ctrl_MoveFrom(comm, tileMat);
-				Ctrl_WaitTile(comm, tileMat);
-				Ctrl_MoveFrom(comm, tileCopy);
-				Ctrl_WaitTile(comm, tileCopy);
-				#endif
+				#endif // EPSILOD_INITIALIZE_COPY_IN_HOST
 			} else {
 				markTiles(comm, props, threads_touch, blocksize_touch, &tiles, &copy_tiles, &comm_args);
 				tiles_marked                  = true;
@@ -1290,7 +1162,7 @@ void stencilComputation(
 				swap(&swap_structs, &swap_structs_copy);
 			}
 
-			/* 4.8.4. MARK INITIALIZATION OF SUBSELECTIONS AND COPIES, ELIMINATE WARNINGS */
+			/* 4.8.4. Mark initialization of subselections and copies, eliminate warnings */
 			if (!tiles_marked)
 				markTiles(comm, props, threads_touch, blocksize_touch, &tiles, &copy_tiles, &comm_args);
 
@@ -1299,7 +1171,7 @@ void stencilComputation(
 			Ctrl_Synchronize();
 			hit_comBarrier(lay);
 
-			/* 4.9. COMPUTATION LOOP */
+			/* 4.9. Computation loop */
 			printOnce("Computation stage\n");
 			fflush(stdout);
 			hit_clockStart(loopClock);
@@ -1310,7 +1182,7 @@ void stencilComputation(
 				doStep(comm, &props, &computation_args, &swap_structs, &swap_structs_copy, &comm_args);
 			}
 
-			/* 4.10. LAST ITERATION UPDATE: NO COMMUNICATION AFTER */
+			/* 4.10. Last iteration update: no communication after */
 			if (numIterations > 0) {
 				doStepNoComms(comm, &props, &computation_args, &swap_structs, &swap_structs_copy);
 			}
@@ -1322,16 +1194,14 @@ void stencilComputation(
 			Ctrl_MoveFrom(comm, tileMat);
 			Ctrl_WaitTile(comm, tileMat);
 
-			// Ctrl_HostTask(comm, print_matrix, tileMat, ext_params);
-
-			/* 4.11. CLOCK RESULTS */
+			/* 4.11. Clock results */
 			hit_clockStop(mainClock);
 			hit_clockStop(loopClock);
 
 			reduceClocks(lay);
 			printClockInfo();
 
-			/* 4.12. WRITE RESULT MATRIX */
+			/* 4.12. Write result matrix */
 			f_output(numIterations % 2 == 0 ? io_tile : io_copy, ext_params);
 			hit_patternFree(&neighSync);
 			hit_patternFree(&neighSyncCopy);
@@ -1339,19 +1209,17 @@ void stencilComputation(
 			printOnce("Output finished\n");
 			fflush(stdout);
 
-			/* FREE TILES */
+			// Free tiles
 			printOnce("Free tiles\n");
 			fflush(stdout);
-			for (i = 0; i < num_tiles_total; i++) {
+			for (int i = 0; i < num_tiles_total; i++) {
 				Ctrl_Free(comm, *tileList[i]);
 				Ctrl_Free(comm, *copyList[i]);
 			}
 			Ctrl_Free(comm, io_tile);
 			Ctrl_Free(comm, io_copy);
-		} // layactive
-
-		/* 5. INACTIVE PROCESSES: ONLY COLLECTIVE CLOCK OPERATIONS */
-		else {
+		} else {
+			/* 5. Inactive processes: only collective clock operations */
 			fprintf(stderr, "[%d] Warning, process not active\n", hit_Rank);
 
 			hit_clockStop(initClock);
@@ -1362,15 +1230,12 @@ void stencilComputation(
 			printClockInfo();
 		}
 
-		/* 6. FREE OTHER RESOURCES */
+		/* 6. Free other resources */
 		printOnce("Free data structures\n");
 		fflush(stdout);
 		Ctrl_Free(comm, stencil);
 		hit_layFree(lay);
 		hit_topFree(topo);
-		// v1.2 @Arturo, new predefined size type for borders
-		// free(borderLow);
-		// free(borderHigh);
 
 		printOnce("Stop distributed Controllers\n");
 		fflush(stdout);
