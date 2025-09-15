@@ -15,7 +15,7 @@
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.4
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -35,7 +35,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2024, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -115,8 +115,10 @@ static int hit_active = 0;
 /* Hit MPI INITIALIZATION */
 void hit_comInit(int *pargc, char **pargv[]) {
 	// 0. AVOID DOUBLE INITIALIZATION
-	if ( hit_active ) 
-		hit_error("hit_comInit: Already initialized", __FILE__, __LINE__);
+	if ( hit_active ) {
+		hit_warning_here("hit_comInit: Already initialized");
+		return;
+	}
 	hit_active = 1;
 
 	/* 1. INITIALIZE MPI */
@@ -171,7 +173,7 @@ void hit_comInit(int *pargc, char **pargv[]) {
 void hit_comFinalize() {
 	// 0. AVOID CALLING BEFORE INITIALIZATION
 	if ( ! hit_active ) 
-		hit_error("hit_comFinalize: Not initialized or already finalized", __FILE__, __LINE__);
+		hit_error_noinit("hit_comFinalize: Not initialized or already finalized");
 	hit_active = 0;
 
 	/* 1. FREE BASIC TOPOLOGY INFORMATION */
@@ -201,6 +203,78 @@ void hit_comFinalize() {
 	/* 3. FINALIZE MPI */
 	MPI_Finalize();
 	//pthread_exit(NULL);
+}
+
+/* MPI NODE NAME/PROC INFO */
+// @arturo 2023/07/04
+
+// PRIVATE VARIABLES FOR NODE GROUP INFO
+char hit_com_node_name[MPI_MAX_PROCESSOR_NAME];
+int  hit_com_nodegroup_rank = MPI_PROC_NULL;
+int  hit_com_nodegroup_size = -1;
+
+/* GET NODE NAME */
+char * hit_comNodeName() {
+	/* AVOID CALLING BEFORE INITIALIZATION */
+	if ( ! hit_active ) 
+		hit_error_noinit("hit_comNodeName: Hit not initialized or already finalized");
+
+	int length = 0;	
+	int ok = MPI_Get_processor_name( hit_com_node_name, &length );
+	hit_mpiTestError( ok, "MPI Getting processor name" );
+	return hit_com_node_name;
+}
+
+/* GET THE RANK id IN THE NODE GROUP */
+int hit_comNodeGroupRank() {
+	/* AVOID CALLING BEFORE INITIALIZATION */
+	if ( ! hit_active ) 
+		hit_error_noinit("hit_comNodeGroupRank: Hit not initialized or already finalized");
+
+	/* DO SPLIT ONLY ONCE, RETURN RANK IF ALREADY COMPUTED */
+	if ( hit_com_nodegroup_rank != MPI_PROC_NULL ) return hit_com_nodegroup_rank;
+
+	/* SPLIT PHYSICAL TOPOLOGY IN NODE GROUPS */
+	MPI_Info info;
+	MPI_Info_create( &info );
+
+	MPI_Comm new_comm;
+	int result = MPI_Comm_split_type( MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, info, &new_comm );
+	hit_mpiTestError( result, "Error using MPI_Comm_split" );
+	MPI_Comm_rank( new_comm, &hit_com_nodegroup_rank );
+	MPI_Comm_size( new_comm, &hit_com_nodegroup_size );
+	result = MPI_Comm_free( &new_comm );
+	hit_mpiTestError( result, "Error freeing NodeGroup communicator" );
+	result = MPI_Info_free( &info );
+	hit_mpiTestError( result, "Error freeing Info for NodeGroup communicator" );
+
+	return hit_com_nodegroup_rank;
+}
+
+/* GET THE SIZE OF THE NODE GROUP */
+int hit_comNodeGroupSize() {
+	/* AVOID CALLING BEFORE INITIALIZATION */
+	if ( ! hit_active ) 
+		hit_error_noinit("hit_comNodeGroupSize: Hit not initialized or already finalized");
+
+	/* SPLIT ONLY ONCE, RETURN RANK IF ALREADY COMPUTED */
+	if ( hit_com_nodegroup_size != -1 ) return hit_com_nodegroup_size;
+
+	/* SPLIT PHYSICAL TOPOLOGY IN NODE GROUPS */
+	MPI_Info info;
+	MPI_Info_create( &info );
+
+	MPI_Comm new_comm;
+	int result = MPI_Comm_split_type( MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, info, &new_comm );
+	hit_mpiTestError( result, "Error using MPI_Comm_split" );
+	MPI_Comm_rank( new_comm, &hit_com_nodegroup_rank );
+	MPI_Comm_size( new_comm, &hit_com_nodegroup_size );
+	result = MPI_Comm_free( &new_comm );
+	hit_mpiTestError( result, "Error freeing NodeGroup communicator" );
+	result = MPI_Info_free( &info );
+	hit_mpiTestError( result, "Error freeing Info for NodeGroup communicator" );
+
+	return hit_com_nodegroup_size;
 }
 
 
@@ -344,6 +418,7 @@ HitType hit_comTypeRec(const void *varP, HitType baseType) {
 #ifdef DEBUG
 printf("Multilevel Struct type for acumCard: %d\n", var.acumCard ); fflush(stdout);
 #endif
+
 			for(i=0;i<var.acumCard;i++) {
 				offset=0;
 				for(j=0;j<hit_tileDims(var);j++) {
@@ -354,7 +429,8 @@ printf("Multilevel Struct type for acumCard: %d\n", var.acumCard ); fflush(stdou
 				types[i]=auxtypes[i];
 				void * data = hit_comSearchData(auxtile);
 				MPI_Get_address(data,&addresses[i]);
-				sizes[i]=1;
+				// @arturo: Moved outside the loop to avoid warning: sizes may be used not initialized
+				//sizes[i]=1;
 				j=0;
 				do {
 					ind[j]=(ind[j]+1)%max[j];
@@ -362,6 +438,9 @@ printf("Multilevel Struct type for acumCard: %d\n", var.acumCard ); fflush(stdou
 				} while(j<hit_tileDims(var) && ind[j-1]==0 && max[j]!=0);
 			}
 			for(i=var.acumCard-1;i>=0;i--) addresses[i]-=addresses[0];
+			// @arturo: Moved outside the loop to avoid warning: sizes may be used not initialized
+			for(i=0;i<var.acumCard;i++) sizes[i]=1;
+
 			MPI_Type_create_struct(var.acumCard,sizes,addresses,types,&newType);
 			MPI_Type_commit(&newType);
 			for(i=0;i<var.acumCard;i++) hit_comFreeType(auxtypes[i]);

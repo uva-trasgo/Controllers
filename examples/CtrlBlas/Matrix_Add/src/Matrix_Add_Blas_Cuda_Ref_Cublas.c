@@ -1,3 +1,11 @@
+/**
+ * @file Matrix_Add_Blas_Cuda_Ref_Cublas.c
+ * @brief MatrixAdd: Native CUBLAS version
+ *
+ * @copyright This software is part of the Controller project by Trasgo Group, UVa.
+ * The relevant license, warranty and copyright notice is available in the Controller project repository.
+ */
+
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
 #include <omp.h>
@@ -11,7 +19,7 @@
 	{                                                                                       \
 		cublasStatus_t error = op;                                                          \
 		if (error != CUBLAS_STATUS_SUCCESS) {                                               \
-			fprintf(stderr, "\tCUBLAS Error at: %s::%d\n %s: ", __FILE__, __LINE__, error); \
+			fprintf(stderr, "\tCUBLAS Error at: %s::%d\n %d: ", __FILE__, __LINE__, error); \
 			printMessageFromCuBLASError(error);                                             \
 			fflush(stderr);                                                                 \
 			exit(EXIT_FAILURE);                                                             \
@@ -96,22 +104,18 @@ int main(int argc, char *argv[]) {
 	struct cudaDeviceProp cu_dev_prop;
 	CUDA_OP(cudaGetDeviceProperties(&cu_dev_prop, GPU));
 	printf("\n DEVICE: %s", cu_dev_prop.name);
-	#ifdef _CTRL_QUEUE_
-	printf("\n QUEUES: ON");
-	#else
-	printf("\n QUEUES: OFF");
-	#endif // _CTRL_QUEUE_
 	printf("\n\n ---------------------------------------------------- \n");
 	fflush(stdout);
 
 	// 2. Alloc host data structures
+	CUDA_OP(cudaSetDevice(GPU));
+
 	float *A, *B;
 	CUDA_OP(cudaMallocHost((void **)&A, size * size * sizeof(float)));
 	CUDA_OP(cudaMallocHost((void **)&B, size * size * sizeof(float)));
 
 	srand(SEED);
-	float alpha = 1.0;
-	CUDA_OP(cudaSetDevice(GPU));
+	float          alpha = 1.0;
 	cublasHandle_t handle;
 	CUBLAS_OP(cublasCreate(&handle));
 
@@ -138,7 +142,7 @@ int main(int argc, char *argv[]) {
 
 	// 8. Sync and stop timer
 	CUDA_OP(cudaDeviceSynchronize());
-	exec_clock = exec_clock - omp_get_wtime();
+	exec_clock = omp_get_wtime() - exec_clock;
 
 	// 9. Copy result from device memory to host memory
 	CUBLAS_OP(cublasGetMatrix(size, size, sizeof(float), d_B, size, B, size));
@@ -164,5 +168,5 @@ int main(int argc, char *argv[]) {
 	printf(" Clock exec: %lf\n", exec_clock);
 	printf("\n ---------------------------------------------------- \n");
 
-	return 0;
+	return EXIT_SUCCESS;
 }

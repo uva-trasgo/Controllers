@@ -1,7 +1,16 @@
+/**
+ * @file gemver_Blas_Cpu_Ctrl.c
+ * @brief gemver: CtrlBlas CPU version
+ *
+ * @copyright This software is part of the Controller project by Trasgo Group, UVa.
+ * The relevant license, warranty and copyright notice is available in the Controller project repository.
+ */
+
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "../../examples/Utils/ctrl_print_info.h"
 #include "Ctrl_Blas.c"
 
 #define SEED 6834723
@@ -54,59 +63,52 @@ CTRL_HOST_TASK_PROTO(norm_calc, 1, IN, HitTile_float, w);
 
 int main(int argc, char *argv[]) {
 	main_clock = omp_get_wtime();
+	Ctrl_Init(&argc, &argv);
 
 	// 1. Taking arguments
-	if (argc != 9) {
-		fprintf(stderr, "Usage: %s <matrixSize> <alpha> <beta> <numThreads> <device> <mem_transfers> <policy> <host>\n\n", argv[0]);
+	if (argc != 6) {
+		fprintf(stderr, "Usage: %s <matrixSize> <alpha> <beta> <policy> <config_file>\n\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
-	int   size      = atoi(argv[1]);
-	float alpha     = atof(argv[2]);
-	float beta      = atof(argv[3]);
-	int   n_threads = atoi(argv[4]);
-	int   p_numanodes[1];
-	int   n_numanodes         = 1;
-	p_numanodes[0]            = atoi(argv[5]);
-	bool        mem_transfers = atoi(argv[6]);
-	Ctrl_Policy policy        = atoi(argv[7]);
-	int         host_aff      = atoi(argv[8]);
-	Ctrl_SetHostAffinity(host_aff);
+	int         size   = atoi(argv[1]);
+	float       alpha  = atof(argv[2]);
+	float       beta   = atof(argv[3]);
+	Ctrl_Policy policy = atoi(argv[4]);
+	Ctrl_SetPolicy(policy);
+	char *ctrl_conf_file = argv[5];
 
-	printf("\n ----------------------- ARGS ------------------------- \n");
-	printf("\n SIZE: %d x %d", size, size);
-	printf("\n ALPHA: %.2f", alpha);
-	printf("\n BETA: %.2f", beta);
-	printf("\n N_THREADS: %d", n_threads);
-	printf("\n POLICY %s", policy ? "Async" : "Sync");
-	printf("\n MEM_TRANSFERS: %s", mem_transfers ? "ON" : "OFF");
-	printf("\n HOST AFFINITY: %d", host_aff);
-	printf("\n DEVICE: %s", n_numanodes != 0 ? argv[5] : "NULL");
-	#ifdef _CTRL_QUEUE_
-	printf("\n QUEUES: ON");
-	#else
-	printf("\n QUEUES: OFF");
-	#endif // _CTRL_QUEUE_
-	printf("\n\n ---------------------------------------------------- \n");
-	fflush(stdout);
-
-	__ctrl_block__(1, 1) {
+	__ctrl_block__(ctrl_conf_file) {
 		// 2. Create controller object
-		PCtrl ctrl = Ctrl_Create(CTRL_TYPE_CPU, policy, n_threads, p_numanodes, n_numanodes, mem_transfers);
+		PCtrl ctrl = Ctrl_Get(0);
+
+		// Extra information for collecting results
+		#ifndef _CTRL_EXAMPLES_EXP_MODE_
+		printf("\n ----------------------- ARGS ------------------------- \n");
+		printf("\n SIZE: %d x %d", size, size);
+		printf("\n ALPHA: %.2f", alpha);
+		printf("\n BETA: %.2f", beta);
+		printf("\n POLICY %s", policy ? "Async" : "Sync");
+		#endif // _CTRL_EXAMPLES_EXP_MODE_
+		Ctrl_PrintInfo();
+		#ifndef _CTRL_EXAMPLES_EXP_MODE_
+		printf("\n\n ---------------------------------------------------- \n");
+		#endif // _CTRL_EXAMPLES_EXP_MODE_
+		fflush(stdout);
 
 		// 3. Alloc data structures
 		HitTile_float A  = Ctrl_DomainAlloc(ctrl, float, hitShapeSize(size, size));
-		HitTile_float B  = Ctrl_DomainAlloc(ctrl, float, hitShapeSize(size, size), CTRL_MEM_ALLOC_DEV); // host memory not needed but currently not implemented
+		HitTile_float B  = Ctrl_DomainAlloc(ctrl, float, hitShapeSize(size, size), CTRL_MEM_ALLOC_DEV);
 		HitTile_float u1 = Ctrl_DomainAlloc(ctrl, float, hitShapeSize(size));
 		HitTile_float u2 = Ctrl_DomainAlloc(ctrl, float, hitShapeSize(size));
 		HitTile_float v1 = Ctrl_DomainAlloc(ctrl, float, hitShapeSize(size));
 		HitTile_float v2 = Ctrl_DomainAlloc(ctrl, float, hitShapeSize(size));
 		HitTile_float w  = Ctrl_DomainAlloc(ctrl, float, hitShapeSize(size));
-		HitTile_float x  = Ctrl_DomainAlloc(ctrl, float, hitShapeSize(size), CTRL_MEM_ALLOC_DEV); // host memory not needed but currently not implemented
+		HitTile_float x  = Ctrl_DomainAlloc(ctrl, float, hitShapeSize(size), CTRL_MEM_ALLOC_DEV);
 		HitTile_float y  = Ctrl_DomainAlloc(ctrl, float, hitShapeSize(size));
 		HitTile_float z  = Ctrl_DomainAlloc(ctrl, float, hitShapeSize(size));
 
 		// 4. Initialize data structures
-		Ctrl_HostTask(ctrl, init_tiles, u1, u2, v1, v2, y, z, A);
+		Ctrl_HostTask(init_tiles, u1, u2, v1, v2, y, z, A);
 
 		// 5. Sync and start timer
 		Ctrl_GlobalSync(ctrl);
@@ -134,14 +136,16 @@ int main(int argc, char *argv[]) {
 		exec_clock = omp_get_wtime() - exec_clock;
 
 		// 8. Calculate NORM
-		Ctrl_HostTask(ctrl, norm_calc, w);
+		Ctrl_HostTask(norm_calc, w);
 
 		// 9. Free data structures
 		Ctrl_Free(ctrl, A, B, u1, u2, v1, v2, w, x, y, z);
 
 		// 10. Destroy the controller
-		Ctrl_Destroy(ctrl);
+		Ctrl_EndBlock();
 	}
+
+	Ctrl_Finalize();
 
 	// 11. Stop main timer and print times
 	main_clock = omp_get_wtime() - main_clock;
@@ -150,5 +154,5 @@ int main(int argc, char *argv[]) {
 	printf(" Clock exec : %lf\n", exec_clock);
 	printf("\n ---------------------------------------------------- \n");
 
-	return 0;
+	return EXIT_SUCCESS;
 }

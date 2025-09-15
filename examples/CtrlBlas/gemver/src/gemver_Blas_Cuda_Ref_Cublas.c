@@ -1,3 +1,11 @@
+/**
+ * @file gemver_Blas_Cuda_Ref_Cublas.c
+ * @brief gemver: Native CUBLAS version
+ *
+ * @copyright This software is part of the Controller project by Trasgo Group, UVa.
+ * The relevant license, warranty and copyright notice is available in the Controller project repository.
+ */
+
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
 #include <omp.h>
@@ -10,7 +18,7 @@
 	{                                                                                       \
 		cublasStatus_t error = op;                                                          \
 		if (error != CUBLAS_STATUS_SUCCESS) {                                               \
-			fprintf(stderr, "\tCUBLAS Error at: %s::%d\n %s: ", __FILE__, __LINE__, error); \
+			fprintf(stderr, "\tCUBLAS Error at: %s::%d\n %d: ", __FILE__, __LINE__, error); \
 			printMessageFromCuBLASError(error);                                             \
 			fflush(stderr);                                                                 \
 			exit(EXIT_FAILURE);                                                             \
@@ -192,5 +200,5 @@ int main(int argc, char *argv[]) {
 	printf(" Clock exec : %lf\n", exec_clock);
 	printf("\n ---------------------------------------------------- \n");
 
-	return 0;
+	return EXIT_SUCCESS;
 }

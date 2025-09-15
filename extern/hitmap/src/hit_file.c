@@ -11,7 +11,7 @@
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.4
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -31,7 +31,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2024, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -39,7 +39,23 @@
  * </license>
 */
 
+#ifndef INCLUDE_IOHB__H
+	#define INCLUDE_IOHB__H
+	#include "iohb.h"
+#endif
+
+#ifndef INCLUDE_MATRIX_IO__H
+	#define INCLUDE_MATRIX_IO__H
+	#include "matrix_io.h"
+#endif
+
+#ifndef INCLUDE_METIS__H
+	#define INCLUDE_METIS__H
+	#include "metis.h"
+#endif
+
 #include <hit_file.h>
+#include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
@@ -51,10 +67,6 @@
 #include <hit_cshape.h>
 #include <hit_bshape.h>
 
-#ifndef INCLUDE_MATRIX_IO__H
-	#define INCLUDE_MATRIX_IO__H
-	#include "matrix_io.h"
-#endif
 
 /**
  * Compare function for idxtype, to be used in stdlib's qsort(3).

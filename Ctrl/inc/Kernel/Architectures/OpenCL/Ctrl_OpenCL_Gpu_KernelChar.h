@@ -3,33 +3,10 @@
 ///@cond INTERNAL
 /**
  * @file Ctrl_OpenCL_Gpu_KernelChar.h
- * @author Trasgo Group
  * @brief Macros to set OpenCL kernels characterization.
- * @version 2.1
- * @date 2021-04-26
  *
- * @copyright This software is provided to enhance knowledge and encourage progress in the scientific
- * community. It should be used only for research and educational purposes. Any reproduction
- * or use for commercial purpose, public redistribution, in source or binary forms, with or
- * without modifications, is NOT ALLOWED without the previous authorization of the copyright
- * holder. The origin of this software must not be misrepresented; you must not claim that you
- * wrote the original software. If you use this software for any purpose (e.g. publication),
- * a reference to the software package and the authors must be included.
- *
- * @copyright THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
- * THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * @copyright Copyright (c) 2007-2020, Trasgo Group, Universidad de Valladolid.
- * All rights reserved.
- *
- * @copyright More information on http://trasgo.infor.uva.es/
+ * @copyright This software is part of the Controller project by Trasgo Group, UVa.
+ * The relevant license, warranty and copyright notice is available in the Controller project repository.
  */
 
 #ifndef CL_USE_DEPRECATED_OPENCL_1_2_APIS
@@ -41,9 +18,9 @@
 #include <Kernel/Ctrl_KernelArgs.h>
 
 /**
- * Create default characterization for a \e OpenCL_GPU kernel or a \e GENERIC kernel when using \e OpenCl_GPU type ctrl.
+ * Create default characterization for a \e OpenCL_GPU kernel or a \e GENERIC kernel when using \e OpenCL_GPU type ctrl.
  *
- * This is called by \e CTRL_KERNEL_CHAR when \e OpenCl_GPU support is activated.
+ * This is called by \e CTRL_KERNEL_CHAR when \e OpenCL_GPU support is activated.
  * @hideinitializer
  *
  * @param name Name of the kernel.
@@ -80,12 +57,12 @@
  * @hideinitializer
  *
  * @param name Name of the kernel.
- * @param X Block sizes for x dimension.
+ * @param X Block sizes for i dimension.
  *
  * @see CTRL_KERNEL_CHAR, CTRL_KERNEL_OPENCL_GPU_KERNEL_CHAR, CTRL_KERNEL_OPENCL_GPU_KERNEL_CHAR_1
  */
 #define CTRL_KERNEL_OPENCL_GPU_KERNEL_CHAR_1_1(name, X) \
-	Ctrl_Thread local_size_OPENCL_GPU_##name = {.dims = 1, .x = X, .y = 0, .z = 0};
+	Ctrl_Thread local_size_OPENCL_GPU_##name = {.dims = 1, .i = X, .j = 1, .k = 1};
 
 /**
  * Create default characterization for a \e OpenCL_GPU kernel or a \e GENERIC kernel when using \e OpenCL_GPU type ctrl,
@@ -96,13 +73,13 @@
  * @hideinitializer
  *
  * @param name Name of the kernel.
- * @param X Block sizes for x dimension.
- * @param Y Block sizes for y dimension.
+ * @param X Block sizes for i dimension.
+ * @param Y Block sizes for j dimension.
  *
  * @see CTRL_KERNEL_CHAR, CTRL_KERNEL_OPENCL_GPU_KERNEL_CHAR, CTRL_KERNEL_OPENCL_GPU_KERNEL_CHAR_1
  */
 #define CTRL_KERNEL_OPENCL_GPU_KERNEL_CHAR_1_2(name, X, Y) \
-	Ctrl_Thread local_size_OPENCL_GPU_##name = {.dims = 2, .x = X, .y = Y, .z = 0};
+	Ctrl_Thread local_size_OPENCL_GPU_##name = {.dims = 2, .i = X, .j = Y, .k = 1};
 
 /**
  * Create default characterization for a \e OpenCL_GPU kernel or a \e GENERIC kernel when using \e OpenCL_GPU type ctrl,
@@ -112,14 +89,14 @@
  * @hideinitializer
  *
  * @param name Name of the kernel.
- * @param X Block sizes for x dimension.
- * @param Y Block sizes for y dimension.
- * @param Z Block sizes for z dimension.
+ * @param X Block sizes for i dimension.
+ * @param Y Block sizes for j dimension.
+ * @param Z Block sizes for k dimension.
  *
  * @see CTRL_KERNEL_CHAR, CTRL_KERNEL_OPENCL_GPU_KERNEL_CHAR, CTRL_KERNEL_OPENCL_GPU_KERNEL_CHAR_1
  */
 #define CTRL_KERNEL_OPENCL_GPU_KERNEL_CHAR_1_3(name, X, Y, Z) \
-	Ctrl_Thread local_size_OPENCL_GPU_##name = {.dims = 3, .x = X, .y = Y, .z = Z};
+	Ctrl_Thread local_size_OPENCL_GPU_##name = {.dims = 3, .i = X, .j = Y, .k = Z};
 
 /**
  * Create default characterization for a \e OpenCL_GPU kernel or a \e GENERIC kernel when using \e OpenCL_GPU type ctrl,
@@ -139,19 +116,19 @@
 #define CTRL_KERNEL_OPENCL_GPU_KERNEL_CHAR_2(name, dims, A, B, C) \
 	Ctrl_Thread local_size_OPENCL_GPU_##name = CTRL_KERNEL_OPENCL_GPU_CHAR_##dims##A##B##C
 
-#define CTRL_KERNEL_OPENCL_GPU_CHAR_1defdefdef          {.dims = 1, .x = 256, .y = 0, .z = 0};
-#define CTRL_KERNEL_OPENCL_GPU_CHAR_2defdefdef          {.dims = 2, .x = 256, .y = 1, .z = 0};
-#define CTRL_KERNEL_OPENCL_GPU_CHAR_1mediumlowlow       {.dims = 1, .x = 128, .y = 0, .z = 0};
-#define CTRL_KERNEL_OPENCL_GPU_CHAR_1fulllowlow         {.dims = 1, .x = 256, .y = 0, .z = 0};
-#define CTRL_KERNEL_OPENCL_GPU_CHAR_2fulllowlow         {.dims = 2, .x = 128, .y = 2, .z = 0};
-#define CTRL_KERNEL_OPENCL_GPU_CHAR_2fullmediummedium   {.dims = 2, .x = 128, .y = 2, .z = 0};
-#define CTRL_KERNEL_OPENCL_GPU_CHAR_2mediummediummedium {.dims = 2, .x = 128, .y = 2, .z = 0};
-#define CTRL_KERNEL_OPENCL_GPU_CHAR_2fulllowhigh        {.dims = 2, .x = 64, .y = 3, .z = 0};
-#define CTRL_KERNEL_OPENCL_GPU_CHAR_2square32lowlow     {.dims = 2, .x = 16, .y = 16, .z = 0};
-#define CTRL_KERNEL_OPENCL_GPU_CHAR_2fixedsquare32      {.dims = 2, .x = 16, .y = 16, .z = 0};
-#define CTRL_KERNEL_OPENCL_GPU_CHAR_2fixedsquare16      {.dims = 2, .x = 16, .y = 16, .z = 0};
-#define CTRL_KERNEL_OPENCL_GPU_CHAR_2fixedsquare4       {.dims = 2, .x = 4, .y = 4, .z = 0};
-#define CTRL_KERNEL_OPENCL_GPU_CHAR_2fixedsquare2       {.dims = 2, .x = 2, .y = 2, .z = 0};
+#define CTRL_KERNEL_OPENCL_GPU_CHAR_1defdefdef          {.dims = 1, .i = 256, .j = 1, .k = 1};
+#define CTRL_KERNEL_OPENCL_GPU_CHAR_2defdefdef          {.dims = 2, .i = 1, .j = 256, .k = 1};
+#define CTRL_KERNEL_OPENCL_GPU_CHAR_1mediumlowlow       {.dims = 1, .i = 128, .j = 1, .k = 1};
+#define CTRL_KERNEL_OPENCL_GPU_CHAR_1fulllowlow         {.dims = 1, .i = 256, .j = 1, .k = 1};
+#define CTRL_KERNEL_OPENCL_GPU_CHAR_2fulllowlow         {.dims = 2, .i = 2, .j = 128, .k = 1};
+#define CTRL_KERNEL_OPENCL_GPU_CHAR_2fullmediummedium   {.dims = 2, .i = 2, .j = 128, .k = 1};
+#define CTRL_KERNEL_OPENCL_GPU_CHAR_2mediummediummedium {.dims = 2, .i = 2, .j = 128, .k = 1};
+#define CTRL_KERNEL_OPENCL_GPU_CHAR_2fulllowhigh        {.dims = 2, .i = 3, .j = 64, .k = 1};
+#define CTRL_KERNEL_OPENCL_GPU_CHAR_2square32lowlow     {.dims = 2, .i = 16, .j = 16, .k = 1};
+#define CTRL_KERNEL_OPENCL_GPU_CHAR_2fixedsquare32      {.dims = 2, .i = 16, .j = 16, .k = 1};
+#define CTRL_KERNEL_OPENCL_GPU_CHAR_2fixedsquare16      {.dims = 2, .i = 16, .j = 16, .k = 1};
+#define CTRL_KERNEL_OPENCL_GPU_CHAR_2fixedsquare4       {.dims = 2, .i = 4, .j = 4, .k = 1};
+#define CTRL_KERNEL_OPENCL_GPU_CHAR_2fixedsquare2       {.dims = 2, .i = 2, .j = 2, .k = 1};
 
 ///@endcond
 #endif // _CTRL_KERNEL_OPENCL_GPU_CHAR_H_

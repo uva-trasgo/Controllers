@@ -1,3 +1,11 @@
+/**
+ * @file Sobel_YUV_Cpu_Ref_Sync_MTM.c
+ * @brief SobelYUV: Native CPU mem to mem version
+ *
+ * @copyright This software is part of the Controller project by Trasgo Group, UVa.
+ * The relevant license, warranty and copyright notice is available in the Controller project repository.
+ */
+
 #include <math.h>
 #include <omp.h>
 #include <stdio.h>
@@ -38,7 +46,7 @@ void Sobel_Operation(BYTE *Input, BYTE *Output, int Width, int Height, int *n_bl
 		for (int tj = 0; tj < n_blocks[1]; tj++) {
 			for (int i = 0; i < BLOCKSIZE_0; i++) {
 				for (int j = 0; j < BLOCKSIZE_1; j++) {
-					// Variable for Gradient in X and Y direction and Final one
+
 					float Gradient_h, Gradient_v, Gradient_mod;
 
 					// Calculating index id
@@ -86,7 +94,7 @@ int main(int argc, char **argv) {
 
 	/************************************* Argument Parse *************************************/
 	if (argc < 7) {
-		printf("Usage: %s <width> <height> <num_frames> <input_yuv_file> <output_yuv_file> <n_threads>", argv[0]);
+		printf("Usage: %s <width> <height> <num_frames> <input_yuv_file> <output_yuv_file> <n_threads>\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -110,7 +118,9 @@ int main(int argc, char **argv) {
 
 	int THREADS = atoi(argv[6]);
 
-	#ifndef _CTRL_EXAMPLES_EXP_MODE_
+	#ifdef _CTRL_EXAMPLES_EXP_MODE_
+	printf("CPU-%d, ", THREADS);
+	#else // _CTRL_EXAMPLES_EXP_MODE_
 	printf("\n ----------------------- ARGS ----------------------- \n");
 	printf("\n WIDTH: %d", Width[0]);
 	printf("\n HEIGHT: %d", Height[0]);
@@ -118,8 +128,8 @@ int main(int argc, char **argv) {
 	printf("\n N_THREADS: %d", THREADS);
 	printf("\n POLICY: Sync");
 	printf("\n\n ---------------------------------------------------- \n");
-	fflush(stdout);
 	#endif // _CTRL_EXAMPLES_EXP_MODE_
+	fflush(stdout);
 
 	int Frame_num = 0;
 
@@ -212,13 +222,12 @@ int main(int argc, char **argv) {
 
 	#ifdef _CTRL_EXAMPLES_EXP_MODE_
 	printf("%lf, %lf\n", main_clock, exec_clock);
-	fflush(stdout);
-	#else
-	printf("\n ----------------------- TIME ----------------------- \n\n");
+	#else // _CTRL_EXAMPLES_EXP_MODE_
+	printf("\n ---------------------- TIMERS ---------------------- \n\n");
 	printf(" Clock main: %lf\n", main_clock);
 	printf(" Clock exec: %lf\n", exec_clock);
 	printf("\n ---------------------------------------------------- \n");
-	#endif
+	#endif // _CTRL_EXAMPLES_EXP_MODE_
 
 	return EXIT_SUCCESS;
 }

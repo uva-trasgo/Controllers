@@ -8,7 +8,7 @@
 #
 # 1. DEFAULT PLATFORM
 #
-PLATFORM=gcc64
+PLATFORM=x86_64
 
 #
 # 2. GENERIC VALUES FOR COMMON FLAGS (TO BE OVERRIDDEN BY SPECIFIC PLATFORM DEFINITIONS BELLOW)
@@ -53,6 +53,15 @@ WARNINGS=-Wall -W -Wconversion -Wcast-qual -Wshadow -Wwrite-strings -Wpointer-ar
 PLATFORM_FLAGS=-mcmodel=medium
 endif
 
+#
+# COMPILING USING DEFAULT COMPILER (GCC/LLVM STYLE) FOR x86_64
+#
+ifeq ($(PLATFORM),x86_64)
+OPTIMIZATION=-O3
+OPENMP_FLAGS=-fopenmp
+WARNINGS=-Wall -W -Wconversion -Wcast-qual -Wshadow -Wwrite-strings -Wpointer-arith
+PLATFORM_FLAGS=-mcmodel=medium
+endif
 
 #
 # COMPILING USING Intel Compiler v12 (64 bits)

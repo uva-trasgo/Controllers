@@ -16,7 +16,7 @@
  * @section License Hitmap license
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.4
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -36,7 +36,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2024, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -107,6 +107,8 @@
  */
 #define hit_as(var, ref, ...)	HIT2_HIT_TEST_VARIADIC( var, ref, HIT2_COUNTPARAM( __VA_ARGS__ ), __VA_ARGS__ )
 #define HIT2_HIT_TEST_VARIADIC(var, ref, num, ...)	hit_as_tileElemAtNoStride( var, ref, num, __VA_ARGS__ )
+
+#define hit_as_tileElemAtNoStride(var, ref, num, ...)	hit_as_tileElemAtNoStride##num(var, ref, __VA_ARGS__ )
 
 #define hit_as_tileElemAtNoStride1(var, ref, pos)	((var).data[pos])
 

@@ -1,3 +1,11 @@
+/**
+ * @file Matrix_Pow_Blas_Cuda_Ref_Magma.c
+ * @brief MatrixPow: Native Magma CUDA version
+ *
+ * @copyright This software is part of the Controller project by Trasgo Group, UVa.
+ * The relevant license, warranty and copyright notice is available in the Controller project repository.
+ */
+
 #include "magma_v2.h"
 #include <cuda_runtime.h>
 #include <omp.h>
@@ -54,11 +62,6 @@ int main(int argc, char *argv[]) {
 	struct cudaDeviceProp cu_dev_prop;
 	CUDA_OP(cudaGetDeviceProperties(&cu_dev_prop, GPU));
 	printf("\n DEVICE: %s", cu_dev_prop.name);
-	#ifdef _CTRL_QUEUE_
-	printf("\n QUEUES: ON");
-	#else
-	printf("\n QUEUES: OFF");
-	#endif // _CTRL_QUEUE_
 	printf("\n\n ---------------------------------------------------- \n");
 	fflush(stdout);
 
@@ -88,7 +91,7 @@ int main(int argc, char *argv[]) {
 
 	magma_ssetmatrix(size, size, A, size, dA, size, queue);
 
-	for (int power = 0; power > n_iter; power++) {
+	for (int power = 0; power < n_iter; power++) {
 		magma_sgemm(MagmaNoTrans, MagmaNoTrans, size, size, size, alpha, dA, size, dA, size, beta, dA, size, queue); // C = αAB + βC
 	}
 
@@ -124,5 +127,5 @@ int main(int argc, char *argv[]) {
 	printf(" Clock main: %lf\n", main_clock);
 	printf(" Clock exec: %lf\n", exec_clock);
 	printf("\n ---------------------------------------------------- \n");
-	return 0;
+	return EXIT_SUCCESS;
 }

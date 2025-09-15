@@ -1,3 +1,11 @@
+/**
+ * @file Matrix_Add_OpenCL_Gpu_Ref.c
+ * @brief MatrixAdd: Native OpenCLGPU version
+ *
+ * @copyright This software is part of the Controller project by Trasgo Group, UVa.
+ * The relevant license, warranty and copyright notice is available in the Controller project repository.
+ */
+
 #ifndef CL_USE_DEPRECATED_OPENCL_1_2_APIS
 #define CL_USE_DEPRECATED_OPENCL_1_2_APIS
 #endif // CL_USE_DEPRECATED_OPENCL_1_2_APIS
@@ -342,8 +350,8 @@ int main(int argc, char *argv[]) {
 		p_pinned_a[i] = 1;
 		p_pinned_b[i] = 1;
 		#else
-		p_pinned_a[i] = (-1 + (2 * (((float)rand()) / RAND_MAX)));
-		p_pinned_b[i] = (-1 + (2 * (((float)rand()) / RAND_MAX)));
+		p_pinned_a[i] = (-1 + (2 * (((float)rand()) / (float)RAND_MAX)));
+		p_pinned_b[i] = (-1 + (2 * (((float)rand()) / (float)RAND_MAX)));
 		#endif // _CTRL_EXAMPLES_OPENCL_GPU_DEBUG_
 		p_pinned_c[i] = 0;
 	}
@@ -549,5 +557,5 @@ int main(int argc, char *argv[]) {
 	printf("\n\n ---------------------------------------------------- \n");
 	#endif // _CTRL_EXAMPLES_OPENCL_GPU_TEST_MODE_
 
-	return 0;
+	return EXIT_SUCCESS;
 }

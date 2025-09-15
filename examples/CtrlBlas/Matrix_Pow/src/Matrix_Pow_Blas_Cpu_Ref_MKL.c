@@ -1,3 +1,11 @@
+/**
+ * @file Matrix_Pow_Blas_Cpu_Ref_MKL.c
+ * @brief MatrixPow: Native MKL version
+ *
+ * @copyright This software is part of the Controller project by Trasgo Group, UVa.
+ * The relevant license, warranty and copyright notice is available in the Controller project repository.
+ */
+
 #include <math.h>
 #include <mkl.h>
 #include <omp.h>
@@ -42,7 +50,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	exec_clock = omp_get_wtime();
-	for (int power = 0; power > n_iter; power++) {
+	for (int power = 0; power < n_iter; power++) {
 		cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, size, size, size, alpha, A, size, A, size, beta, A, size);
 	}
 	exec_clock = omp_get_wtime() - exec_clock;
@@ -71,5 +79,5 @@ int main(int argc, char *argv[]) {
 	printf(" Clock exec: %lf\n", exec_clock);
 	printf("\n ---------------------------------------------------- \n");
 
-	return 0;
+	return EXIT_SUCCESS;
 }

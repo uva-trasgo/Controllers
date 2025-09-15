@@ -7,17 +7,17 @@
  * 
  * @file hit_topology.h
  * @ingroup Com
- * @version 1.4
+ * @version 1.5
  * @author Arturo Gonzalez-Escribano
  * @author Javier Fresno Bausela
- * @date Mar 2019
+ * @date Jul 2023
  *
  */
 
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.4
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -37,7 +37,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2024, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -57,6 +57,24 @@
 #ifdef __cplusplus
 	extern "C" {
 #endif
+
+/* 0. Misc utilities */
+/* Hit BASIC RANKS AND COMMUNICATOR GLOBAL DEFINITIONS */
+/**
+ * Linear rank for the current processor
+ * @hideinitializer
+ */
+#undef hit_Rank
+#define	hit_Rank		(HIT_TOPOLOGY_INFO->selfRank)
+
+/* Hit MPI ERROR TEST */
+/** This macro checks if the MPI operation was successful. */
+#define	hit_mpiTestError(ok,cad)	\
+    if ( ok != MPI_SUCCESS ) {		\
+        fprintf(stderr,"Hit MPI RunTime-Error, Rank %d: %s - %d\n", hit_Rank, cad, ok);	fflush(stderr); \
+        exit(-1);					\
+    }
+
 
 /* 1. PHYSICAL TOPOLOGY */
 /* CURRENTLY, ONLY HOMOGENEOUS SYSTEM SUPPORT */
@@ -283,7 +301,7 @@ typedef struct HitTopology {
 /**
  * Array dims complete topology type constant.
  */
-#define HIT_TOPOLOGY_ARRAYDIMSCOMP		6
+#define HIT_TOPOLOGY_ARRAY			6
 
 
 
@@ -357,11 +375,11 @@ HitTopology hit_topology_plug_topSquare( HitPTopology *topo );
  */
 HitTopology hit_topology_plug_topArray2DComplete( HitPTopology *topo );
 
-/* 3.4.5 Hit X-D ARRAY TOPOLOGY */
+/* 3.4.5.a Hit n-DIMENSIONAL ARRAY TOPOLOGY: NAS Benchmarks */
 /**
- * X-D Array topology generator
+ * n-DIMENSIONAL Array topology generator based on one included in the NAS Parallel Benchmarks
  *
- * The processors are arranged in a X-dimensional topology
+ * The processors are arranged in a n-dimensional topology
  * Some processor may be inactive.
  * If the input is power of two the result cardinalities keep this property
  * First dimensions are bigger
@@ -369,6 +387,31 @@ HitTopology hit_topology_plug_topArray2DComplete( HitPTopology *topo );
  * This function is meant to be used through the macros below.
  */
 HitTopology hit_topology_plug_topArrayDims( HitPTopology *topo , int dims );
+
+/* 3.4.5.b Hit ARRAY TOPOLOGY */
+/**
+ * Array topology generator
+ *
+ * All processes are arranged in an n-dimensional topology. All of the processes are active.
+ *
+ * The cardinalities are equal or decreasing with the dimension identifier.
+ * It balances the cardinalities using the integer divisors of the number of processes.
+ * Not a perfect balance for some cases, a little bias for the first dimensions.
+ * NOTE: This means a single row in the first dimension if the number of processes is prime.
+ */
+HitTopology hit_topology_plug_topArray( HitPTopology *topo, int num_dims );
+
+/* 3.4.5.c Hit ARRAY TOPOLOGY (First version) */
+/**
+ * Array topology generator
+ *
+ * All processes are arranged in an n-dimensional topology. All of the processes are active.
+ *
+ * The cardinalities are equal or decreasing with the dimension identifier.
+ * It balances the cardinalities but with a higher bias for the first dimensions.
+ * NOTE: This means a single row in the first dimension if the number of processes is prime.
+ */
+HitTopology hit_topology_plug_topArrayFirst( HitPTopology *topo, int num_dims );
 
 /**
  * 1D Array topology generator
@@ -533,6 +576,7 @@ HitRanks hit_topRanksInternal( HitTopology topo, int linealRank );
 			hit_warning( message, __FILE__, __LINE__ );	\
 		}	\
 	}
+
 
 #ifdef __cplusplus
 }

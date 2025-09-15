@@ -1,3 +1,11 @@
+/**
+ * @file Matrix_Add_Cpu_Ref.c
+ * @brief MatrixAdd: Native CPU version
+ *
+ * @copyright This software is part of the Controller project by Trasgo Group, UVa.
+ * The relevant license, warranty and copyright notice is available in the Controller project repository.
+ */
+
 #include <math.h>
 #include <omp.h>
 #include <stdio.h>
@@ -9,15 +17,13 @@ double exec_clock;
 /* A. Perform the adition */
 void add(float *matrixA, float *matrixB, float *matrixC, int size, int n_threads, int n_iter) {
 	#pragma omp parallel for num_threads(n_threads)
-	{
-		for (int i = 0; i < size; i++) {
-			for (int j = 0; j < size; j++) {
-				for (int iter = 0; iter < n_iter; iter++) {
-					matrixC[i * size + j] =
-						matrixA[i * size + j] +
-						matrixB[i * size + j] +
-						matrixC[i * size + j];
-				}
+	for (int i = 0; i < size; i++) {
+		for (int j = 0; j < size; j++) {
+			for (int iter = 0; iter < n_iter; iter++) {
+				matrixC[i * size + j] =
+					matrixA[i * size + j] +
+					matrixB[i * size + j] +
+					matrixC[i * size + j];
 			}
 		}
 	}
@@ -106,5 +112,5 @@ int main(int argc, char *argv[]) {
 	printf(" Clock exec: %lf\n", exec_clock);
 	printf("\n ---------------------------------------------------- \n");
 
-	return 0;
+	return EXIT_SUCCESS;
 }

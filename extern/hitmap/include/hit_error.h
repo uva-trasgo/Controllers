@@ -13,7 +13,7 @@
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.4
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -33,7 +33,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2024, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -50,10 +50,10 @@
 #define HIT_NOT_USED(x) ((void)(x))
 
 /* ERROR CODES */
-#define HIT_OK				0
-#define HIT_ERROR			-1
-#define HIT_ERR_INTERNAL	-10
-#define HIT_ERR_USER		-100
+#define HIT_OK			0
+#define HIT_ERROR		255
+#define HIT_ERR_INTERNAL	250
+#define HIT_ERR_USER		240
 
 
 
@@ -75,7 +75,7 @@
 /* ERROR AND WARNING MESSAGES FOR PROGRAMMERS/USERS */
 #define hit_error( name, file, numLine )	\
 	{							\
-	fprintf(stderr,"Hit Programmer, RunTime-Error: %s, in %s[%d]\n", name, file, numLine); \
+	fprintf(stderr,"Hit Programmer, RunTime-Error: %s, in %s[%d]\n", name, file, numLine);				\
 	exit( HIT_ERR_USER );		\
 	}
 
@@ -86,6 +86,27 @@
 
 #define hit_error_here(name)	hit_error(name, __FILE__, __LINE__)
 #define hit_warning_here(name)	hit_warning(name, __FILE__, __LINE__)
+
+
+#define hit_err( prefix, text, postfix )	\
+	{					\
+	fprintf(stderr,"Hit RunTime-Error: %s %s %s\n", prefix, text, postfix); \
+	exit( HIT_ERR_USER );			\
+	}
+#define hit_errInt( prefix, text, postfix )	\
+	{					\
+	fprintf(stderr,"Hit RunTime-Error: %s %s %d\n", prefix, text, postfix); \
+	exit( HIT_ERR_USER );			\
+	}
+#define hit_warn( prefix, text, postfix )	\
+	{							\
+	fprintf(stderr,"Hit RunTime-Warning: %s %s %s\n", prefix, text, postfix); \
+	}
+#define hit_warnInt( prefix, text, postfix )	\
+	{							\
+	fprintf(stderr,"Hit RunTime-Warning: %s %s %d\n", prefix, text, postfix); \
+	}
+
 
 
 /**

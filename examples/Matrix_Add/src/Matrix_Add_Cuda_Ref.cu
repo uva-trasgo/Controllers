@@ -1,3 +1,11 @@
+/**
+ * @file Matrix_Add_Cuda_Ref.cu
+ * @brief MatrixAdd: Native CUDA version
+ *
+ * @copyright This software is part of the Controller project by Trasgo Group, UVa.
+ * The relevant license, warranty and copyright notice is available in the Controller project repository.
+ */
+
 #include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -82,11 +90,6 @@ int main(int argc, char *argv[]) {
 	cudaDeviceProp cu_dev_prop;
 	cudaGetDeviceProperties(&cu_dev_prop, GPU);
 	printf("\n DEVICE: %s", cu_dev_prop.name);
-	#ifdef _CTRL_QUEUE_
-	printf("\n QUEUES: ON");
-	#else
-	printf("\n QUEUES: OFF");
-	#endif // _CTRL_QUEUE_
 	printf("\n\n ---------------------------------------------------- \n");
 	fflush(stdout);
 
@@ -138,7 +141,7 @@ int main(int argc, char *argv[]) {
 
 	// 8. Sync and stop timer
 	cudaDeviceSynchronize();
-	exec_clock = exec_clock - omp_get_wtime();
+	exec_clock = omp_get_wtime() - exec_clock;
 
 	// 9. Copy result from device memory to host memory
 	cudaMemcpy(C, d_C, MATRIX_SIZE, cudaMemcpyDeviceToHost);
@@ -165,5 +168,5 @@ int main(int argc, char *argv[]) {
 	printf(" Clock exec: %lf\n", exec_clock);
 	printf("\n ---------------------------------------------------- \n");
 
-	return 0;
+	return EXIT_SUCCESS;
 }

@@ -16,7 +16,7 @@
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.4
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -36,7 +36,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2024, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -49,17 +49,16 @@
 #include <stdlib.h>
 
 #include <hit_topology.h>
-#include <hit_com.h>
+#include <hit_allocP.h>
 
 /* INTEGER POWER OF 2 MACRO*/
 #define pow2(x) ( 1<<(x) )
 
-
 /* EXTERN VARIABLES */ 
-/* 1.2 PHYSICAL TOPOLOGY: TO BE INITIALIZED BY THE SPECIFIC PARALLEL INTERFACE FUNCTION */
+/* 1.1 PHYSICAL TOPOLOGY: TO BE INITIALIZED BY THE SPECIFIC PARALLEL INTERFACE FUNCTION */
 HitPTopology		*HIT_TOPOLOGY_INFO = NULL;
 
-/* 1.3 NULL TOPOLOGY */
+/* 1.2 NULL TOPOLOGY */
 HitPTopology HIT_PTOPOLOGY_NULL = HIT_PTOPOLOGY_NULL_STATIC;
 HitTopology	HIT_TOPOLOGY_NULL = HIT_TOPOLOGY_NULL_STATIC;
 
@@ -267,8 +266,145 @@ HitTopology hit_topology_plug_topArray2DComplete( HitPTopology *ptopo ) {
 	return res;
 }
 
+/* 5.5.a. Hit ARRAY TOPOLOGY First: PROMOTES MORE PROCESSES IN THE FIRST DIMENSIONS */
+HitTopology hit_topology_plug_topArrayFirst( HitPTopology *ptopo, int num_dims ) {
+	HitTopology res = HIT_TOPOLOGY_NULL;
+	res.type = HIT_TOPOLOGY_ARRAY;
 
-/* 5.5. Hit NAS ARRAY TOPOLOGY */
+	/* 1. GET NUMBER OF PROCS AND PREPARE ARRAY TO FACTORIZE */
+	int num_procs = ptopo->numProcs;
+	int factors[num_procs+1];
+	for (int i=0; i<num_procs+1; i++) factors[i]=0;
+	factors[1]=1;
+
+	/* 2. FACTORIZATION */
+	int factor=2;
+	int reduced=num_procs;
+	while( factor <= reduced && reduced > 1 ) {
+		if (reduced % factor == 0) {
+			factors[factor]++;
+			reduced /= factor;
+			continue;
+		}
+		else factor++;
+	}
+
+	// FIRST STAGE: ONE FACTOR FOR EACH DIMENSION 
+	int product = 1;
+	for (int i=0; i<num_dims; i++) res.card[i]=1;
+
+	int f_search = num_procs;
+	for (int i=0; i<num_dims; i++) {
+		for(; f_search>1; f_search--) {
+			if ( factors[f_search] > 0 ) {
+				res.card[i] *= f_search;
+				factors[f_search]--;
+				product *= f_search;
+				break;
+			}
+		}
+	}
+
+	// SECOND STAGE: START IN dim 1 TRYING TO FIT A FACTOR THAT DOES NOT MAKES THE 
+	//   DIM VALUE HIGHER THAN THE PREVIOUS ONE. IF IT IS NOT POSSIBLE, IT IS ASSIGNED TO dim 0
+	while( product < num_procs ) {
+		// Next factor
+		for(; f_search>1; f_search--) 
+			if ( factors[f_search] > 0 ) {
+				factors[f_search]--;
+				break;
+			}
+
+		// Locate dim to assign it
+		int found = 0;
+		for(int d=1; d<num_dims && ! found; d++) {
+			if ( res.card[d] * f_search <= res.card[d-1] ) {
+				res.card[d] *= f_search;
+				found = 1;
+			}
+		}
+		if ( ! found ) res.card[0] *= f_search;
+		product *= f_search;
+	}
+
+	/* 6. BUILD RESULT */
+	res.numDims = num_dims;
+	res.active = 1;
+	int rank = ptopo->selfRank;
+	for (int i=0; i<num_dims; i++) {
+		product /= res.card[i];
+		res.self.rank[i] = rank / product;
+		rank = rank % product;
+	}
+	res.pTopology = hit_ptopDup( ptopo );
+
+	/* 7. RETURN RESULT */
+	return res;
+}
+
+/* 5.5.b. Hit ARRAY TOPOLOGY: BALANCE THE CARDINALITIES ON EACH DIMENSION */
+HitTopology hit_topology_plug_topArray( HitPTopology *ptopo, int num_dims ) {
+	HitTopology res = HIT_TOPOLOGY_NULL;
+	res.type = HIT_TOPOLOGY_ARRAY;
+
+	/* 1. GET NUMBER OF PROCS AND PREPARE ARRAY TO FACTORIZE */
+	int num_procs = ptopo->numProcs;
+	int max_factors = 1 + (int)(log(num_procs) / log(2));
+	int factors[ max_factors ];
+	for (int i=0; i<max_factors; i++) factors[i]=0;
+
+
+	/* 2. FACTORIZATION */
+	int num_factors=0;
+	int factor=2;
+	int reduced=num_procs;
+	while( factor <= reduced && reduced > 1 ) {
+		if (reduced % factor == 0) {
+			factors[ num_factors ] = factor;
+			num_factors++;
+			reduced /= factor;
+			continue;
+		}
+		else factor++;
+	}
+
+	/* 3. ASSIGN FACTORS */
+	int product = 1;
+	for (int i=0; i<num_dims; i++) res.card[i]=1;
+
+	for( int f_search = num_factors-1; 
+		product < num_procs; 
+		product *= factors[ f_search ], f_search-- ) {
+
+		// Locate dim to assign next factor
+		res.card[num_dims-1] *= factors[ f_search ];
+		for(int d=num_dims-1; d>0; d--) {
+			if ( res.card[d] >= res.card[d-1] ) {
+				int tmp = res.card[d];
+				res.card[d] = res.card[d-1];
+				res.card[d-1] = tmp;
+			}
+			else break;
+		}
+	}
+	
+	/* 4. BUILD RESULT */
+	res.numDims = num_dims;
+	res.active = 1;
+	int rank = ptopo->selfRank;
+	for (int i=0; i<num_dims; i++) {
+		product /= res.card[i];
+		res.self.rank[i] = rank / product;
+		rank = rank % product;
+	}
+	res.pTopology = hit_ptopDup( ptopo );
+
+	/* 5. RETURN RESULT */
+	return res;
+}
+
+
+/* 5.6. Hit NAS ARRAY TOPOLOGY */
 HitTopology hit_topology_plug_topArrayDims( HitPTopology *ptopo , int dims ) {
 	
 	HitTopology res = HIT_TOPOLOGY_NULL;
@@ -343,7 +479,7 @@ HitTopology hit_topology_plug_topArrayDims( HitPTopology *ptopo , int dims ) {
 	return res;
 }
 
-/* 5.6. Hit DIMENSIONAL PROJECTION ARRAY TOPOLOGY */
+/* 5.7. Hit DIMENSIONAL PROJECTION ARRAY TOPOLOGY */
 HitTopology hit_topology_plug_topArrayDimProjection( HitPTopology *ptopo, int dim ) {
 	HitTopology res = HIT_TOPOLOGY_NULL;
 	res.type = HIT_TOPOLOGY_ARRAYDIMPROJECTION;
@@ -474,4 +610,5 @@ HitRanks hit_topRanksInternal( HitTopology topo, int linealRank ){
 
 	return res;
 }
+
 

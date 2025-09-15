@@ -14,7 +14,7 @@
 /*
  * <license>
  * 
- * Hitmap v1.3
+ * Hitmap v1.4
  * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
@@ -34,7 +34,7 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * 
- * Copyright (c) 2007-2021, Trasgo Group, Universidad de Valladolid.
+ * Copyright (c) 2007-2024, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
  * 
  * More information on http://trasgo.infor.uva.es/
@@ -255,7 +255,7 @@ printf("DEBUG: Post-overlapped \n");
 
 		/* New: Restrict previous dimensions to the intersection */
 		add = in_new;
-		for ( pre_dim=0; pre_dim<dim; pre_dim++ ) {
+		for ( pre_dim=0; pre_dim<dim && pre_dim < HIT_MAXDIMS; pre_dim++ ) {
 			add.sig[pre_dim] = intersection->sig[pre_dim];
 		}
 		/* New: Substract the intersection at the current dimension */
@@ -283,7 +283,7 @@ printf("DEBUG: Add new right\n");
 
 		/* Old: Restrict previous dimensions to the intersection */
 		add = in_old;
-		for ( pre_dim=0; pre_dim<dim; pre_dim++ ) {
+		for ( pre_dim=0; pre_dim<dim && pre_dim < HIT_MAXDIMS; pre_dim++ ) {
 			add.sig[pre_dim] = intersection->sig[pre_dim];
 		}
 		/* Old: Substract the intersection at the current dimension */
@@ -314,7 +314,7 @@ printf("DEBUG: Post-new, cut old \n");
 
 		/* Old: Restrict previous dimensions to the intersection */
 		add = in_old;
-		for ( pre_dim=0; pre_dim<dim; pre_dim++ ) {
+		for ( pre_dim=0; pre_dim<dim && pre_dim < HIT_MAXDIMS; pre_dim++ ) {
 			add.sig[pre_dim] = intersection->sig[pre_dim];
 		}
 		/* Old: Substract the intersection at the current dimension */
@@ -343,7 +343,7 @@ printf("DEBUG: Post-old, cut new \n");
 
 		/* New: Restrict previous dimensions to the intersection */
 		add = in_new;
-		for ( pre_dim=0; pre_dim<dim; pre_dim++ ) {
+		for ( pre_dim=0; pre_dim<dim && pre_dim < HIT_MAXDIMS; pre_dim++ ) {
 			add.sig[pre_dim] = intersection->sig[pre_dim];
 		}
 		/* New: Substract the intersection at the current dimension */

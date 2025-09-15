@@ -1,3 +1,11 @@
+/**
+ * @file Sobel_YUV_Cuda_Ref_Sync_FTM.cu
+ * @brief SobelYUV: Syncronous native CUDA file to mem version
+ *
+ * @copyright This software is part of the Controller project by Trasgo Group, UVa.
+ * The relevant license, warranty and copyright notice is available in the Controller project repository.
+ */
+
 #include <math.h>
 #include <omp.h>
 #include <stdio.h>
@@ -67,7 +75,7 @@ void Load_Frame(BYTE *Input_Img[N_IMG], FILE *File_reader, size_t sizes[N_IMG]) 
 }
 
 __global__ void Sobel_Operation(BYTE *Input, BYTE *Output, int Width, int Height) {
-	// Variable for Gradient in X and Y direction and Final one
+
 	float Gradient_h, Gradient_v, Gradient_mod;
 
 	// Calculating index id
@@ -119,10 +127,7 @@ int main(int argc, char **argv) {
 
 	/*********************************** Argument Parse *************************************/
 	if (argc < 7) {
-		printf(
-			"Usage: %s <width> <height> <num_frames> <input_yuv_file> "
-			"<output_yuv_file> <device>",
-			argv[0]);
+		printf("Usage: %s <width> <height> <num_frames> <input_yuv_file> <output_yuv_file> <device>\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -146,10 +151,11 @@ int main(int argc, char **argv) {
 
 	int DEVICE = atoi(argv[6]);
 
+	// Extra information for collecting results
 	cudaDeviceProp cu_dev_prop;
 	cudaGetDeviceProperties(&cu_dev_prop, DEVICE);
 	#ifdef _CTRL_EXAMPLES_EXP_MODE_
-	printf("%s, ", cu_dev_prop.name);
+	printf("CUDA-%s, ", cu_dev_prop.name);
 	#else
 	printf("\n ----------------------- ARGS ----------------------- \n");
 	printf("\n WIDTH: %d", Width[0]);
@@ -158,8 +164,8 @@ int main(int argc, char **argv) {
 	printf("\n DEVICE: %s", cu_dev_prop.name);
 	printf("\n POLICY SYNC");
 	printf("\n\n ---------------------------------------------------- \n");
-	fflush(stdout);
 	#endif // _CTRL_EXAMPLES_EXP_MODE_
+	fflush(stdout);
 
 	int Frame_num = 0;
 
@@ -188,8 +194,8 @@ int main(int argc, char **argv) {
 	for (int i = 0; i < N_IMG; i++) {
 		dimBlock[i] = dim3(BLOCKSIZE_0, BLOCKSIZE_1);
 		dimGrid[i]  = dim3(
-			 (Width[i] + BLOCKSIZE_0 - 1) / BLOCKSIZE_0,
-			 (Height[i] + BLOCKSIZE_1 - 1) / BLOCKSIZE_1);
+            (Width[i] + BLOCKSIZE_0 - 1) / BLOCKSIZE_0,
+            (Height[i] + BLOCKSIZE_1 - 1) / BLOCKSIZE_1);
 	}
 
 	if (!(File_reader = fopen(Input_Filename, "rb"))) {
@@ -255,13 +261,12 @@ int main(int argc, char **argv) {
 
 	#ifdef _CTRL_EXAMPLES_EXP_MODE_
 	printf("%lf, %lf\n", main_clock, exec_clock);
-	fflush(stdout);
-	#else
-	printf("\n ----------------------- TIME ----------------------- \n\n");
+	#else // _CTRL_EXAMPLES_EXP_MODE_
+	printf("\n ---------------------- TIMERS ---------------------- \n\n");
 	printf(" Clock main: %lf\n", main_clock);
 	printf(" Clock exec: %lf\n", exec_clock);
 	printf("\n ---------------------------------------------------- \n");
-	#endif
+	#endif // _CTRL_EXAMPLES_EXP_MODE_
 
 	return EXIT_SUCCESS;
 }

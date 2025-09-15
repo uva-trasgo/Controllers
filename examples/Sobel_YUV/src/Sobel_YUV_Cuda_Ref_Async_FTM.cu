@@ -1,3 +1,11 @@
+/**
+ * @file Sobel_YUV_Cuda_Ref_Async_FTM.cu
+ * @brief SobelYUV: Asyncronous native CUDA file to mem version
+ *
+ * @copyright This software is part of the Controller project by Trasgo Group, UVa.
+ * The relevant license, warranty and copyright notice is available in the Controller project repository.
+ */
+
 #include <math.h>
 #include <omp.h>
 #include <stdio.h>
@@ -97,7 +105,7 @@ void Load_Frame_Wrapper(void *data) {
 }
 
 __global__ void Sobel_Operation(BYTE *Input, BYTE *Output, int Width, int Height) {
-	// Variable for Gradient in X and Y direction and Final one
+
 	float Gradient_h, Gradient_v, Gradient_mod;
 
 	// Calculating index id
@@ -155,10 +163,7 @@ int main(int argc, char **argv) {
 
 	/*********************************** Argument Parse *************************************/
 	if (argc < 7) {
-		printf(
-			"Usage: %s <width> <height> <num_frames> <input_yuv_file> "
-			"<output_yuv_file> <device>",
-			argv[0]);
+		printf("Usage: %s <width> <height> <num_frames> <input_yuv_file> <output_yuv_file> <device>\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -182,10 +187,11 @@ int main(int argc, char **argv) {
 
 	int DEVICE = atoi(argv[6]);
 
+	// Extra information for collecting results
 	cudaDeviceProp cu_dev_prop;
 	cudaGetDeviceProperties(&cu_dev_prop, DEVICE);
 	#ifdef _CTRL_EXAMPLES_EXP_MODE_
-	printf("%s, ", cu_dev_prop.name);
+	printf("CUDA-%s, ", cu_dev_prop.name);
 	#else
 	printf("\n ----------------------- ARGS ----------------------- \n");
 	printf("\n WIDTH: %d", Width[0]);
@@ -194,8 +200,8 @@ int main(int argc, char **argv) {
 	printf("\n DEVICE: %s", cu_dev_prop.name);
 	printf("\n POLICY ASYNC");
 	printf("\n\n ---------------------------------------------------- \n");
-	fflush(stdout);
 	#endif // _CTRL_EXAMPLES_EXP_MODE_
+	fflush(stdout);
 
 	int Frame_num = 0;
 
@@ -237,8 +243,8 @@ int main(int argc, char **argv) {
 	for (int i = 0; i < N_IMG; i++) {
 		dimBlock[i] = dim3(BLOCKSIZE_0, BLOCKSIZE_1);
 		dimGrid[i]  = dim3(
-			 (Width[i] + BLOCKSIZE_0 - 1) / BLOCKSIZE_0,
-			 (Height[i] + BLOCKSIZE_1 - 1) / BLOCKSIZE_1);
+            (Width[i] + BLOCKSIZE_0 - 1) / BLOCKSIZE_0,
+            (Height[i] + BLOCKSIZE_1 - 1) / BLOCKSIZE_1);
 	}
 
 	if (!(File_reader = fopen(Input_Filename, "rb"))) {
@@ -270,37 +276,24 @@ int main(int argc, char **argv) {
 		CUDA_CALL(cudaStreamWaitEvent(streams[STREAM_KERNEL], events[EVENT_DTH], 0));
 		CUDA_CALL(cudaStreamWaitEvent(streams[STREAM_DTH], events[EVENT_HOST_SAVE], 0));
 		for (int i = 0; i < N_IMG; i++) {
-			CUDA_CALL(cudaMemcpyAsync(Device_Input_Img[i], Host_Input_Img[i],
-									  (size_t)(sizes[i] * sizeof(BYTE)),
-									  cudaMemcpyHostToDevice, streams[STREAM_HTD]));
+			CUDA_CALL(cudaMemcpyAsync(Device_Input_Img[i], Host_Input_Img[i], (size_t)(sizes[i] * sizeof(BYTE)), cudaMemcpyHostToDevice, streams[STREAM_HTD]));
 			CUDA_CALL(cudaEventRecord(events[EVENT_HTD], streams[STREAM_HTD]));
 			CUDA_CALL(cudaStreamWaitEvent(streams[STREAM_KERNEL], events[EVENT_HTD], 0));
-			CUDA_CALL((Sobel_Operation<<<dimGrid[i], dimBlock[i], 0, streams[STREAM_KERNEL]>>>(Device_Input_Img[i],
-																							   Device_Output_Img[i],
-																							   Width[i], Height[i])));
+			CUDA_CALL((Sobel_Operation<<<dimGrid[i], dimBlock[i], 0, streams[STREAM_KERNEL]>>>(Device_Input_Img[i], Device_Output_Img[i], Width[i], Height[i])));
 			CUDA_CALL(cudaEventRecord(events[EVENT_KERNEL], streams[STREAM_KERNEL]));
 			CUDA_CALL(cudaStreamWaitEvent(streams[STREAM_DTH], events[EVENT_KERNEL], 0));
-			CUDA_CALL(cudaMemcpyAsync(Host_Output_Img[i], Device_Output_Img[i],
-									  (size_t)(sizes[i] * sizeof(BYTE)),
-									  cudaMemcpyDeviceToHost, streams[STREAM_DTH]));
+			CUDA_CALL(cudaMemcpyAsync(Host_Output_Img[i], Device_Output_Img[i], (size_t)(sizes[i] * sizeof(BYTE)), cudaMemcpyDeviceToHost, streams[STREAM_DTH]));
 		}
 		CUDA_CALL(cudaEventRecord(events[EVENT_DTH], streams[STREAM_DTH]));
 
 		if (Frame_num + 1 < Num_Frames) {
-			Load_Frame_data[Frame_num + 1] = (hostFuncData_t){.buffer = NULL,
-															  .Img    = Host_Input_Img,
-															  .File   = File_reader,
-															  .sizes  = sizes};
+			Load_Frame_data[Frame_num + 1] = (hostFuncData_t){.buffer = NULL, .Img = Host_Input_Img, .File = File_reader, .sizes = sizes};
 			CUDA_CALL(cudaStreamWaitEvent(streams[STREAM_HOST], events[EVENT_HTD], 0));
-			CUDA_CALL(cudaLaunchHostFunc(streams[STREAM_HOST], Load_Frame_Wrapper,
-										 (void *)(&Load_Frame_data[Frame_num + 1])));
+			CUDA_CALL(cudaLaunchHostFunc(streams[STREAM_HOST], Load_Frame_Wrapper, (void *)(&Load_Frame_data[Frame_num + 1])));
 			CUDA_CALL(cudaEventRecord(events[EVENT_HOST_LOAD], streams[STREAM_HOST]));
 		}
 
-		Save_Frame_data[Frame_num] = (hostFuncData_t){.buffer = buffer_write[Frame_num],
-													  .Img    = Host_Output_Img,
-													  .File   = NULL,
-													  .sizes  = sizes};
+		Save_Frame_data[Frame_num] = (hostFuncData_t){.buffer = buffer_write[Frame_num], .Img = Host_Output_Img, .File = NULL, .sizes = sizes};
 		CUDA_CALL(cudaStreamWaitEvent(streams[STREAM_HOST], events[EVENT_DTH], 0));
 		CUDA_CALL(cudaLaunchHostFunc(streams[STREAM_HOST], Put_Frame, (void *)(&Save_Frame_data[Frame_num])));
 		CUDA_CALL(cudaEventRecord(events[EVENT_HOST_SAVE], streams[STREAM_HOST]));
@@ -339,13 +332,12 @@ int main(int argc, char **argv) {
 
 	#ifdef _CTRL_EXAMPLES_EXP_MODE_
 	printf("%lf, %lf\n", main_clock, exec_clock);
-	fflush(stdout);
-	#else
-	printf("\n ----------------------- TIME ----------------------- \n\n");
+	#else // _CTRL_EXAMPLES_EXP_MODE_
+	printf("\n ---------------------- TIMERS ---------------------- \n\n");
 	printf(" Clock main: %lf\n", main_clock);
 	printf(" Clock exec: %lf\n", exec_clock);
 	printf("\n ---------------------------------------------------- \n");
-	#endif
+	#endif // _CTRL_EXAMPLES_EXP_MODE_
 
 	return EXIT_SUCCESS;
 }

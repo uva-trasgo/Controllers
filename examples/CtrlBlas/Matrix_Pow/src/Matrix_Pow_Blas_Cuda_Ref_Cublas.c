@@ -1,3 +1,11 @@
+/**
+ * @file Matrix_Pow_Blas_Cuda_Ref_Cublas.c
+ * @brief MatrixPow: Native CUBLAS version
+ *
+ * @copyright This software is part of the Controller project by Trasgo Group, UVa.
+ * The relevant license, warranty and copyright notice is available in the Controller project repository.
+ */
+
 #include "cublas_v2.h"
 #include <cuda_runtime.h>
 #include <omp.h>
@@ -11,7 +19,7 @@
 	{                                                                                       \
 		cublasStatus_t error = op;                                                          \
 		if (error != CUBLAS_STATUS_SUCCESS) {                                               \
-			fprintf(stderr, "\tCUBLAS Error at: %s::%d\n %s: ", __FILE__, __LINE__, error); \
+			fprintf(stderr, "\tCUBLAS Error at: %s::%d\n %d: ", __FILE__, __LINE__, error); \
 			printMessageFromCuBLASError(error);                                             \
 			fflush(stderr);                                                                 \
 			exit(EXIT_FAILURE);                                                             \
@@ -69,16 +77,12 @@ int main(int argc, char *argv[]) {
 	struct cudaDeviceProp cu_dev_prop;
 	CUDA_OP(cudaGetDeviceProperties(&cu_dev_prop, GPU));
 	printf("\n DEVICE: %s", cu_dev_prop.name);
-	#ifdef _CTRL_QUEUE_
-	printf("\n QUEUES: ON");
-	#else
-	printf("\n QUEUES: OFF");
-	#endif // _CTRL_QUEUE_
 	printf("\n\n ---------------------------------------------------- \n");
 	fflush(stdout);
 
-	float *A, *dA;
+	CUDA_OP(cudaSetDevice(GPU));
 
+	float *A, *dA;
 	CUDA_OP(cudaMallocHost((void **)&A, size * size * sizeof(float)));
 	CUDA_OP(cudaMalloc((void **)&dA, sizeof(float) * size * size));
 
@@ -102,7 +106,7 @@ int main(int argc, char *argv[]) {
 
 	CUBLAS_OP(cublasSetMatrix(size, size, sizeof(float), A, size, dA, size));
 
-	for (int power = 0; power > n_iter; power++) {
+	for (int power = 0; power < n_iter; power++) {
 		CUBLAS_OP(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, size, size, size, &cu_alpha, dA, size, dA, size,
 							  &cu_beta, dA, size)); // C = αAB + βC
 	}
@@ -138,5 +142,5 @@ int main(int argc, char *argv[]) {
 	printf(" Clock main: %lf\n", main_clock);
 	printf(" Clock exec: %lf\n", exec_clock);
 	printf("\n ---------------------------------------------------- \n");
-	return 0;
+	return EXIT_SUCCESS;
 }

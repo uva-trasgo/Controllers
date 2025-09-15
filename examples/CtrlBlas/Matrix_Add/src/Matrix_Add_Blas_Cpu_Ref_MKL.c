@@ -1,3 +1,11 @@
+/**
+ * @file Matrix_Add_Blas_Cpu_Ref_MKL.c
+ * @brief MatrixAdd: Native MKL version
+ *
+ * @copyright This software is part of the Controller project by Trasgo Group, UVa.
+ * The relevant license, warranty and copyright notice is available in the Controller project repository.
+ */
+
 #include <math.h>
 #include <mkl.h>
 #include <omp.h>
@@ -89,5 +97,5 @@ int main(int argc, char *argv[]) {
 	printf(" Clock exec: %lf\n", exec_clock);
 	printf("\n ---------------------------------------------------- \n");
 
-	return 0;
+	return EXIT_SUCCESS;
 }

@@ -1,5 +1,12 @@
 #ifndef _CTRL_BLAS_ENUM_H_
 #define _CTRL_BLAS_ENUM_H_
+/**
+ * @file Ctrl_Blas_Enum.h
+ * @brief Enum for CtrlBlas kernels.
+ *
+ * @copyright This software is part of the Controller project by Trasgo Group, UVa.
+ * The relevant license, warranty and copyright notice is available in the Controller project repository.
+ */
 
 /**
  * Numbering is consistent with CBLAS. For cublas translation is handled internally.

@@ -2,39 +2,14 @@
 #define _CTRL_KERNEL_ARGS_H_
 /**
  * @file Ctrl_KernelArgs.h
- * @author Trasgo Group
  * @brief Macros to process lists of arguments in kernels definitions and launches
- * @version 2.1
- * @date 2021-04-26
  *
- * @copyright This software is provided to enhance knowledge and encourage progress in the scientific
- * community. It should be used only for research and educational purposes. Any reproduction
- * or use for commercial purpose, public redistribution, in source or binary forms, with or
- * without modifications, is NOT ALLOWED without the previous authorization of the copyright
- * holder. The origin of this software must not be misrepresented; you must not claim that you
- * wrote the original software. If you use this software for any purpose (e.g. publication),
- * a reference to the software package and the authors must be included.
- *
- * @copyright THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
- * THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * @copyright Copyright (c) 2007-2020, Trasgo Group, Universidad de Valladolid.
- * All rights reserved.
- *
- * @copyright More information on http://trasgo.infor.uva.es/
+ * @copyright This software is part of the Controller project by Trasgo Group, UVa.
+ * The relevant license, warranty and copyright notice is available in the Controller project repository.
  */
 
 // @sergioalo formatter breaks recursive macros into multiple lines and makes them very long
 // clang-format off
-
-#define CTRL_KERNEL_PATH_LENGTH 512
 
 #ifdef _CTRL_ARCH_CPU_
 	#include "Kernel/Architectures/Cpu/Ctrl_Cpu_KernelArgs.h"
@@ -52,6 +27,14 @@
 	#define CTRL_KERNEL_CUDA_KERNEL_CHAR(...)
 #endif // _CTRL_ARCH_CUDA_
 
+#ifdef _CTRL_ARCH_HIP_
+	#include "Kernel/Architectures/Hip/Ctrl_Hip_KernelArgs.h"
+	#include "Kernel/Architectures/Hip/Ctrl_Hip_KernelChar.h"
+#else
+	#define CTRL_KERNEL_HIP_KTILE_DEVICE_DATA(...)
+	#define CTRL_KERNEL_HIP_KERNEL_CHAR(...)
+#endif // _CTRL_ARCH_HIP_
+
 #ifdef _CTRL_ARCH_OPENCL_GPU_
 	#include "Kernel/Architectures/OpenCL/Ctrl_OpenCL_KernelArgs.h"
 	#include "Kernel/Architectures/OpenCL/Ctrl_OpenCL_Gpu_KernelChar.h"
@@ -61,10 +44,8 @@
 #endif // _CTRL_ARCH_OPENCL_GPU_
 
 #ifdef _CTRL_ARCH_FPGA_
-	#ifdef CTRL_HOST_COMPILE
-		#include "Kernel/Architectures/FPGA/Ctrl_FPGA_KernelArgs.h"
-		#include "Kernel/Architectures/FPGA/Ctrl_FPGA_KernelChar.h"
-	#endif // CTRL_HOST_COMPILE
+    #include "Kernel/Architectures/FPGA/Ctrl_FPGA_KernelArgs.h"
+    #include "Kernel/Architectures/FPGA/Ctrl_FPGA_KernelChar.h"
 #else
 	#define CTRL_KERNEL_FPGA_KTILE_DEVICE_DATA(...)
 	#define CTRL_KERNEL_FPGA_KERNEL_CHAR(...)
@@ -81,6 +62,7 @@
  * @param type type of characterization, MANUAL or AUTO.
  * @param ... sizes of blocks, 1 value per dimension.
  */
+// FIXME: Fix the CTRL_COUNTPARAM breaking the automatic characterizations (now useful for FPGA kernels).
 #define CTRL_KERNEL_CHAR(name, type, ...) \
 	CTRL_KERNEL_CHARN(name, type, CTRL_COUNTPARAM(__VA_ARGS__), __VA_ARGS__)
 
@@ -89,6 +71,7 @@
 #define CTRL_KERNEL_CHARN2(name, type, dims, ...)                      \
 	CTRL_KERNEL_CPU_KERNEL_CHAR(name, type, dims, __VA_ARGS__);        \
 	CTRL_KERNEL_CUDA_KERNEL_CHAR(name, type, dims, __VA_ARGS__);       \
+	CTRL_KERNEL_HIP_KERNEL_CHAR(name, type, dims, __VA_ARGS__);        \
 	CTRL_KERNEL_OPENCL_GPU_KERNEL_CHAR(name, type, dims, __VA_ARGS__); \
 	CTRL_KERNEL_FPGA_KERNEL_CHAR(name, type, dims, __VA_ARGS__);
 
@@ -104,7 +87,11 @@
 #define C_GUARD
 #endif // __cplusplus
 
-#define CTRL_KERNEL_STRINGIFY(arg) #arg
+#define CTRL_MACRO_STRINGIFY(a)  CTRL_MACRO_STRINGIFY2(a)
+#define CTRL_MACRO_STRINGIFY2(a) #a
+
+#define CTRL_COUNTPARAM(...) CTRL_COUNTPARAM_N(__VA_ARGS__, 63, 62, 61, 60, 59, 58, 57, 56, 55, 54, 53, 52, 51, 50, 49, 48, 47, 46, 45, 44, 43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
+#define CTRL_COUNTPARAM_N(n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, n22, n23, n24, n25, n26, n27, n28, n29, n30, n31, n32, n33, n34, n35, n36, n37, n38, n39, n40, n41, n42, n43, n44, n45, n46, n47, n48, n49, n50, n51, n52, n53, n54, n55, n56, n57, n58, n59, n60, n61, n62, n63, num, ...) num
 
 /* Copy parameter types and names */
 #define CTRL_KERNEL_TYPED(list, numArgs, ...) CTRL_KERNEL_TYPED_##numArgs(__VA_ARGS__)
@@ -203,9 +190,6 @@
 			CTRL_KERNEL_ARGS_POINTERS_1,                                              \
 		)(__VA_ARGS__)
 
-#define CTRL_COUNTPARAM(...) CTRL_COUNTPARAM_N(__VA_ARGS__, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
-#define CTRL_COUNTPARAM_N(n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, num, ...) num
-
 /*
  * Arguments list size (sum of the type sizes of all the arguments)
  */
@@ -232,6 +216,7 @@
 #define CTRL_KERNEL_ARG_LIST_SIZE_19(role, type, name, ...) sizeof(type) + CTRL_KERNEL_ARG_LIST_SIZE_18(__VA_ARGS__)
 #define CTRL_KERNEL_ARG_LIST_SIZE_20(role, type, name, ...) sizeof(type) + CTRL_KERNEL_ARG_LIST_SIZE_19(__VA_ARGS__)
 
+// TODO: quitar este TODO de abajo, WAI, el compilador se encarga de ello.
 // TODO @waxa los siguientes macrosw funcionan pero generean casteos anidados de mas, arreglar esto en un futuro
 /*
  * List store: Store a copy of the values in a contiguos buffer
@@ -381,36 +366,33 @@
 #define CTRL_KERNEL_KTILE_STORE_IO(list, type, name) \
 	CTRL_KERNEL_KTILE_STORE_NO_INVAL(list, type, name)
 
-// TODO @waxa las lineas de deviceType hay que moverlas a compilacion condicional
-#define CTRL_KERNEL_KTILE_STORE_NO_INVAL(list, type, name)                                                                               \
-	KHitTile k_##name##_void;                                                                                                            \
-	switch (ctrl_type) {                                                                                                                 \
-		CTRL_KERNEL_CPU_KTILE_DEVICE_DATA(name)                                                                                          \
-		CTRL_KERNEL_CUDA_KTILE_DEVICE_DATA(name)                                                                                         \
-		CTRL_KERNEL_OPENCL_KTILE_DEVICE_DATA(name)                                                                                       \
-		CTRL_KERNEL_FPGA_KTILE_DEVICE_DATA(name)                                                                                         \
-		default:                                                                                                                         \
-			fprintf(stderr, "[Ctrl_KernelArgs] Unsupported Ctrl type: %d. Recompile the library with the proper support.\n", ctrl_type); \
-			exit(EXIT_FAILURE);                                                                                                          \
-			break;                                                                                                                       \
-	}                                                                                                                                    \
-	K##type k_##name;                                                                                                                    \
-	memcpy(&k_##name, &k_##name##_void, sizeof(KHitTile));                                                                               \
-	k_##name.origAcumCard[0] = name->origAcumCard[0];                                                                                    \
-	k_##name.origAcumCard[1] = name->origAcumCard[1];                                                                                    \
-	k_##name.origAcumCard[2] = name->origAcumCard[2];                                                                                    \
-	k_##name.origAcumCard[3] = name->origAcumCard[3];                                                                                    \
-	k_##name.card[0]         = hit_tileDimCard((*name), 0);                                                                              \
-	k_##name.card[1]         = hit_tileDimCard((*name), 1);                                                                              \
-	k_##name.card[2]         = hit_tileDimCard((*name), 2);                                                                              \
-	/* Offset for subselections. Most times will be 0. */                                                                                \
-	{                                                                                                                                    \
-		type *p_parent = name;                                                                                                           \
-		while (p_parent->memStatus == HIT_MS_NOT_OWNER)                                                                                  \
-			p_parent = p_parent->ref;                                                                                                    \
-		k_##name.offset = ((size_t)name->data - (size_t)p_parent->data) / name->baseExtent;                                              \
-	}                                                                                                                                    \
-	*((K##type *)(list)) = k_##name;
+#define CTRL_KERNEL_KTILE_STORE_NO_INVAL(list, hit_type, name)                                                                              \
+	KHitTile k_##name##_void;                                                                                                               \
+	switch (p_ctrl->type) {                                                                                                                 \
+		CTRL_KERNEL_CPU_KTILE_DEVICE_DATA(name)                                                                                             \
+		CTRL_KERNEL_CUDA_KTILE_DEVICE_DATA(name)                                                                                            \
+		CTRL_KERNEL_HIP_KTILE_DEVICE_DATA(name)                                                                                             \
+		CTRL_KERNEL_OPENCL_KTILE_DEVICE_DATA(name)                                                                                          \
+		CTRL_KERNEL_FPGA_KTILE_DEVICE_DATA(name)                                                                                            \
+		default:                                                                                                                            \
+			fprintf(stderr, "[Ctrl_KernelArgs] Unsupported Ctrl type: %d. Recompile the library with the proper support.\n", p_ctrl->type); \
+			exit(EXIT_FAILURE);                                                                                                             \
+			break;                                                                                                                          \
+	}                                                                                                                                       \
+	K##hit_type k_##name;                                                                                                                   \
+ 	memcpy(&k_##name, &k_##name##_void, sizeof(KHitTile));                                                                                  \
+	for (int i = 0; i < HIT_MAXDIMS + 1; i++)                                                                                               \
+		k_##name.origAcumCard[i] = name->origAcumCard[i];                                                                                   \
+	for (int i = 0; i < HIT_MAXDIMS; i++)                                                                                                   \
+		k_##name.card[i] = hit_tileDimCard((*name), i);                                                                                     \
+	/* Offset for subselections. Most times will be 0. */                                                                                   \
+	{                                                                                                                                       \
+		hit_type *p_parent = name;                                                                                                          \
+		while (p_parent->memStatus == HIT_MS_NOT_OWNER)                                                                                     \
+			p_parent = p_parent->ref;                                                                                                       \
+		k_##name.offset = ((size_t)name->data - (size_t)p_parent->data) / name->baseExtent;                                                 \
+	}                                                                                                                                       \
+	*((K##hit_type *)(list)) = k_##name;
 
 /*
  * List store for Ktile types: Store a copy of the values in a contiguos buffer, also casting to kTiles and transferring memory
@@ -719,12 +701,12 @@
 #define CTRL_KERNEL_ROLES_20(rolesList, numArgs, role, type, name, ...) rolesList[numArgs - 20] = KERNEL_##role; CTRL_KERNEL_ROLES_19(rolesList, numArgs, __VA_ARGS__)
 
 /* Create list of pointers */
-#define CTRL_KERNEL_POINTERS(pointersList, numArgs, ...)                                                      \
-	pointersList = (void **)malloc(numArgs * sizeof(void *));                                                 \
-	if (pointersList == NULL) {                                                                               \
-		printf("CTRL Internal error: Allocating task memory for pointers list %s[%d]\n", __FILE__, __LINE__); \
-		;                                                                                                     \
-	}                                                                                                         \
+#define CTRL_KERNEL_POINTERS(pointersList, numArgs, ...)                                                               \
+	pointersList = (void **)malloc(numArgs * sizeof(void *));                                                          \
+	if (pointersList == NULL) {                                                                                        \
+		fprintf(stderr, "CTRL Internal Error: Allocating task memory for pointers list %s[%d]\n", __FILE__, __LINE__); \
+		exit(EXIT_FAILURE);                                                                                            \
+	}                                                                                                                  \
 	CTRL_KERNEL_POINTERS_##numArgs(pointersList, numArgs, __VA_ARGS__)
 
 #define CTRL_KERNEL_POINTERS_1(pointersList, numArgs, role, type, name)       pointersList[numArgs - 1] = (void *)(name);
@@ -749,13 +731,13 @@
 #define CTRL_KERNEL_POINTERS_20(pointersList, numArgs, role, type, name, ...) pointersList[numArgs - 20] = (void *)(name); CTRL_KERNEL_POINTERS_19(pointersList, numArgs, __VA_ARGS__)
 
 /* Create list of displacement */
-#define CTRL_KERNEL_DISPLACEMENTS(displacementsList, numArgs, ...)                                            \
-	displacementsList = (uint16_t *)malloc((numArgs + 1) * sizeof(uint16_t));                                 \
-	if (displacementsList == NULL) {                                                                          \
-		printf("CTRL Internal error: Allocating task memory for pointers list %s[%d]\n", __FILE__, __LINE__); \
-		;                                                                                                     \
-	}                                                                                                         \
-	displacementsList[0] = 0;                                                                                 \
+#define CTRL_KERNEL_DISPLACEMENTS(displacementsList, numArgs, ...)                                                     \
+	displacementsList = (uint16_t *)malloc((numArgs + 1) * sizeof(uint16_t));                                          \
+	if (displacementsList == NULL) {                                                                                   \
+		fprintf(stderr, "CTRL Internal Error: Allocating task memory for pointers list %s[%d]\n", __FILE__, __LINE__); \
+		exit(EXIT_FAILURE);                                                                                            \
+	}                                                                                                                  \
+	displacementsList[0] = 0;                                                                                          \
 	CTRL_KERNEL_DISPLACEMENTS_##numArgs(displacementsList, numArgs, __VA_ARGS__)
 
 #define CTRL_KERNEL_DISPLACEMENTS_1(displacementsList, numArgs, role, type, name)       displacementsList[numArgs] = displacementsList[numArgs - 1] + CTRL_KERNEL_LIST_SIZE_KTILE(role, type, name);
@@ -779,13 +761,13 @@
 #define CTRL_KERNEL_DISPLACEMENTS_19(displacementsList, numArgs, role, type, name, ...) displacementsList[numArgs - 18] = displacementsList[numArgs - 19] + CTRL_KERNEL_LIST_SIZE_KTILE(role, type, name); CTRL_KERNEL_DISPLACEMENTS_18(displacementsList, numArgs, __VA_ARGS__);
 #define CTRL_KERNEL_DISPLACEMENTS_20(displacementsList, numArgs, role, type, name, ...) displacementsList[numArgs - 19] = displacementsList[numArgs - 20] + CTRL_KERNEL_LIST_SIZE_KTILE(role, type, name); CTRL_KERNEL_DISPLACEMENTS_19(displacementsList, numArgs, __VA_ARGS__);
 
-#define CTRL_KERNEL_DISPLACEMENTS_TILES(displacementsList, numArgs, ...)                                      \
-	displacementsList = (uint16_t *)malloc((numArgs + 1) * sizeof(uint16_t));                                 \
-	if (displacementsList == NULL) {                                                                          \
-		printf("CTRL Internal error: Allocating task memory for pointers list %s[%d]\n", __FILE__, __LINE__); \
-		;                                                                                                     \
-	}                                                                                                         \
-	displacementsList[0] = 0;                                                                                 \
+#define CTRL_KERNEL_DISPLACEMENTS_TILES(displacementsList, numArgs, ...)                                               \
+	displacementsList = (uint16_t *)malloc((numArgs + 1) * sizeof(uint16_t));                                          \
+	if (displacementsList == NULL) {                                                                                   \
+		fprintf(stderr, "CTRL Internal Error: Allocating task memory for pointers list %s[%d]\n", __FILE__, __LINE__); \
+		exit(EXIT_FAILURE);                                                                                            \
+	}                                                                                                                  \
+	displacementsList[0] = 0;                                                                                          \
 	CTRL_KERNEL_DISPLACEMENTS_TILES_##numArgs(displacementsList, numArgs, __VA_ARGS__)
 
 #define CTRL_KERNEL_DISPLACEMENTS_TILES_1(displacementsList, numArgs, role, type, name)       displacementsList[numArgs] = displacementsList[numArgs - 1] + CTRL_KERNEL_LIST_SIZE_KTILE(INVAL, type, name);
@@ -809,7 +791,7 @@
 #define CTRL_KERNEL_DISPLACEMENTS_TILES_19(displacementsList, numArgs, role, type, name, ...) displacementsList[numArgs - 18] = displacementsList[numArgs - 19] + CTRL_KERNEL_LIST_SIZE_KTILE(INVAL, type, name); CTRL_KERNEL_DISPLACEMENTS_TILES_18(displacementsList, numArgs, __VA_ARGS__);
 #define CTRL_KERNEL_DISPLACEMENTS_TILES_20(displacementsList, numArgs, role, type, name, ...) displacementsList[numArgs - 19] = displacementsList[numArgs - 20] + CTRL_KERNEL_LIST_SIZE_KTILE(INVAL, type, name); CTRL_KERNEL_DISPLACEMENTS_TILES_19(displacementsList, numArgs, __VA_ARGS__);
 
-#define CTRL_KERNEL_EXTRACT_KERNEL_1(kernel)    CTRL_KERNEL_STRINGIFY(kernel);
+#define CTRL_KERNEL_EXTRACT_KERNEL_1(kernel)    CTRL_MACRO_STRINGIFY(kernel);
 #define CTRL_KERNEL_EXTRACT_KERNEL_2(arg, ...)  CTRL_KERNEL_EXTRACT_KERNEL_1(__VA_ARGS__)
 #define CTRL_KERNEL_EXTRACT_KERNEL_3(arg, ...)  CTRL_KERNEL_EXTRACT_KERNEL_2(__VA_ARGS__)
 #define CTRL_KERNEL_EXTRACT_KERNEL_4(arg, ...)  CTRL_KERNEL_EXTRACT_KERNEL_3(__VA_ARGS__)
@@ -856,14 +838,7 @@
 							CTRL_KERNEL_EXTRACT_KERNEL_2(__VA_ARGS__),  \
 							CTRL_KERNEL_EXTRACT_KERNEL_1(__VA_ARGS__))
 
-/* @author: Gabriel Rodriguez-Canal
-   @brief There must not be a semicolon after the kernel attributes
-*/
-#ifndef CTRL_FPGA_KERNEL_FILE
-	#define CTRL_KERNEL_EXTRACT_KERNEL_NO_STR_1(kernel) kernel;
-#else // CTRL_FPGA_KERNEL_FILE
-	#define CTRL_KERNEL_EXTRACT_KERNEL_NO_STR_1(kernel) kernel
-#endif // CTRL_FPGA_KERNEL_FILE
+#define CTRL_KERNEL_EXTRACT_KERNEL_NO_STR_1(kernel) kernel;
 
 #define CTRL_KERNEL_EXTRACT_KERNEL_NO_STR_2(arg, ...)  CTRL_KERNEL_EXTRACT_KERNEL_NO_STR_1(__VA_ARGS__)
 #define CTRL_KERNEL_EXTRACT_KERNEL_NO_STR_3(arg, ...)  CTRL_KERNEL_EXTRACT_KERNEL_NO_STR_2(__VA_ARGS__)

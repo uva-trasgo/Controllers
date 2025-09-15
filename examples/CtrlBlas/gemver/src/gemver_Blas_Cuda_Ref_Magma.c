@@ -1,3 +1,11 @@
+/**
+ * @file gemver_Blas_Cuda_Ref_Magma.c
+ * @brief gemver: Native CUDA Magma version
+ *
+ * @copyright This software is part of the Controller project by Trasgo Group, UVa.
+ * The relevant license, warranty and copyright notice is available in the Controller project repository.
+ */
+
 #include "magma_v2.h"
 #include <cuda_runtime.h>
 #include <omp.h>
@@ -177,5 +185,5 @@ int main(int argc, char *argv[]) {
 	printf(" Clock exec : %lf\n", exec_clock);
 	printf("\n ---------------------------------------------------- \n");
 
-	return 0;
+	return EXIT_SUCCESS;
 }
