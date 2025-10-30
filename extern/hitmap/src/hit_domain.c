@@ -131,7 +131,7 @@ void hit_domainPrint( HitSigDomain dom_old ) {
 		printf("\tShape %d:\t", ind );
 		int dim;
 		for ( dim=0; dim<dom_old.list[ind].numDims; dim++ ) {
-			printf("[%d:%d]", 
+			printf("[%ld:%ld]", 
 				dom_old.list[ind].sig[dim].begin,
 				dom_old.list[ind].sig[dim].end );
 		}

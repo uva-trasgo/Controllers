@@ -15,13 +15,13 @@
 char *input_file_name;
 char *output_file_name;
 
-vec2i size;
+vec2l size;
 int   iterations;
 
 /* A. INITIALIZE ARRAY */
 void initData(HitTile(EPSILOD_BASE_TYPE) tileMat, EpsilodCoords global, Epsilod_ext *ext_params) {
 	HitTile root = *hit_tileRoot(&tileMat);
-	int     i, j;
+	HitInd  i, j;
 
 	/* 2.1. FIRST COLUMN IS MINE */
 	if (hit_sigIn(hit_tileDimSig(tileMat, 1), hit_tileDimBegin(root, 1)))
@@ -44,7 +44,6 @@ void initData(HitTile(EPSILOD_BASE_TYPE) tileMat, EpsilodCoords global, Epsilod_
 	/* 2.4. LAST ROW IS MINE */
 	if (hit_sigIn(hit_tileDimSig(tileMat, 0), hit_tileDimEnd(root, 0)))
 		for (i = 0; i < global.borders.high[0]; i++) {
-			printf("%d\n", i);
 			hit_tileForDimDomain(tileMat, 1, j)
 				hit_tileElemAt(tileMat, 2, hit_tileDimCard(tileMat, 0) - 1 - i, j) = (EPSILOD_BASE_TYPE)j / (size.y - 1);
 		}
@@ -60,7 +59,7 @@ void outputData(HitTile(EPSILOD_BASE_TYPE) io_tile, Epsilod_ext *ext_params) {
 	}
 
 	char o_f_name[1024];
-	sprintf(o_f_name, "%s_%d_%d_%d.txt", output_file_name, size.x, size.y, iterations);
+	sprintf(o_f_name, "%s_%ld_%ld_%d.txt", output_file_name, size.x, size.y, iterations);
 	output_file_name = o_f_name;
 
 	/* Write distributed file */
@@ -95,8 +94,8 @@ int main(int argc, char *argv[]) {
 	}
 
 	/* READ ARGUMENTS */
-	size.x                      = atoi(argv[1]);
-	size.y                      = atoi(argv[2]);
+	size.x                      = atol(argv[1]);
+	size.y                      = atol(argv[2]);
 	iterations                  = atoi(argv[3]);
 	input_file_name             = argv[4];
 	output_file_name            = argv[5];
@@ -117,7 +116,7 @@ int main(int argc, char *argv[]) {
 	stencilDeviceFunction f_stencil = iterations == 0 ? noop_laplace : updateCell_laplace;
 
 	// int sizes[3] = {size.x + (radius * 2), size.y + (radius * 2), 0};
-	int sizes[3] = {size.x, size.y, 0};
+	HitInd sizes[3] = {size.x, size.y, 0};
 
 	EPSILOD_BASE_TYPE xmin = 0.;
 	EPSILOD_BASE_TYPE ymin = 0.;

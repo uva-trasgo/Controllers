@@ -626,7 +626,7 @@ void Ctrl_AllocInner(Ctrl *p_ctrl, HitTile *p_tile, int flags) {
 		/* 3.2. UPDATE ORIGINAL ACUMULATED CARDINALITIES, NOW IT HAS ITS OWN MEMORY */
 		// Code below extracted from the body of hit_tileUpdateAcumCards(p_tile); (static inline fn)
 		p_tile->origAcumCard[hit_shapeDims(p_tile->shape)] = 1;
-		int cardinality                                    = 1;
+		HitInd cardinality                                 = 1;
 		for (int i = (hit_shapeDims(p_tile->shape) - 1); i >= 0; i--) {
 			cardinality             = cardinality * p_tile->card[i];
 			p_tile->origAcumCard[i] = cardinality;
@@ -1216,7 +1216,7 @@ void Ctrl_ParseConfig(const char *file) {
 
 	// LOAD HARDWARE TOPOLOGY INFO
 	hwloc_topology_init(&topo);
-	hwloc_topology_set_flags(topo, HWLOC_TOPOLOGY_FLAG_INCLUDE_DISALLOWED);
+	// hwloc_topology_set_flags(topo, HWLOC_TOPOLOGY_FLAG_INCLUDE_DISALLOWED);
 	hwloc_topology_load(topo);
 
 	// INITIALIZE CONTROLLERS LIST

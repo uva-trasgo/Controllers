@@ -45,6 +45,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 #include <hit_pattern.h>
 #include <hit_com.h>
 #include <hit_sshape.h>
@@ -703,453 +704,6 @@ fprintf(stderr, "%s Adding recv from %d to %d with shape %d [%d:%d:%d][%d:%d:%d]
 #undef DEBUG
 }
 
-/*
- * @arturo Jan 2015
- * hit_patternLayRedistribute2: Redistribute a tile allocated with a given layout,
- * 		as indicated by another layout, WHEN topologies of the layouts are different.
- * 		For layouts using the same topology see hit_patternLayRedistribute
- * 		Use hit_patterLayRedistribute as front-end for any case.
- *
- * 		Restrictions:
- * 		1) The tile should have been allocated using the local shape from the first layout
- */
-#define HIT_PAT_REDISTRIBUTE2_TAG	15005
-HitPattern hit_patternLayRedistributeGeneric2(	HitLayout lay1, HitLayout lay2, void *tileP1, void *tileP2, HitType baseType,
-			expandBorderFunction f_for_inbound, expandBorderFunction f_for_outbound) {
-	int i;
-	HitTile* tile = (HitTile *)tileP1;
-
-	// @arturo 2015/01/03: Eliminate the requirement for topologies associated to both layouts
-	//		being the same
-	/* 1. CHECK THAT THE TOPOLOGY IS THE SAME IN BOTH LAYOUTS */
-	/*
-	if ( ! hit_ptopoCmp( lay1.topo.pTopology, lay2.topo.pTopology ) ) 
-		hit_errInternal( __FUNCTION__, "Layouts with different topologies", "", __FILE__, __LINE__ );
-	*/
-
-	/* 2. SKIP IF MY PROC IS NOT ACTIVE IN ANY LAYOUT */
-	if ( ! hit_layImActive( lay1 ) && ! hit_layImActive( lay2 ) ) return HIT_PATTERN_NULL;
-
-	/* 3. DECLARE THE NEW COMM. PATTERN */
-	HitPattern allToAll = hit_pattern( HIT_PAT_UNORDERED );
-	// @arturo 2015/01/03 Two possible number of processors when topologies are not the same
-	//int myRank = lay1.topo.linearRank;
-	//int numProcs = hit_topCard( lay1.topo );
-	// @arturo 2015/01/22
-	//int myRank1 = lay1.topo.linearRank;
-	//int myRank2 = lay1.topo.linearRank;
-	int myRank1 = hit_topSelfRankInternal( lay1.topo );
-	int myRank2 = hit_topSelfRankInternal( lay2.topo );
-	int numProcs1 = hit_topCard( lay1.topo );
-	int numProcs2 = hit_topCard( lay2.topo );
-
-	// @arturo 2015/01/03: False layout to contain the global topology communicator
-	MPI_Group gLay1;
-	MPI_Group gLay2;
-	MPI_Group gGlobal;
-	MPI_Comm_group( lay1.topo.pTopology->global->comm, &gGlobal );
-	// @arturo 2015/01/07 Bug corrected: Get info for the active group on each layout
-	if ( lay1.topo.active ) MPI_Comm_group( lay1.topo.pTopology->comm, &gLay1 );
-	else gLay1 = lay1.topo.pTopology->antiCommGroup;
-	if ( lay2.topo.active ) MPI_Comm_group( lay2.topo.pTopology->comm, &gLay2 );
-	else gLay2 = lay2.topo.pTopology->antiCommGroup;
-
-	int myRankGlobal = lay1.topo.pTopology->global->selfRank;
-
-	HitLayout fooGlobal = HIT_LAYOUT_NULL;
-	fooGlobal.active = 1;
-	fooGlobal.topo.pTopology = lay1.topo.pTopology->global;
-	fooGlobal.topo.numDims = 1;
-	fooGlobal.topo.card[0] = fooGlobal.topo.pTopology->numProcs;
-	fooGlobal.topo.active = 1;
-	//fooGlobal.topo.linearRank = myRankGlobal;
-
-#ifdef DEBUG
-printf("Ranks: Lay1: %d, Lay2: %d, Global: %d\n", myRank1, myRank2, myRankGlobal );
-#endif
-	
-	HitTile *globalMat = hit_tileRoot(tile);
-	int dims = hit_shapeDims(hit_tileShape(*tile));
-	int *borderLow  = (int *)malloc(dims * sizeof(int));
-	int *borderHigh = (int *)malloc(dims * sizeof(int));
-
-	HitShape shape = hit_layShape( lay1 );
-	for (int j = 0; j < dims; j++) {
-		borderLow[j] = hit_shapeSig(shape, j).begin - hit_tileDimBegin(*tile, j);
-		borderHigh[j] = hit_tileDimEnd(*tile, j) - hit_shapeSig(shape, j).end;
-	}
-
-
-	/* 4. ONLY COMPUTE SENDS IF I'M ACTIVE IN THE FIRST LAYOUT (I HAVE DATA) */
-	if ( hit_layImActive( lay1 ) ) {
-		HitShape localShp = hit_layShape( lay1 );
-		localShp = f_for_inbound(globalMat, borderLow, borderHigh, localShp);
-
-#ifdef DEBUG
-printf("Ranks: Lay1: %d, Lay2: %d, Global: %d ACTIVO en Lay1\n", myRank1, myRank2, myRankGlobal );
-#endif
-		/* FOR ALL PROCESSORS IN THE TOPOLOGY */
-		/*		(FUNCTIONS INTERNALLY CHECK ACTIVE STATUS IN TOPOLOGY AND LAYOUT) */
-		/*		REORDER THE ORDER OF EXPLORATION TO CREATE A SKEWED PATTERN AND
-		 *		AVOID POTENTIAL COMM. BOTTLENECKS 	*/
-		// @arturo 2015/01/03 Two possible number of processors when topologies are not the same
-		//for ( i=0; i<numProcs; i++ ) {
-		//	int foreignId = ( myRank + i ) % numProcs;
-		for ( i=0; i<numProcs2; i++ ) {
-			// Perhaps this processor is not active in lay2. For skewing, it does not matter
-			// what is the real processor we start at. It is only important that they
-			// are skewed. Thus, I use here myRank1 anyway. Thus, each processor in lay1
-			// start the communications in a different processors of lay2 (if possible, lay2
-			// may contain less processors than lay1)
-			int foreignId = ( myRank1 + i ) % numProcs2;
-			int foreignIdGlobal;
-			MPI_Group_translate_ranks( gLay2, 1, &foreignId, gGlobal, &foreignIdGlobal );
-
-			HitRanks foreignProc1 = hit_topRanksInternal( lay1.topo, foreignId );
-			HitRanks foreignProc2 = hit_topRanksInternal( lay2.topo, foreignId );
-
-			HitShape foreignShp1 = hit_layShapeOther( lay1, foreignProc1 );
-			foreignShp1 = f_for_inbound(globalMat, borderLow, borderHigh, foreignShp1);
-
-			HitShape foreignShp2 = hit_layShapeOther( lay2, foreignProc2 );
-			foreignShp2 = f_for_outbound(globalMat, borderLow, borderHigh, foreignShp2);
-#ifdef DEBUG
-printf("[%d] Topology: NumDims: %d, Cards:(%d,%d)\n", hit_Rank,
-				lay1.topo.numDims, lay1.topo.card[0], 
-				lay1.topo.card[1] );
-printf("[%d] Send Comprobando foreig: %d (%d) Ranks1:(%d,%d), Ranks2(%d,%d)\n", hit_Rank, foreignId, foreignIdGlobal,
-	 			foreignProc1.rank[0],
-	 			foreignProc1.rank[1],
-	 			foreignProc2.rank[0],
-	 			foreignProc2.rank[1]
-	  );
-#endif
-
-			/* INTERSECTION: NON-EMPTY IMPLIES COMMUNICATION */
-			/* FOR COPY SIG. LAYOUTS: SKIP COMM. IF THE FOREIGN PROC. ALREADY HAS THIS SHAPE */
-			HitShape overlapShp2 = hit_shapeIntersect( localShp, foreignShp2 );
-			HitShape alreadyThere = hit_shapeIntersect( overlapShp2, foreignShp1 );
-
-#ifdef DEBUG
-printf("[%d] Send shapes: f1 [%d:%d][%d:%d], f2:[%d:%d][%d:%d], over2:[%d:%d][%d:%d], alreadyThere:[%d:%d][%d:%d]\n", hit_Rank, 
-			hit_shapeSig(foreignShp1,0).begin,
-			hit_shapeSig(foreignShp1,0).end,
-			hit_shapeSig(foreignShp1,1).begin,
-			hit_shapeSig(foreignShp1,1).end,
-			hit_shapeSig(foreignShp2,0).begin,
-			hit_shapeSig(foreignShp2,0).end,
-			hit_shapeSig(foreignShp2,1).begin,
-			hit_shapeSig(foreignShp2,1).end,
-			hit_shapeSig(overlapShp2,0).begin,
-			hit_shapeSig(overlapShp2,0).end,
-			hit_shapeSig(overlapShp2,1).begin,
-			hit_shapeSig(overlapShp2,1).end,
-			hit_shapeSig(alreadyThere,0).begin,
-			hit_shapeSig(alreadyThere,0).end,
-			hit_shapeSig(alreadyThere,1).begin,
-			hit_shapeSig(alreadyThere,1).end
-	  );
-#endif
-			// In this comparison, i==0 is substituted by the global rank of the local
-			// proc. and the foreign proc are the same, as the local proc. can have different 
-			// ranks in the different topologies.
-			//if ( ! hit_shapeCmp( overlapShp2, HIT_SHAPE_NULL )
-			//		&& ( i == 0 || hit_shapeCmp( alreadyThere, HIT_SHAPE_NULL ) ) ) {
-			if ( ! hit_shapeCmp( overlapShp2, HIT_SHAPE_NULL )
-					&& ( myRankGlobal == foreignIdGlobal 
-							|| hit_shapeCmp( alreadyThere, HIT_SHAPE_NULL ) ) ) {
-
-#ifdef DEBUG
-fprintf(stderr, "%s Adding send from %d to %d with shape %d [%d:%d:%d][%d:%d:%d]\n", __FUNCTION__, myRank1, foreignId,
-		hit_shapeDims( overlapShp2 ),
-		hit_shapeSig( overlapShp2, 0 ).begin,
-		hit_shapeSig( overlapShp2, 0 ).end,
-		hit_shapeSig( overlapShp2, 0 ).stride,
-		hit_shapeSig( overlapShp2, 1 ).begin,
-		hit_shapeSig( overlapShp2, 1 ).end,
-		hit_shapeSig( overlapShp2, 1 ).stride
-	   );
-
-printf("Ranks: Lay1: %d, Lay2: %d, Global: %d COM to RLay2: %d, RGlobal: %d\n", myRank1, myRank2, myRankGlobal, foreignId, foreignIdGlobal  );
-#endif
-
-				// @arturo 2015/01/03 Translate to global ranks for the foo Layout
-				HitRanks foreignProcGlobal = HIT_RANKS_NULL;
-				foreignProcGlobal.rank[0] = foreignIdGlobal;
-
-				// @arturo 2015/01/03 Use the foo layout in order to use the global communicator
-				/*
-				hit_patternAdd( &allToAll, 
-					hit_comSendSelectTag( 
-						lay2, foreignProc, tileP1, overlapShp2, HIT_COM_ARRAYCOORDS, baseType, 
-						HIT_PAT_REDISTRIBUTE_TAG
-					)
-				);
-				*/
-				hit_patternAdd( &allToAll, 
-					hit_comSendSelectTag( 
-						fooGlobal, foreignProcGlobal, tileP1, overlapShp2, HIT_COM_ARRAYCOORDS, 
-							baseType, HIT_PAT_REDISTRIBUTE2_TAG
-					)
-				);
-			}
-		}
-	}
-
-	/* 6. ONLY COMPUTE RECEIVES IF I'M ACTIVE IN THE SECOND LAYOUT (I WILL HAVE DATA) */
-	if ( hit_layImActive( lay2 ) ) {
-		HitShape localShp1 = hit_layShape( lay1 );
-		localShp1 = f_for_inbound(globalMat, borderLow, borderHigh, localShp1);
-
-		HitShape localShp2 = hit_layShape( lay2 );
-		localShp2 = f_for_outbound(globalMat, borderLow, borderHigh, localShp2);
-
-#ifdef DEBUG
-printf("Ranks: Lay1: %d, Lay2: %d, Global: %d ACTIVO en Lay2\n", myRank1, myRank2, myRankGlobal );
-#endif
-
-		/* FOR ALL PROCESSORS IN THE TOPOLOGY */
-		/*		(FUNCTIONS INTERNALLY CHECK ACTIVE STATUS IN TOPOLOGY AND LAYOUT) */
-		/*		REORDER THE ORDER OF EXPLORATION TO CREATE A SKEWED PATTERN AND
-		 *		AVOID POTENTIAL COMM. BOTTLENECKS 	*/
-		//for ( i=0; i<numProcs; i++ ) {
-		//	int foreignId = ( myRank + i ) % numProcs;
-		for ( i=0; i<numProcs1; i++ ) {
-			int foreignId = ( myRank2 + i ) % numProcs1;
-			int foreignIdGlobal;
-			MPI_Group_translate_ranks( gLay1, 1, &foreignId, gGlobal, &foreignIdGlobal );
-#ifdef DEBUG
-printf("[%d] Recv Comprobando foreig: %d (%d)\n", hit_Rank, foreignId, foreignIdGlobal );
-#endif
-
-			HitRanks foreignProc = hit_topRanksInternal( lay1.topo, foreignId );
-#ifdef DEBUG
-printf("[%d] Foreign Ranks: %d,%d,%d,%d\n", hit_Rank,
-			foreignProc.rank[0],
-			foreignProc.rank[1],
-			foreignProc.rank[2],
-			foreignProc.rank[3]
-	  );
-#endif
-			HitShape foreignShp1 = hit_layShapeOther( lay1, foreignProc );
-			foreignShp1 = f_for_inbound(globalMat, borderLow, borderHigh, foreignShp1);
-
-			/* INTERSECTION: NON-EMPTY IMPLIES COMMUNICATION */
-			/* FOR COPY SIG. LAYOUTS: SKIP COMM. IF THE FOREIGN PROC. ALREADY HAS THIS SHAPE */
-			HitShape overlapShp = hit_shapeIntersect( localShp2, foreignShp1 );
-			HitShape alreadyHere = hit_shapeIntersect( overlapShp, localShp1 );
-
-#ifdef DEBUG
-printf("[%d] After shapes: %d (%d)\n", hit_Rank, foreignId, foreignIdGlobal );
-#endif
-			//if ( ! hit_shapeCmp( overlapShp, HIT_SHAPE_NULL ) 
-			//		&& ( i == 0 || hit_shapeCmp( alreadyHere, HIT_SHAPE_NULL ) ) ) {
-			if ( ! hit_shapeCmp( overlapShp, HIT_SHAPE_NULL )
-					&& ( myRankGlobal == foreignIdGlobal 
-							|| hit_shapeCmp( alreadyHere, HIT_SHAPE_NULL ) ) ) {
-
-#ifdef DEBUG
-fprintf(stderr, "%s Adding recv from %d to %d with shape %d [%d:%d:%d][%d:%d:%d]\n", __FUNCTION__, foreignId, myRank2,
-		hit_shapeDims( overlapShp ),
-		hit_shapeSig( overlapShp, 0 ).begin,
-		hit_shapeSig( overlapShp, 0 ).end,
-		hit_shapeSig( overlapShp, 0 ).stride,
-		hit_shapeSig( overlapShp, 1 ).begin,
-		hit_shapeSig( overlapShp, 1 ).end,
-		hit_shapeSig( overlapShp, 1 ).stride
-	   );
-#endif
-				// @arturo 2015/01/03 Translate to global ranks for the foo Layout
-				HitRanks foreignProcGlobal = HIT_RANKS_NULL;
-				foreignProcGlobal.rank[0] = foreignIdGlobal;
-
-#ifdef DEBUG
-printf("Ranks: Lay1: %d, Lay2: %d, Global: %d COM to RLay2: %d, RGlobal: %d\n", myRank1, myRank2, myRankGlobal, foreignId, foreignIdGlobal  );
-#endif
-				/*
-				hit_patternAdd( &allToAll, 
-					hit_comRecvSelectTag( 
-						lay1, foreignProc, tileP2, overlapShp, HIT_COM_ARRAYCOORDS, baseType,
-						HIT_PAT_REDISTRIBUTE_TAG
-					)
-				);
-				*/
-				hit_patternAdd( &allToAll, 
-					hit_comRecvSelectTag( 
-						fooGlobal, foreignProcGlobal, tileP2, overlapShp, HIT_COM_ARRAYCOORDS, 
-							baseType, HIT_PAT_REDISTRIBUTE2_TAG
-					)
-				);
-			}
-#ifdef DEBUG
-			else 
-				printf("[%d] Fail condition: %d (%d)\n", hit_Rank, foreignId, foreignIdGlobal );
-#endif
-		}
-	}
-
-	/* 7. RETURN */
-	return allToAll;
-}
-
-/*
- * @arturo Feb 2013
- * hit_patternLayRedistribute: Redistribute a tile allocated with a given layout,
- * 		as indicated by another layout.
- * 		Restrictions:
- * 		1) The two layouts should have been built using the same topology
- * 			(Eliminated: It calls to hit_patternRedistribute2() that considers that case)
- * 		2) The tile should have been allocated using the local shape from the first layout
- */
-#define HIT_PAT_REDISTRIBUTE_TAG	15001
-HitPattern hit_patternLayRedistributeGeneric(	HitLayout lay1, HitLayout lay2, void *tileP1, void *tileP2, HitType baseType,
-			expandBorderFunction f_for_inbound, expandBorderFunction f_for_outbound) {
-	int i;
-	HitTile* tile = (HitTile *)tileP1;
-
-
-	/* 1. CHECK THAT THE TOPOLOGY IS THE SAME IN BOTH LAYOUTS */
-	// @arturo 2015/01/05 In case topologies are different, call the Redistribute2 function
-	/*
-	if ( ! hit_ptopoCmp( lay1.topo.pTopology, lay2.topo.pTopology ) ) 
-		hit_errInternal( __FUNCTION__, "Layouts with different topologies", "", __FILE__, __LINE__ );
-	*/
-	if ( ! hit_ptopoCmp( lay1.topo.pTopology, lay2.topo.pTopology ) )
-		return hit_patternLayRedistributeGeneric2( lay1, lay2, tileP1, tileP2, baseType, f_for_inbound, f_for_outbound);
-
-	/* 2. SKIP IF MY PROC IS NOT ACTIVE IN ANY LAYOUT */
-	if ( ! hit_layImActive( lay1 ) && ! hit_layImActive( lay2 ) ) return HIT_PATTERN_NULL;
-
-	/* 3. DECLARE THE NEW COMM. PATTERN */
-	HitPattern allToAll = hit_pattern( HIT_PAT_UNORDERED );
-	// @arturo 2015/01/22
-	//int myRank = lay1.topo.linearRank;
-	int myRank = hit_topSelfRankInternal( lay1.topo );
-	int numProcs = hit_topCard( lay1.topo );
-
-	HitTile *globalMat = hit_tileRoot(tile);
-	int dims = hit_shapeDims(hit_tileShape(*tile));
-	int *borderLow  = (int *)malloc(dims * sizeof(int));
-	int *borderHigh = (int *)malloc(dims * sizeof(int));
-
-	HitShape shape = hit_layShape( lay1 );
-	for (int j = 0; j < dims; j++) {
-		borderLow[j] = hit_shapeSig(shape, j).begin - hit_tileDimBegin(*tile, j);
-		borderHigh[j] = hit_tileDimEnd(*tile, j) - hit_shapeSig(shape, j).end;
-	}
-
-	/* 4. ONLY COMPUTE SENDS IF I'M ACTIVE IN THE FIRST LAYOUT (I HAVE DATA) */
-	if ( hit_layImActive( lay1 ) ) {
-
-	
-		HitShape localShp = hit_layShape( lay1 );
-		localShp = f_for_inbound(globalMat, borderLow, borderHigh, localShp);
-
-		/* FOR ALL PROCESSORS IN THE TOPOLOGY */
-		/*		(FUNCTIONS INTERNALLY CHECK ACTIVE STATUS IN TOPOLOGY AND LAYOUT) */
-		/*		REORDER THE ORDER OF EXPLORATION TO CREATE A SKEWED PATTERN AND
-		 *		AVOID POTENTIAL COMM. BOTTLENECKS 	*/
-		for ( i=0; i<numProcs; i++ ) {
-			int foreignId = ( myRank + i ) % numProcs;
-
-			HitRanks foreignProc = hit_topRanksInternal( lay2.topo, foreignId );
-
-			HitShape foreignShp1 = hit_layShapeOther( lay1, foreignProc );
-			foreignShp1 = f_for_inbound(globalMat, borderLow, borderHigh, foreignShp1);
-
-			HitShape foreignShp2 = hit_layShapeOther( lay2, foreignProc );
-			foreignShp2 = f_for_outbound(globalMat, borderLow, borderHigh, foreignShp2);
-
-
-			/* INTERSECTION: NON-EMPTY IMPLIES COMMUNICATION */
-			/* FOR COPY SIG. LAYOUTS: SKIP COMM. IF THE FOREIGN PROC. ALREADY HAS THIS SHAPE */
-			HitShape overlapShp2 = hit_shapeIntersect( localShp, foreignShp2 );
-			HitShape alreadyThere = hit_shapeIntersect( overlapShp2, foreignShp1 );
-
-			if ( ! hit_shapeCmp( overlapShp2, HIT_SHAPE_NULL )
-					&& ( i == 0 || hit_shapeCmp( alreadyThere, HIT_SHAPE_NULL ) ) ) {
-
-#ifdef DEBUG
-fprintf(stderr, "%s Adding send from %d to %d with shape %d [%d:%d:%d][%d:%d:%d][%d:%d:%d]\n", __FUNCTION__, myRank, foreignId,
-		hit_shapeDims( overlapShp2 ),
-		hit_shapeSig( overlapShp2, 0 ).begin,
-		hit_shapeSig( overlapShp2, 0 ).end,
-		hit_shapeSig( overlapShp2, 0 ).stride,
-		hit_shapeSig( overlapShp2, 1 ).begin,
-		hit_shapeSig( overlapShp2, 1 ).end,
-		hit_shapeSig( overlapShp2, 1 ).stride,
-		hit_shapeSig( overlapShp2, 2 ).begin,
-		hit_shapeSig( overlapShp2, 2 ).end,
-		hit_shapeSig( overlapShp2, 2 ).stride
-	   );
-#endif
-				hit_patternAdd( &allToAll, 
-					hit_comSendSelectTag( 
-						lay2, foreignProc, tileP1, overlapShp2, HIT_COM_ARRAYCOORDS, baseType, 
-						HIT_PAT_REDISTRIBUTE_TAG
-					)
-				);
-			}
-		}
-	}
-
-	/* 6. ONLY COMPUTE RECEIVES IF I'M ACTIVE IN THE SECOND LAYOUT (I WILL HAVE DATA) */
-	if ( hit_layImActive( lay2 ) ) {
-		HitShape localShp1 = hit_layShape( lay1 );
-		localShp1 = f_for_inbound(globalMat,borderLow, borderHigh, localShp1);
-
-		HitShape localShp2 = hit_layShape( lay2 );
-		localShp2 = f_for_outbound(globalMat, borderLow, borderHigh, localShp2);
-
-
-		/* FOR ALL PROCESSORS IN THE TOPOLOGY */
-		/*		(FUNCTIONS INTERNALLY CHECK ACTIVE STATUS IN TOPOLOGY AND LAYOUT) */
-		/*		REORDER THE ORDER OF EXPLORATION TO CREATE A SKEWED PATTERN AND
-		 *		AVOID POTENTIAL COMM. BOTTLENECKS 	*/
-		for ( i=0; i<numProcs; i++ ) {
-			int foreignId = ( myRank + i ) % numProcs;
-
-			HitRanks foreignProc = hit_topRanksInternal( lay1.topo, foreignId );
-
-			HitShape foreignShp1 = hit_layShapeOther( lay1, foreignProc );
-			foreignShp1 = f_for_inbound(globalMat, borderLow, borderHigh, foreignShp1);
-
-			/* INTERSECTION: NON-EMPTY IMPLIES COMMUNICATION */
-			/* FOR COPY SIG. LAYOUTS: SKIP COMM. IF THE FOREIGN PROC. ALREADY HAS THIS SHAPE */
-			HitShape overlapShp = hit_shapeIntersect( localShp2, foreignShp1 );
-			HitShape alreadyHere = hit_shapeIntersect( overlapShp, localShp1 );
-
-			if ( ! hit_shapeCmp( overlapShp, HIT_SHAPE_NULL ) 
-					&& ( i == 0 || hit_shapeCmp( alreadyHere, HIT_SHAPE_NULL ) ) ) {
-
-#ifdef DEBUG
-fprintf(stderr, "%s Adding recv from %d to %d with shape %d [%d:%d:%d][%d:%d:%d][%d:%d:%d]\n", __FUNCTION__, foreignId, myRank,
-		hit_shapeDims( overlapShp ),
-		hit_shapeSig( overlapShp, 0 ).begin,
-		hit_shapeSig( overlapShp, 0 ).end,
-		hit_shapeSig( overlapShp, 0 ).stride,
-		hit_shapeSig( overlapShp, 1 ).begin,
-		hit_shapeSig( overlapShp, 1 ).end,
-		hit_shapeSig( overlapShp, 1 ).stride,
-		hit_shapeSig( overlapShp, 2 ).begin,
-		hit_shapeSig( overlapShp, 2 ).end,
-		hit_shapeSig( overlapShp, 2 ).stride
-	   );
-#endif
-				hit_patternAdd( &allToAll, 
-					hit_comRecvSelectTag( 
-						lay1, foreignProc, tileP2, overlapShp, HIT_COM_ARRAYCOORDS, baseType,
-						HIT_PAT_REDISTRIBUTE_TAG
-					)
-				);
-			}
-		}
-	}
-
-	/* 7. RETURN */
-	return allToAll;
-#undef DEBUG
-}
 
 /*
  * @arturo Feb 2013
@@ -1175,7 +729,7 @@ HitPattern hit_patternRedistributeCom(	HitLayout lay, void *tileP1, void *tileP2
 	HitShape tileShapes[ numProcs ][2];
 	// @javfres Initialize this to avoid warnings
 	HitShape tileShapesOrig[2] = {HIT_SHAPE_NULL_STATIC,HIT_SHAPE_NULL_STATIC};
-	int prefixSums[2][ HIT_MAXDIMS ];
+	HitInd prefixSums[2][ HIT_MAXDIMS ];
 
 	// @arturo: To skip warnings when accesing tileShapes[myRank]
 	if ( myRank<0 || myRank>numProcs-1) {
@@ -1224,7 +778,7 @@ printf("[%d](%d) CTRL Redistribute: Before Allgather Local Send[%d:%d:%d][%d:%d:
 	// if ( ! hit_topImActive( hit_layTopology( lay ) ) ) return HIT_PATTERN_NULL;
 
 	/* 3. BUILD SHAPES */
-	int acumCard[ HIT_MAXDIMS ][2];
+	HitInd acumCard[ HIT_MAXDIMS ][2];
 	for( i=0; i<HIT_MAXDIMS; i++) {
 		acumCard[i][0] = 0;
 		acumCard[i][1] = 0;
@@ -1258,7 +812,7 @@ printf("[%d] CTRL 2 After Allgather(A) %d Send[%d:%d:%d][%d:%d:%d] Recv[%d:%d:%d
 			for ( j = 0; j < hit_shapeDims( tileShapes[i][0] ); j++ ) {
 				if ( i == myRank )  prefixSums[0][j] = acumCard[j][0];
 				if ( ! hit_sigCmp( tileSigShapes[i][0].sig[j], HIT_SIG_NULL ) ) {
-					int card0 = hit_sigCard( tileSigShapes[i][0].sig[j] );
+					HitInd card0 = hit_sigCard( tileSigShapes[i][0].sig[j] );
 					tileSigShapes[i][0].sig[j].begin = acumCard[j][0];
 					tileSigShapes[i][0].sig[j].end = acumCard[j][0] + card0 - 1;
 					tileSigShapes[i][0].sig[j].stride = 1;
@@ -1268,7 +822,7 @@ printf("[%d] CTRL 2 After Allgather(A) %d Send[%d:%d:%d][%d:%d:%d] Recv[%d:%d:%d
 			for ( j = 0; j < hit_shapeDims( tileShapes[i][1] ); j++ ) {
 				if ( i == myRank ) prefixSums[1][j] = acumCard[j][1];
 				if ( ! hit_sigCmp( tileSigShapes[i][1].sig[j], HIT_SIG_NULL ) ) {
-					int card1 = hit_sigCard( tileSigShapes[i][1].sig[j] );
+					HitInd card1 = hit_sigCard( tileSigShapes[i][1].sig[j] );
 					tileSigShapes[i][1].sig[j].begin = acumCard[j][1];
 					tileSigShapes[i][1].sig[j].end = acumCard[j][1] + card1 - 1;
 					tileSigShapes[i][1].sig[j].stride = 1;
@@ -1544,13 +1098,14 @@ void hit_patMatMultInternal(HitPattern *pattern, HitLayout lay, HitShape origin_
 	hit_calloc(rdispls,sizeof(int), (size_t) numProcs,int*);
 	*/
 
-	int nrecv = hit_cShapeCard(matrix,1);
+	if (hit_cShapeCard(matrix,1) > INT_MAX) hit_error_here("hit_patMatMultInternal does not yet support cardinalities bigger than INT_MAX data.");
+	int nrecv = (int)hit_cShapeCard(matrix,1);
 
 	//printf("[%d] Recibo %d, other %d\n",lay.topo.linearRank,nrecv,hit_cShapeNameList(matrix,1).nNames);
 	//printf("numElementsTotal1 %d\n",lay.info.layoutList.numElementsTotal);
 
 	for(i=0; i<nrecv; i++){
-		int name = hit_cShapeNameList(matrix,1).names[i];
+		HitInd name = hit_cShapeNameList(matrix,1).names[i];
 		int owner = hit_lgr_elementGroup(lay,name);
 		recvcnts[owner] ++;
 	}
@@ -1594,8 +1149,10 @@ void hit_patMatMultInternal(HitPattern *pattern, HitLayout lay, HitShape origin_
 	const HitTile *tileSend = (const HitTile *)tilePSend;
 	const HitTile *tileRecv = (const HitTile *)tilePRecv;
 
+	
+	if (hit_shapeSig(tileSend->shape,0).begin > INT_MAX) hit_error_here("hit_patMatMultInternal does not yet support cardinalities bigger than INT_MAX data.");
 	for(i=0; i<nsend; i++){
-		sendlist[i] -= hit_shapeSig(tileSend->shape,0).begin;
+		sendlist[i] -= (int)hit_shapeSig(tileSend->shape,0).begin;
 	}
 
 
@@ -1725,13 +1282,14 @@ void hit_patMatMultBitmapInternal(HitPattern *pattern, HitLayout lay, HitShape o
 	hit_calloc(rdispls,sizeof(int), (size_t) numProcs,int*);
 	*/
 
-	int nrecv = hit_bShapeCard(matrix,1);
+	if (hit_bShapeCard(matrix,1) > INT_MAX) hit_error_here("hit_patMatMultBitmapInternal does not yet support cardinalities bigger than INT_MAX data.");
+	int nrecv = (int)hit_bShapeCard(matrix,1);
 
 	//printf("[%d] Recibo %d, other %d\n",lay.topo.linearRank,nrecv,hit_bShapeNameList(matrix,1).nNames);
 	//printf("numElementsTotal1 %d\n",lay.info.layoutList.numElementsTotal);
 
 	for(i=0; i<nrecv; i++){
-		int name = hit_bShapeNameList(matrix,1).names[i];
+		HitInd name = hit_bShapeNameList(matrix,1).names[i];
 		int owner = lay.info.layoutList.assignedGroups[name];
 		recvcnts[owner] ++;
 		//printf("**[%d] Recivo %d from %d\n",lay.topo.linearRank,name,owner);
@@ -1814,9 +1372,9 @@ void hit_patMatMultBitmapInternal(HitPattern *pattern, HitLayout lay, HitShape o
 	}
 	*/
 
-
+	if (hit_shapeSig(tileSend->shape,0).begin > INT_MAX) hit_error_here("hit_patMatMultBitmapInternal does not yet support cardinalities bigger than INT_MAX data.");
 	for(i=0; i<nsend; i++){
-		sendlist[i] -= hit_shapeSig(tileSend->shape,0).begin;
+		sendlist[i] -= (int)hit_shapeSig(tileSend->shape,0).begin;
 	}
 
 	// @arturo 2015/01/22

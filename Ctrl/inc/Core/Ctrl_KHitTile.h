@@ -61,17 +61,17 @@ typedef union Ctrl_KHitTile_Ext {
  */
 typedef struct ALIGNED {
 	void             *data;                          /**< Pointer to the data held by the tile. */
-	int               origAcumCard[HIT_MAXDIMS + 1]; /**< Dimension accumulated cardinalities. */
-	int               card[HIT_MAXDIMS];             /**< Dimension cardinalities. */
-	int               offset;                        /**< Offset to original data. For hierarchical subselections. */
+	HitInd            origAcumCard[HIT_MAXDIMS + 1]; /**< Dimension accumulated cardinalities. */
+	HitInd            card[HIT_MAXDIMS];             /**< Dimension cardinalities. */
+	HitInd            offset;                        /**< Offset to original data. For hierarchical subselections. */
 	Ctrl_KHitTile_Ext ext;                           /**< Backend specific extra fields  */
 } KHitTile;
 
 typedef struct ALIGNED {
 	void *restrict data;                             /**< Pointer to the data held by the tile, with a restrict qualifier to improve performance. */
-	int               origAcumCard[HIT_MAXDIMS + 1]; /**< Dimension accumulated cardinalities. */
-	int               card[HIT_MAXDIMS];             /**< Dimension cardinalities. */
-	int               offset;                        /**< Offset to original data. For hierarchical subselections. */
+	HitInd            origAcumCard[HIT_MAXDIMS + 1]; /**< Dimension accumulated cardinalities. */
+	HitInd            card[HIT_MAXDIMS];             /**< Dimension cardinalities. */
+	HitInd            offset;                        /**< Offset to original data. For hierarchical subselections. */
 	Ctrl_KHitTile_Ext ext;                           /**< Backend specific extra fields  */
 } KHitTileR;
 
@@ -79,17 +79,17 @@ typedef struct ALIGNED {
    @brief: KHitTile wrapper to isolate tile coordinates and offset from data, as structures with pointers cannot be passed as arguments */
 #ifdef _CTRL_ARCH_FPGA_
 typedef struct ALIGNED {
-	int origAcumCard[HIT_MAXDIMS + 1];
-	int card[HIT_MAXDIMS];
-	int offset;
+	HitInd origAcumCard[HIT_MAXDIMS + 1];
+	HitInd card[HIT_MAXDIMS];
+	HitInd offset;
 } KHitTile_fpga_wrapper;
 #endif // _CTRL_ARCH_FPGA_
 
 #ifdef _CTRL_ARCH_OPENCL_GPU_
 typedef struct {
-	int origAcumCard[HIT_MAXDIMS + 1];
-	int card[HIT_MAXDIMS];
-	int offset;
+	HitInd origAcumCard[HIT_MAXDIMS + 1];
+	HitInd card[HIT_MAXDIMS];
+	HitInd offset;
 } KHitTile_opencl_wrapper;
 #endif // _CTRL_ARCH_OPENCL_GPU_
 
@@ -105,15 +105,15 @@ typedef struct {
 #define hit_ktileNewType(type)                           \
 	typedef struct ALIGNED {                             \
 		type             *data;                          \
-		int               origAcumCard[HIT_MAXDIMS + 1]; \
-		int               card[HIT_MAXDIMS];             \
-		int               offset;                        \
+		HitInd            origAcumCard[HIT_MAXDIMS + 1]; \
+		HitInd            card[HIT_MAXDIMS];             \
+		HitInd            offset;                        \
 		Ctrl_KHitTile_Ext ext;                           \
 	} KHitTile_##type;                                   \
 	typedef struct {                                     \
-		int origAcumCard[HIT_MAXDIMS + 1];               \
-		int card[HIT_MAXDIMS];                           \
-		int offset;                                      \
+		HitInd origAcumCard[HIT_MAXDIMS + 1];            \
+		HitInd card[HIT_MAXDIMS];                        \
+		HitInd offset;                                   \
 	} fpga_wrapper_KHitTile_##type;                      \
 	CTRL_KTILE_VARS(type);
 
@@ -122,18 +122,18 @@ typedef struct {
 	static const char *raw_def_ktile_KHitTile_##type __attribute__((unused)) = CTRL_MACRO_STRINGIFY(       \
 		typedef struct {                                                                                   \
 			__global type *data;                                                                           \
-			int            origAcumCard[HIT_MAXDIMS + 1];                                                  \
-			int            card[HIT_MAXDIMS];                                                              \
+			HitInd         origAcumCard[HIT_MAXDIMS + 1];                                                  \
+			HitInd         card[HIT_MAXDIMS];                                                              \
 		} KHitTile_##type##_write;                                                                         \
 		typedef struct {                                                                                   \
 			__global const type *data;                                                                     \
-			int                  origAcumCard[HIT_MAXDIMS + 1];                                            \
-			int                  card[HIT_MAXDIMS];                                                        \
+			HitInd               origAcumCard[HIT_MAXDIMS + 1];                                            \
+			HitInd               card[HIT_MAXDIMS];                                                        \
 		} KHitTile_##type##_read;                                                                          \
 		typedef struct {                                                                                   \
-			int origAcumCard[HIT_MAXDIMS + 1];                                                             \
-			int card[HIT_MAXDIMS];                                                                         \
-			int offset;                                                                                    \
+			HitInd origAcumCard[HIT_MAXDIMS + 1];                                                          \
+			HitInd card[HIT_MAXDIMS];                                                                      \
+			HitInd offset;                                                                                 \
 		} KHitTile_##type##_wrapper;);                                                                     \
 	static bool raw_added_ktile_KHitTile_##type __attribute__((unused)) = false;
 
@@ -142,24 +142,24 @@ typedef struct {
 #define hit_ktileNewType(type)                           \
 	typedef struct ALIGNED {                             \
 		__global type    *data;                          \
-		int               origAcumCard[HIT_MAXDIMS + 1]; \
-		int               card[HIT_MAXDIMS];             \
-		int               offset;                        \
+		HitInd            origAcumCard[HIT_MAXDIMS + 1]; \
+		HitInd            card[HIT_MAXDIMS];             \
+		HitInd            offset;                        \
 		Ctrl_KHitTile_Ext ext;                           \
 	} KHitTile_##type;                                   \
                                                          \
 	typedef struct ALIGNED {                             \
 		__global type *restrict data;                    \
-		int               origAcumCard[HIT_MAXDIMS + 1]; \
-		int               card[HIT_MAXDIMS];             \
-		int               offset;                        \
+		HitInd            origAcumCard[HIT_MAXDIMS + 1]; \
+		HitInd            card[HIT_MAXDIMS];             \
+		HitInd            offset;                        \
 		Ctrl_KHitTile_Ext ext;                           \
 	} KHitTileR_##type;                                  \
                                                          \
 	typedef struct {                                     \
-		int origAcumCard[HIT_MAXDIMS + 1];               \
-		int card[HIT_MAXDIMS];                           \
-		int offset;                                      \
+		HitInd origAcumCard[HIT_MAXDIMS + 1];            \
+		HitInd card[HIT_MAXDIMS];                        \
+		HitInd offset;                                   \
 	} fpga_wrapper_KHitTile_##type;                      \
                                                          \
 	typedef __global type *data_KHitTile_##type;         \

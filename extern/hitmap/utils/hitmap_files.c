@@ -129,9 +129,9 @@ int main( int argc, char *argv[] ) {
 	printf("\trank:\t%d\n", info.rank);
 	printf("\tnprocs:\t%d\n", info.nprocs);
 	printf("\tnum_dims:\t%d\n", info.num_dims);
-	printf("\tcards:\t%d, %d\n", info.cards[0], info.cards[1]);
-	for (int d=0; d<infor.num_dims; d++)
-		printf(" (%d,%d,%d)",
+	printf("\tcards:\t%ld, %ld\n", info.cards[0], info.cards[1]);
+	for (int d=0; d<info.num_dims; d++)
+		printf(" (%ld,%ld,%ld)",
 			hit_shapeSig( info.tileShape, d ).begin,
 			hit_shapeSig( info.tileShape, d ).end,
 			hit_shapeSig( info.tileShape, d ).stride

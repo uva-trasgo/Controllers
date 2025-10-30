@@ -45,7 +45,7 @@
 #include <hit_funcop.h>
 
 
-HitShape hit_csrShape(int nvertices, int nedges){
+HitShape hit_csrShape(HitInd nvertices, HitInd nedges){
 
 	HitShape s = HIT_CSR_SHAPE_NULL;
 
@@ -70,7 +70,7 @@ HitShape hit_csrShape(int nvertices, int nedges){
 
 
 
-HitShape hit_csrShapeMatrix(int n, int m, int nz){
+HitShape hit_csrShapeMatrix(HitInd n, HitInd m, HitInd nz){
 
 	HitShape s = HIT_CSR_SHAPE_NULL;
 
@@ -107,7 +107,7 @@ void hit_cShapeFree(HitShape shape){
 }
 
 
-HitShape hit_cShapeSelect(HitShape s, int nvertices, int * vertices){
+HitShape hit_cShapeSelect(HitShape s, HitInd nvertices, HitInd * vertices){
 	
 	// We have to select one vertex at least.
 	if(nvertices < 1) return HIT_SHAPE_NULL;
@@ -121,65 +121,63 @@ HitShape hit_cShapeSelect(HitShape s, int nvertices, int * vertices){
 	HitShape res = hit_csrShape(nvertices, hit_cShapeNedges(s));
 	
 	// 3. Duplicate vertices array as globalNames.
-	memcpy(hit_cShapeNameList(res,0).names, vertices, sizeof(int) * (size_t) nvertices );
+	memcpy(hit_cShapeNameList(res,0).names, vertices, sizeof(HitInd) * (size_t) nvertices );
 	hit_cShapeNameList(res,0).nNames = nvertices;
 	hit_cShapeNameList(res,0).flagNames = HIT_SHAPE_NAMES_NOARRAY;
 	hit_cShapeNameList(res,1) = hit_cShapeNameList(res,0);
 	
 	// 4. Construct the inverse translation list
-	int vertex_min = INT_MAX;
-	int vertex_max = 0;
+	HitInd vertex_min = LONG_MAX;
+	HitInd vertex_max = 0;
 	
 	// 4.1. Get the maximum and minimum values
-	int i;
-	for(i=0;i<nvertices;i++){
+	for(HitInd i=0;i<nvertices;i++){
 		vertex_min = hit_min(vertex_min,vertices[i]);
 		vertex_max = hit_max(vertex_max,vertices[i]);
 	}
 	
-	int * inv_list_p;
-	hit_malloc(inv_list_p, int, vertex_max-vertex_min+1 );
+	HitInd * inv_list_p;
+	hit_malloc(inv_list_p, HitInd, vertex_max-vertex_min+1 );
 	// @arturo Ago 2015: New allocP interface
 	// hit_malloc(inv_list_p,sizeof(int) * (size_t)(vertex_max-vertex_min+1),int*);
-	int * inv_list = inv_list_p - vertex_min;
+	HitInd * inv_list = inv_list_p - vertex_min;
 	
 	// Init list elements to -1
-	for(i=vertex_min+1;i<vertex_max;i++){
+	for(HitInd i=vertex_min+1;i<vertex_max;i++){
 		inv_list[i] = -1;
 	}
 	
-	for(i=0;i<nvertices;i++){
+	for(HitInd i=0;i<nvertices;i++){
 		inv_list[vertices[i]] = i;
 	}
 	
 	// 5. Construct the new sparse shape
-	int nedges = 0;
+	HitInd nedges = 0;
 	hit_cShapeXadj(res)[0] = 0;
 	
 	
 	// 5.1 Traverse all the new vertices
-	int j;
-	for(i=0;i<nvertices;i++){
+	for(HitInd i=0;i<nvertices;i++){
 		
 		hit_cShapeXadj(res)[i+1] = hit_cShapeXadj(res)[i];
 		
-		int vertex = hit_cShapeVertexToLocal(s,vertices[i]);
-		int actedges = hit_cShapeNEdgesFromVertex(s,vertex);
+		HitInd vertex = hit_cShapeVertexToLocal(s,vertices[i]);
+		HitInd actedges = hit_cShapeNEdgesFromVertex(s,vertex);
 
 		// 5.2 For each edge, check if we have to add it.
-		for(j=0;j<actedges;j++){
+		for(HitInd j=0;j<actedges;j++){
 			
-			int dst = hit_cShapeAdjncy(s)[ hit_cShapeXadj(s)[vertex] + j ];
-			int globaldst = hit_cShapeCoordToGlobal(s,0,dst);
+			HitInd dst = hit_cShapeAdjncy(s)[ hit_cShapeXadj(s)[vertex] + j ];
+			HitInd globaldst = hit_cShapeCoordToGlobal(s,0,dst);
 
 			// 4.2.1 Search the vertices in our list.
 			if(globaldst < vertex_min || globaldst > vertex_max) continue;
 			
-			int new_dst = inv_list[globaldst];
+			HitInd new_dst = inv_list[globaldst];
 			
 			if(new_dst == -1) continue;
 			
-			hit_cShapeAdjncy(res)[nedges] = new_dst;
+			hit_cShapeAdjncy(res)[nedges] = (idxtype)new_dst;
 			nedges ++;
 			hit_cShapeXadj(res)[i+1] ++;
 			
@@ -210,50 +208,46 @@ HitShape hit_cShapeExpand(HitShape shape, HitShape original, int amount){
 
 	//@javfres 2015-10-05 Fix for expanding null shapes
 	// 0. Check the shape has vertices
-	int nvertices = hit_cShapeNvertices(shape);
+	HitInd nvertices = hit_cShapeNvertices(shape);
 	if(nvertices == 0){
 		HitShape res = HIT_CSR_SHAPE_NULL;
 		return res;
 	}
 
 	// 1. Create a vertex list
-	int orig_nvertices = hit_cShapeNvertices(original);
-	int * vertices;
+	HitInd orig_nvertices = hit_cShapeNvertices(original);
+	HitInd * vertices;
 	// @arturo Ago 2015: New allocP interface
 	// hit_calloc(vertices, (size_t)orig_nvertices, sizeof(int),int*);
-	hit_calloc(vertices, int, orig_nvertices );
+	hit_calloc(vertices, HitInd, orig_nvertices );
 	
 #define VLOCAL	1 // (....0001)
 #define VEXPAND	2 // (....0010)
 	
 	// 2. Set the local vertices in the vector.
-	int vertex;
-	for(vertex=0; vertex<nvertices; vertex++){
+	for(HitInd vertex=0; vertex<nvertices; vertex++){
 	
-		int global_vertex = hit_cShapeVertexToGlobal(shape,vertex);
-		int local_orig_vertex = hit_cShapeVertexToLocal(original,global_vertex);
+		HitInd global_vertex = hit_cShapeVertexToGlobal(shape,vertex);
+		HitInd local_orig_vertex = hit_cShapeVertexToLocal(original,global_vertex);
 		
 		vertices[local_orig_vertex] = VLOCAL;
 	}
 	
 	// 3. Expand the list.
-	int new_vertices = 0;
-	int a;
-	for(a=0; a<amount; a++){
+	HitInd new_vertices = 0;
+	for(int a=0; a<amount; a++){
 	
 		// Complete the local vertices and the number of vertices.
-		for(vertex=0; vertex<orig_nvertices; vertex++){
+		for(HitInd vertex=0; vertex<orig_nvertices; vertex++){
 			
 			// Get first and last links.
-			int first = hit_cShapeXadj(original)[vertex];
-			int last = hit_cShapeXadj(original)[vertex+1];
-			int nlink;
+			HitInd first = hit_cShapeXadj(original)[vertex];
+			HitInd last = hit_cShapeXadj(original)[vertex+1];
 
-
-			for(nlink=first; nlink<last; nlink++){
+			for(HitInd nlink=first; nlink<last; nlink++){
 
 				//Get the neighbor.
-				int neighbor = hit_cShapeAdjncy(original)[nlink];
+				HitInd neighbor = hit_cShapeAdjncy(original)[nlink];
 				
 				// TO
 				if((vertices[vertex] & VLOCAL) && (! vertices[neighbor] & VLOCAL)){
@@ -271,7 +265,7 @@ HitShape hit_cShapeExpand(HitShape shape, HitShape original, int amount){
 		
 		// Set the expanded vertices as local for the next loop.
 		if(a<amount-1){
-			for(vertex=0; vertex<orig_nvertices; vertex++){
+			for(HitInd vertex=0; vertex<orig_nvertices; vertex++){
 				if(vertices[vertex] == VEXPAND) vertices[vertex] |= VLOCAL;
 			}
 		}
@@ -280,18 +274,18 @@ HitShape hit_cShapeExpand(HitShape shape, HitShape original, int amount){
 	
 	
 	// 3. Create selection list
-	int * vlist;
-	int nvlist = new_vertices + nvertices;
+	HitInd * vlist;
+	HitInd nvlist = new_vertices + nvertices;
 	// @arturo Ago 2015: New allocP interface
 	// hit_malloc(vlist,sizeof(int) * (size_t) nvlist,int*);
-	hit_malloc(vlist, int, nvlist );
+	hit_malloc(vlist, HitInd, nvlist );
 	
 	// 4. The first vertices of the old and new shape are the same.
-	memcpy(vlist,hit_cShapeNameList(shape,0).names, sizeof(int) * (size_t) nvertices);
+	memcpy(vlist,hit_cShapeNameList(shape,0).names, sizeof(HitInd) * (size_t) nvertices);
 	
 	// 5. Complete the selection list.
-	int vertex_index = nvertices;
-	for(vertex=0; vertex<orig_nvertices; vertex++){
+	HitInd vertex_index = nvertices;
+	for(HitInd vertex=0; vertex<orig_nvertices; vertex++){
 	
 		if(vertices[vertex] > VLOCAL){
 			vlist[vertex_index] = hit_cShapeVertexToGlobal(original,vertex);
@@ -347,11 +341,11 @@ void hit_cShapeCreateInvNames(HitShape * shape){
 
 
 
-void hit_cShapeAddEmptyRow_or_Vertex(HitShape * shape, int x, int mode){
+void hit_cShapeAddEmptyRow_or_Vertex(HitShape * shape, HitInd x, int mode){
 
 #define s (*shape)
 
-	int local_x, nelems_x;
+	HitInd local_x, nelems_x;
 
 	local_x = hit_cShapeCoordToLocal(s,0,x);
 
@@ -405,7 +399,7 @@ void hit_cShapeAddEmptyRow_or_Vertex(HitShape * shape, int x, int mode){
 }
 
 
-void hit_cShapeAddColumn(HitShape * shape, int y){
+void hit_cShapeAddColumn(HitShape * shape, HitInd y){
 
 	if(hit_nameListName2Index(hit_cShapeNameList(*shape,1),y) == -1){
 		hit_nameListAdd(&hit_cShapeNameList(*shape,1),y);
@@ -414,12 +408,12 @@ void hit_cShapeAddColumn(HitShape * shape, int y){
 }
 
 
-int hit_cShapeElemExists(HitShape shape, int x, int y){
+int hit_cShapeElemExists(HitShape shape, HitInd x, HitInd y){
 
-	int local_x = hit_cShapeCoordToLocal(shape,0,x);
-	int local_y = hit_cShapeCoordToLocal(shape,1,y);
+	HitInd local_x = hit_cShapeCoordToLocal(shape,0,x);
+	HitInd local_y = hit_cShapeCoordToLocal(shape,1,y);
 
-	int c;
+	HitInd c;
 	hit_cShapeColumnIterator(c,shape,local_x){
 		if(hit_cShapeAdjncy(shape)[c] == local_y){
 			return 1;
@@ -430,7 +424,7 @@ int hit_cShapeElemExists(HitShape shape, int x, int y){
 
 
 
-void hit_cShapeAddElem_or_Edge(HitShape * shape, int x, int y, int mode){
+void hit_cShapeAddElem_or_Edge(HitShape * shape, HitInd x, HitInd y, int mode){
 
 	// 1. Add the row or vertices
 	hit_cShapeAddEmptyRow_or_Vertex(shape, x, mode);
@@ -442,18 +436,18 @@ void hit_cShapeAddElem_or_Edge(HitShape * shape, int x, int y, int mode){
 #define s (*shape)
 
 	// 2. Get the local coordinates names.
-	int local_x = hit_cShapeCoordToLocal(s,0,x);
-	int local_y = hit_cShapeCoordToLocal(s,1,y);
+	HitInd local_x = hit_cShapeCoordToLocal(s,0,x);
+	HitInd local_y = hit_cShapeCoordToLocal(s,1,y);
 
 
 	// 3. Checks if element exists
-	int c;
+	HitInd c;
 	hit_cShapeEdgeIterator(c,s,local_x){
 		if(hit_cShapeAdjncy(s)[c] == local_y) return;
 	}
 
 	// 4. Add the element
-	int nedges = hit_cShapeNedges(s) + 1;
+	HitInd nedges = hit_cShapeNedges(s) + 1;
 
 	if(hit_cShapeAdjncy(s) == NULL){
 		// @arturo Ago 2015: New allocP interface
@@ -466,16 +460,15 @@ void hit_cShapeAddElem_or_Edge(HitShape * shape, int x, int y, int mode){
 	}
 
 	// 4.1 Create a space for the element moving the other elements right
-	int i;
-	for(i=nedges-1; i>hit_cShapeLastColumn(s,local_x); i--){
+	for(HitInd i=nedges-1; i>hit_cShapeLastColumn(s,local_x); i--){
 		hit_cShapeAdjncy(s)[i] = hit_cShapeAdjncy(s)[i-1];
 	}
 
 	// 4.2 Insert the element
-	hit_cShapeAdjncy(s)[hit_cShapeLastColumn(s,local_x)] = local_y;
+	hit_cShapeAdjncy(s)[hit_cShapeLastColumn(s,local_x)] = (idxtype)local_y;
 
 	// 4.3 Update the Xadj's pointers
-	for(i=local_x;i<hit_cShapeNvertices(s);i++){
+	for(HitInd i=local_x;i<hit_cShapeNvertices(s);i++){
 		hit_cShapeXadj(s)[i+1] ++ ;
 	}
 
@@ -491,28 +484,25 @@ void hit_cShapeAddElem_or_Edge(HitShape * shape, int x, int y, int mode){
  */
 void hit_cShapeSelectRows_compress_columns(HitShape * shape){
 
-	int n = hit_cShapeCard(*shape,0);
-	int m = hit_cShapeCard(*shape,1);
-	int * used;
+	HitInd n = hit_cShapeCard(*shape,0);
+	HitInd m = hit_cShapeCard(*shape,1);
+	HitInd * used;
 	// @arturo Ago 2015: New allocP interface
 	// hit_calloc(used,(size_t)m,sizeof(int),int*);
-	hit_calloc(used, int, m );
-
-	int i;
+	hit_calloc(used, HitInd, m );
 
 	// Count the number of used elements.
-	for(i=0; i<n; i++){
-		int j;
-		for(j=hit_cShapeXadj(*shape)[i]; j<hit_cShapeXadj(*shape)[i+1]; j++){
-			int idx = hit_cShapeAdjncy(*shape)[j];
+	for(HitInd i=0; i<n; i++){
+		for(HitInd j=hit_cShapeXadj(*shape)[i]; j<hit_cShapeXadj(*shape)[i+1]; j++){
+			HitInd idx = hit_cShapeAdjncy(*shape)[j];
 			used[idx] = 1;
 		}
 	}
 
 	// Delete the not used elements from the name list
 	// and use the used list to create a translation list.
-	int nused = 0;
-	for(i=0; i<m; i++){
+	HitInd nused = 0;
+	for(HitInd i=0; i<m; i++){
 		if(used[i]){
 			hit_cShapeNameList(*shape,1).names[nused] = hit_cShapeNameList(*shape,1).names[i];
 			used[i] = nused;
@@ -526,11 +516,11 @@ void hit_cShapeSelectRows_compress_columns(HitShape * shape){
 	//hit_cShapeNameList(*shape,1).names = realloc(hit_cShapeNameList(*shape,1).names, (size_t) nused * sizeof(int) );
 	// @arturo Ago 2015: New allocP interface
 	// hit_realloc(hit_cShapeNameList(*shape,1).names,(size_t) nused * sizeof(int),int*);
-	hit_realloc(hit_cShapeNameList(*shape,1).names, int, nused );
+	hit_realloc(hit_cShapeNameList(*shape,1).names, HitInd, nused );
 
 	// Rename the elements.
-	for(i=0; i<hit_cShapeXadj(*shape)[n]; i++){
-		hit_cShapeAdjncy(*shape)[i] = used[hit_cShapeAdjncy(*shape)[i]];
+	for(HitInd i=0; i<hit_cShapeXadj(*shape)[n]; i++){
+		hit_cShapeAdjncy(*shape)[i] = (idxtype)used[hit_cShapeAdjncy(*shape)[i]];
 	}
 
 	// Free the used list
@@ -540,28 +530,26 @@ void hit_cShapeSelectRows_compress_columns(HitShape * shape){
 
 
 
-HitShape hit_cShapeSelectRows(HitShape shape, int nNames, int * names){
+HitShape hit_cShapeSelectRows(HitShape shape, HitInd nNames, HitInd * names){
 
 	// Select cardinalities: matrix of n x m
-	int n = nNames;
-	int m = hit_cShapeCard(shape,1);
+	HitInd m = hit_cShapeCard(shape,1);
 
-	if(n == 0){
+	if(nNames == 0){
 		return HIT_CSR_SHAPE_NULL;
 	}
 
 	// Create the matrix
-	HitShape res = hit_csrShapeMatrix(n,m,0);
+	HitShape res = hit_csrShapeMatrix(nNames,m,0);
 
 	// Loop for copy and update the Xadj array.
-	int i;
-	int acumNCols = 0;
+	HitInd acumNCols = 0;
 	hit_cShapeXadj(res)[0] = 0;
-	for(i=0;i<n;i++){
+	for(HitInd i=0;i<nNames;i++){
 
 		// Get the row and its number of cols
-		int row = hit_cShapeCoordToLocal(shape,0,names[i]);
-		int nCols = hit_cShapeNColsRow(shape, row);
+		HitInd row = hit_cShapeCoordToLocal(shape,0,names[i]);
+		HitInd nCols = hit_cShapeNColsRow(shape, row);
 		acumNCols += nCols;
 
 		// Add size for this new row
@@ -575,12 +563,12 @@ HitShape hit_cShapeSelectRows(HitShape shape, int nNames, int * names){
 		memcpy(dst,src, (size_t) nCols *sizeof(idxtype));
 
 		// Update the Xadj array
-		hit_cShapeXadj(res)[i+1] = acumNCols;
+		hit_cShapeXadj(res)[i+1] = (idxtype)acumNCols;
 
 	}
 
 	// Create the name lists
-	memcpy(hit_cShapeNameList(res,0).names, names, (size_t) n *sizeof(idxtype) );
+	memcpy(hit_cShapeNameList(res,0).names, names, (size_t) nNames *sizeof(idxtype) );
 	hit_cShapeNameList(res,0).flagNames = HIT_SHAPE_NAMES_NOARRAY;
 	hit_nameListFree(hit_cShapeNameList(res,1));
 

@@ -52,7 +52,8 @@
 #include <hit_cshape.h>
 #include <hit_bshape.h>
 #include <hit_error.h>
-#include <pthread.h>
+//#include <pthread.h>
+#include <limits.h>
 
 /* Hit NULL CONSTANTS INITIALIZATION */
 HitCom HIT_COM_NULL = HIT_COM_NULL_STATIC;
@@ -112,6 +113,9 @@ static void mpi_error_handler(MPI_Comm *comm, int *err, ... ){
 // FLAG TO CHECK IF THE COM MODULE HAS BEEN INITIALIZED OF FINALIZED
 static int hit_active = 0;
 
+/* Hit CHECK IF COMM. ARE INITIALIZED */
+int hit_comActive() { return hit_active; }
+
 /* Hit MPI INITIALIZATION */
 void hit_comInit(int *pargc, char **pargv[]) {
 	// 0. AVOID DOUBLE INITIALIZATION
@@ -123,7 +127,7 @@ void hit_comInit(int *pargc, char **pargv[]) {
 
 	/* 1. INITIALIZE MPI */
 	int mpi_provided_thread;
-	int ok = MPI_Init_thread( pargc, pargv, MPI_THREAD_MULTIPLE, &mpi_provided_thread );
+	int ok = MPI_Init_thread( pargc, pargv, MPI_THREAD_FUNNELED, &mpi_provided_thread );
 	hit_mpiTestError( ok, "Initializing HitCom for MPI comm. library" );
 
 	// Set our error handler
@@ -282,7 +286,7 @@ int hit_comNodeGroupSize() {
 HitType hit_comType(const void *varP, HitType baseType) {
 	HitType newType, prevType;
 	HitType aux[HIT_MAXDIMS];
-	int dim,numTypes, contiguous;
+	int dim, numTypes, contiguous;
 	MPI_Aint baseExtent, baseLb;
 	HitTile var = *(const HitTile *)varP;
 
@@ -310,19 +314,60 @@ HitType hit_comType(const void *varP, HitType baseType) {
 	/* 4. START LOOP OF DIMENSIONS BACKWARDS (ROW ORIENTED) */
 	prevType = baseType;
 	contiguous = 1;
-	int partialAcumCard = 1;
 
+	// @arturo Apr 2025: NUMBER OF ELEMENTS > ARBITRARY CONSTANT
+	// FOR COMMUNICATIONS WITH COUNT > 2^31 (int)
+	// THIS IMPLEMENTATION SUPPORTS OLD MPI VERSIONS
+	HitInd partialAcumCard = 1;
+	//#define	HIT_MAX_ELEMS_COUNT	9
+	#define	HIT_MAX_ELEMS_COUNT	2147483647
+
+	int ok;
 	for (dim=numTypes-1; dim >=0; dim-- ) {
 		/* 4.1. WHILE CONTIGUOUS AND THIS DIM HAS NO STRIDE, KEEP ON CONTIGUOS DATA TYPES */
 		// @arturo May 2021: BUG CORRECTED, USE MEMORY STRIDE, NOT GLOBAL COORDINATES STRIDE
 		if (contiguous && var.qstride[dim] == 1 ) {
 #ifdef DEBUG
-printf("Contiguous type for dim %d, with %d total elements\n", dim, partialAcumCard); fflush(stdout);
+printf("[%d] Contiguous type for dim %d, Card: %ld, with %ld total elements\n", hit_Rank, dim, (HitInd)var.card[dim], partialAcumCard * var.card[dim]); fflush(stdout);
 #endif
 			/* 4.1.1. COMPUTE TYPE */
-			if (MPI_SUCCESS != MPI_Type_contiguous( hit_tileDimCard(var,dim), prevType,
-														&(aux[dim])))
-				hit_error("MPI_Type_contiguous", __FILE__, __LINE__);
+			HitInd card = hit_tileDimCard(var,dim);
+			if ( card > HIT_MAX_ELEMS_COUNT ) {
+				int num_blocks = (int)(card / HIT_MAX_ELEMS_COUNT);
+				int remainder = (int)(card % HIT_MAX_ELEMS_COUNT);
+				HitType block_type;
+				HitType array_type;
+				HitType remainder_type;
+				HitType struct_type;
+
+#ifdef DEBUG
+printf("[%d] > MAX, num_blocks: %d, remainder: %d\n", hit_Rank, num_blocks, remainder); fflush(stdout);
+#endif
+
+				ok = MPI_Type_contiguous( HIT_MAX_ELEMS_COUNT, prevType, &block_type );
+				hit_mpiTestError(ok, "ComType: MPI_Type_contiguous > MAX, block type for MAX COUNT elements");
+				ok = MPI_Type_contiguous( num_blocks, block_type, &array_type );
+				hit_mpiTestError(ok, "ComType: MPI_Type_contiguous > MAX, array of MAX COUNT blocks");
+				if ( remainder ) {
+					ok = MPI_Type_contiguous( remainder, prevType, &remainder_type );
+					hit_mpiTestError(ok, "ComType: MPI_Type_contiguous > MAX, remainder array");
+					MPI_Aint displacements[2] = {0, num_blocks * HIT_MAX_ELEMS_COUNT * baseExtent };
+					MPI_Datatype types[2] = { array_type, remainder_type};
+					MPI_Type_create_struct( 2, (int []){1, 1}, displacements, types, &struct_type );
+					hit_comFreeType( block_type );
+					hit_comFreeType( array_type );
+					hit_comFreeType( remainder_type );
+					aux[dim] = struct_type;
+				}
+				else {
+					hit_comFreeType(block_type);
+					aux[dim] = array_type;
+				}
+			}
+			else {
+				ok = MPI_Type_contiguous( (int) hit_tileDimCard(var,dim), prevType, &(aux[dim]) );
+				hit_mpiTestError(ok, "ComType: MPI_Type_contiguous");
+			}
 
 			/* 4.1.2. A NON-FULL DIMENSION FORCES TO USE HVECTOR TYPES AFTERWARDS */
 			partialAcumCard = partialAcumCard * hit_tileDimCard(var, dim);
@@ -332,15 +377,57 @@ printf("Contiguous type for dim %d, with %d total elements\n", dim, partialAcumC
 		else {
 			contiguous = 0;
 #ifdef DEBUG
-printf("Hvector type for dim %d, Card: %d, stride: %ld\n", dim, var.card[dim], baseExtent*var.origAcumCard[dim+1]* hit_tileDimStride(var,dim)
-//.shape.sig[dim].stride
-); fflush(stdout);
+printf("[%d] Hvector type for dim %d, Card: %ld, stride: %ld\n", hit_Rank, dim, (HitInd)var.card[dim], baseExtent*var.origAcumCard[dim+1]* hit_tileDimStride(var,dim)); fflush(stdout);
 #endif
-			if (MPI_SUCCESS != MPI_Type_create_hvector(var.card[dim], 1, 
+			/* 4.2.1. COMPUTE TYPE */
+			HitInd card = hit_tileDimCard(var,dim);
+			if ( card > HIT_MAX_ELEMS_COUNT ) {
+				int num_blocks = (int)(card / HIT_MAX_ELEMS_COUNT);
+				int remainder = (int)(card % HIT_MAX_ELEMS_COUNT);
+				HitType block_type;
+				HitType array_type;
+				HitType remainder_type;
+				HitType struct_type;
+#ifdef DEBUG
+printf("[%d] > MAX, num_blocks: %d, remainder: %d\n", hit_Rank, num_blocks, remainder); fflush(stdout);
+#endif
+				ok = MPI_Type_create_hvector( HIT_MAX_ELEMS_COUNT, 1,
 					// @arturo May 2021: BUG CORRECTED, USE MEMORY STRIDE, NOT GLOBAL COORDINATES STRIDE
-					baseExtent*var.origAcumCard[dim+1] * var.qstride[dim],
-					prevType, &(aux[dim])) )
-				hit_error("MPI_Type_create_hvector", __FILE__, __LINE__);
+					baseExtent * var.origAcumCard[dim+1] * var.qstride[dim],
+					prevType, &block_type );
+				hit_mpiTestError(ok, "ComType: MPI_Type_hvector > MAX, block type for MAX COUNT elements");
+				ok = MPI_Type_create_hvector( num_blocks, 1,
+						HIT_MAX_ELEMS_COUNT * baseExtent * var.origAcumCard[dim+1] * var.qstride[dim],
+						block_type, &array_type );
+				hit_mpiTestError(ok, "ComType: MPI_Type_hvector > MAX, array of MAX COUNT blocks");
+				if ( remainder ) {
+					ok = MPI_Type_create_hvector( remainder, 1,
+						baseExtent * var.origAcumCard[dim+1] * var.qstride[dim],
+						prevType, &remainder_type );
+					hit_mpiTestError(ok, "ComType: MPI_Type_hvector > MAX, remainder array");
+					MPI_Aint displacements[2] = { 0, 
+						num_blocks * HIT_MAX_ELEMS_COUNT * baseExtent * var.origAcumCard[dim+1] * var.qstride[dim]
+					};
+					MPI_Datatype types[2] = { array_type, remainder_type};
+					MPI_Type_create_struct( 2, (int[]){1, 1}, displacements, types, &struct_type );
+					hit_comFreeType( block_type );
+					hit_comFreeType( array_type );
+					hit_comFreeType( remainder_type );
+					aux[dim] = struct_type;
+				}
+				else {
+					hit_comFreeType( block_type );
+					aux[dim] = array_type;
+				}
+			}
+			else {
+				ok = MPI_Type_create_hvector( (int) hit_tileDimCard(var,dim), 1,
+					// @arturo May 2021: BUG CORRECTED, USE MEMORY STRIDE, NOT GLOBAL COORDINATES STRIDE
+					baseExtent * var.origAcumCard[dim+1] * var.qstride[dim],
+					prevType, &(aux[dim]) );
+				hit_mpiTestError(ok, "ComType: MPI_Type_hvector");
+			}
+
 		}
 		prevType = aux[dim];
 	}
@@ -357,7 +444,7 @@ printf("Hvector type for dim %d, Card: %d, stride: %ld\n", dim, var.card[dim], b
 #ifdef DEBUG
 	printf("commited hit type %d\n",newType);
 #endif
-	
+
 	/* 6. RETURN THE TYPES STRUCTURE */	
 	return newType;
 }
@@ -387,7 +474,8 @@ HitType hit_comTypeRec(const void *varP, HitType baseType) {
 	HitType *types;
 	
 	MPI_Aint *addresses;
-	int i, j, offset, *sizes, ind[HIT_MAXDIMS], max[HIT_MAXDIMS];
+	HitInd i, offset;
+	int j, *sizes, ind[HIT_MAXDIMS], max[HIT_MAXDIMS];
         HitTile * auxtile;
 	HitType newType;
 	HitType * auxtypes;
@@ -416,7 +504,7 @@ HitType hit_comTypeRec(const void *varP, HitType baseType) {
 			//initialize ind with 0
 			memset(ind,0,(size_t)hit_tileDims(var)*sizeof(int));
 #ifdef DEBUG
-printf("Multilevel Struct type for acumCard: %d\n", var.acumCard ); fflush(stdout);
+printf("Multilevel Struct type for acumCard: %" PRId64 "\n", var.acumCard ); fflush(stdout);
 #endif
 
 			for(i=0;i<var.acumCard;i++) {
@@ -441,7 +529,8 @@ printf("Multilevel Struct type for acumCard: %d\n", var.acumCard ); fflush(stdou
 			// @arturo: Moved outside the loop to avoid warning: sizes may be used not initialized
 			for(i=0;i<var.acumCard;i++) sizes[i]=1;
 
-			MPI_Type_create_struct(var.acumCard,sizes,addresses,types,&newType);
+			if (var.acumCard > INT_MAX) hit_error_here("hit_comTypeRec does not support cardinalities bigger than INT_MAX data.");
+			MPI_Type_create_struct((int)var.acumCard,sizes,addresses,types,&newType);
 			MPI_Type_commit(&newType);
 			for(i=0;i<var.acumCard;i++) hit_comFreeType(auxtypes[i]);
 			free(auxtypes);
@@ -1053,25 +1142,36 @@ HitCom hit_comAlltoallSelectv(	HitLayout lay,
 	for(i=0; i<numProcs; i++){
 
 		// Send
-		newCom.alltoallv->sendcnts[i] = hit_sigCard( hit_shapeSig(selectionSend[i],0));
+		HitInd send_selection_card = hit_sigCard(hit_shapeSig(selectionSend[i], 0));
+		HitInd send_selection_coords = hit_sigTileToArray(hit_shapeSig(selectionSend[i], 0), 0);
+
+		if (send_selection_card > INT_MAX) hit_error_here("hit_comAlltoallSelectv does not support cardinalities bigger than INT_MAX data.");
+		newCom.alltoallv->sendcnts[i] = (int)send_selection_card;
 		// With hit_sigTileToArray we get the displacement of the first position,
 		// if HIT_COM_ARRAYCOORDS is selected the real displacement is calculated
 		// subtracting the displacement of the first element of the array.
 		if(selectSendMode == HIT_COM_TILECOORDS){
-			newCom.alltoallv->sdispls[i] = hit_sigTileToArray(hit_shapeSig(selectionSend[i],0),0);
+			if (send_selection_coords > INT_MAX) hit_error_here("hit_comAlltoallSelectv does not support cardinalities bigger than INT_MAX data.");
+			newCom.alltoallv->sdispls[i] = (int)send_selection_coords;
 		} else {
-			newCom.alltoallv->sdispls[i] = hit_sigTileToArray(hit_shapeSig(selectionSend[i],0),0) - 
-										hit_sigTileToArray(hit_shapeSig(tileSend->shape,0),0);
+			HitInd send_sdipl = send_selection_coords - hit_sigTileToArray(hit_shapeSig(tileSend->shape, 0), 0);
+			if (send_sdipl > INT_MAX) hit_error_here("hit_comAlltoallSelectv does not support cardinalities bigger than INT_MAX data.");
+			newCom.alltoallv->sdispls[i] = (int)send_sdipl;
 		}
 		
 		// Recv
-		newCom.alltoallv->recvcnts[i] = hit_sigCard(hit_shapeSig(selectionRecv[i],0));
+		HitInd recv_selection_card = hit_sigCard(hit_shapeSig(selectionRecv[i], 0));
+		HitInd recv_selection_coords = hit_sigTileToArray(hit_shapeSig(selectionRecv[i], 0), 0);
+
+		if (recv_selection_card > INT_MAX) hit_error_here("hit_comAlltoallSelectv does not yet support cardinalities bigger than INT_MAX data.");
+		newCom.alltoallv->recvcnts[i] = (int)recv_selection_card;
 		if(selectRecvMode == HIT_COM_TILECOORDS){
-			newCom.alltoallv->rdispls[i] = hit_sigTileToArray(hit_shapeSig(selectionRecv[i],0),0);
+			if (recv_selection_coords > INT_MAX) hit_error_here("hit_comAlltoallSelectv does not yet support cardinalities bigger than INT_MAX data.");
+			newCom.alltoallv->rdispls[i] = (int)recv_selection_coords;
 		} else {
-			newCom.alltoallv->rdispls[i] = hit_sigTileToArray(hit_shapeSig(selectionRecv[i],0),0) - 
-										hit_sigTileToArray(hit_shapeSig(tileRecv->shape,0),0);
-		
+			HitInd recv_displ = recv_selection_coords - hit_sigTileToArray(hit_shapeSig(tileRecv->shape, 0), 0);
+			if (recv_displ > INT_MAX) hit_error_here("hit_comAlltoallSelectv does not yet support cardinalities bigger than INT_MAX data.");
+			newCom.alltoallv->rdispls[i] = (int)recv_displ;
 		}
 	}
 
@@ -1189,11 +1289,12 @@ HitCom hit_comAllGathervInternal(HitLayout lay, const void * tilePSend, const vo
 
 // SEND
 	HitShape myshape = hit_layShape(lay);
-	newCom.count = hit_sigCard(hit_shapeSig(myshape,0));
+	if (hit_sigCard(hit_shapeSig(myshape,0)) > INT_MAX) hit_error_here("hit_comAllGathervInternal does not yet support cardinalities bigger than INT_MAX data.");
+	newCom.count = (int)hit_sigCard(hit_shapeSig(myshape,0));
 
 
 // RECV
-	int acum_disp = 0;
+	HitInd acum_disp = 0;
 	for(i=0; i<numProcs; i++){
 
 		HitRanks ranks = HIT_RANKS_NULL;
@@ -1203,8 +1304,9 @@ HitCom hit_comAllGathervInternal(HitLayout lay, const void * tilePSend, const vo
 
 		//printf("[%d] From %d: [%d-%d]\n",newCom.myself,i,hit_shapeSig(shape,0).begin,hit_shapeSig(shape,0).end);
 
-		newCom.alltoallv->recvcnts[i] = hit_sigCard(hit_shapeSig(shape,0));
-		newCom.alltoallv->rdispls[i] = acum_disp;
+		if (hit_sigCard(hit_shapeSig(shape,0)) > INT_MAX || acum_disp > INT_MAX) hit_error_here("hit_comAllGathervInternal does not yet support cardinalities bigger than INT_MAX data.");
+		newCom.alltoallv->recvcnts[i] = (int)hit_sigCard(hit_shapeSig(shape,0));
+		newCom.alltoallv->rdispls[i] = (int)acum_disp;
 		acum_disp += hit_sigCard(hit_shapeSig(shape,0));
 
 		//printf("[%d] From %d: Recv[counts:%d, disp:%d]\n",newCom.myself,i,newCom.alltoallv->recvcnts[i],newCom.alltoallv->rdispls[i]);
@@ -1285,8 +1387,7 @@ HitCom hit_comSparseUpdateCSR(HitLayout lay, const void * tileP, HitType baseTyp
 
 	/* 4. COMMUNICATION */
 	int numProcs = 1;
-	int i;
-	for(i=0;i<lay.topo.numDims;i++){
+	for(int i=0;i<lay.topo.numDims;i++){
 		numProcs *= lay.numActives[i];
 	}
 	
@@ -1313,7 +1414,7 @@ HitCom hit_comSparseUpdateCSR(HitLayout lay, const void * tileP, HitType baseTyp
 	// hit_malloc(local,sizeof(int) * (size_t) hit_cShapeNvertices(shape), int*);
 	hit_malloc(local, int, hit_cShapeNvertices(shape) );
 
-	for(i=0;i<hit_cShapeNvertices(shape);i++){
+	for(HitInd i=0;i<hit_cShapeNvertices(shape);i++){
 		if(part[i] == lay.group){
 			local[i] = 1;
 		} else {
@@ -1322,10 +1423,10 @@ HitCom hit_comSparseUpdateCSR(HitLayout lay, const void * tileP, HitType baseTyp
 	}
 	
 	// Set as local the neighbor vertices
-	for(i=hit_cShapeNvertices(lay.shape);i<hit_cShapeNvertices(ext_shape);i++){
+	for(HitInd i=hit_cShapeNvertices(lay.shape);i<hit_cShapeNvertices(ext_shape);i++){
 	
-		int gvertex = hit_cShapeVertexToGlobal(ext_shape,i);
-		int overtex = hit_cShapeVertexToLocal(shape,gvertex);
+		HitInd gvertex = hit_cShapeVertexToGlobal(ext_shape,i);
+		HitInd overtex = hit_cShapeVertexToLocal(shape,gvertex);
 		local[overtex] = 1;
 	}
 	
@@ -1345,17 +1446,20 @@ HitCom hit_comSparseUpdateCSR(HitLayout lay, const void * tileP, HitType baseTyp
 	hit_calloc(auxcounts, sizeof(int), (size_t) numProcs,int*);
 	*/
 
-	int nrecv = 0;
-	for(i=0; i<hit_cShapeNvertices(shape); i++){
+	HitInd nrecv = 0;
+	for(HitInd i=0; i<hit_cShapeNvertices(shape); i++){
 
 		if( local[i] && part[i] != lay.group){
+			// Not performant, but avoids changing recvcnts type
+			if (recvcnts[part[i]] >= INT_MAX) hit_error_here("hit_comSparseUpdateCSR does not yet support cardinalities bigger than INT_MAX data.");
 			recvcnts[part[i]] ++;
 			nrecv ++;
 		}
 	}
+	if (nrecv > INT_MAX) hit_error_here("hit_comSparseUpdateCSR does not yet support cardinalities bigger than INT_MAX data.");
 
 	recvdispls[0] = 0;
-	for(i=1;i<numProcs;i++){
+	for(int i=1;i<numProcs;i++){
 		recvdispls[i] = recvdispls[i-1] + recvcnts[i-1];
 	}
 
@@ -1365,11 +1469,14 @@ HitCom hit_comSparseUpdateCSR(HitLayout lay, const void * tileP, HitType baseTyp
 	// @arturo Ago 2015: New allocP interface
 	// hit_malloc(recv,sizeof(int) * (size_t) nrecv,int*);
 
-	for(i=0; i<hit_cShapeNvertices(shape); i++){
+	for(HitInd i=0; i<hit_cShapeNvertices(shape); i++){
 
 		if( local[i] && part[i] != lay.group){
 			int p = part[i];
-			recv[ recvdispls[p] +  auxcounts[p] ] = hit_cShapeNameList(shape,0).names[i];
+			if (hit_cShapeNameList(shape,0).names[i] > INT_MAX) hit_error_here("hit_comSparseUpdateCSR does not yet support cardinalities bigger than INT_MAX data.");
+			recv[ recvdispls[p] +  auxcounts[p] ] = (int)hit_cShapeNameList(shape,0).names[i];
+			// Not performant, but avoids changing auxcounts type
+			if (auxcounts[p] >= INT_MAX) hit_error_here("hit_comSparseUpdateCSR does not yet support cardinalities bigger than INT_MAX data.");
 			auxcounts[p]++;
 		}
 	}
@@ -1402,7 +1509,7 @@ HitCom hit_comSparseUpdateCSR(HitLayout lay, const void * tileP, HitType baseTyp
 	hit_mpiTestError(ok,"Failed while sending the recvcnts");
 	
 	senddispls[0] = 0;
-	for(i=1;i<numProcs;i++){
+	for(int i=1;i<numProcs;i++){
 		senddispls[i] = senddispls[i-1] + sendcnts[i-1];
 	}
 	
@@ -1499,8 +1606,7 @@ HitCom hit_comSparseUpdateBitmap(HitLayout lay, const void * tileP, HitType base
 
 	/* 4. COMMUNICATION */
 	int numProcs = 1;
-	int i;
-	for(i=0;i<lay.topo.numDims;i++){
+	for(int i=0;i<lay.topo.numDims;i++){
 		numProcs *= lay.numActives[i];
 	}
 	
@@ -1527,7 +1633,7 @@ HitCom hit_comSparseUpdateBitmap(HitLayout lay, const void * tileP, HitType base
 	// hit_malloc(local,sizeof(int) * (size_t) hit_bShapeNvertices(shape),int*);
 	hit_malloc(local, int, hit_bShapeNvertices(shape));
 
-	for(i=0;i<hit_bShapeNvertices(shape);i++){
+	for(HitInd i=0;i<hit_bShapeNvertices(shape);i++){
 		if(part[i] == lay.group){
 			local[i] = 1;
 		} else {
@@ -1536,10 +1642,10 @@ HitCom hit_comSparseUpdateBitmap(HitLayout lay, const void * tileP, HitType base
 	}
 	
 	// Set as local the neighbor vertices
-	for(i=hit_bShapeNvertices(lay.shape);i<hit_bShapeNvertices(ext_shape);i++){
+	for(HitInd i=hit_bShapeNvertices(lay.shape);i<hit_bShapeNvertices(ext_shape);i++){
 	
-		int gvertex = hit_bShapeVertexToGlobal(ext_shape,i);
-		int overtex = hit_bShapeVertexToLocal(shape,gvertex);
+		HitInd gvertex = hit_bShapeVertexToGlobal(ext_shape,i);
+		HitInd overtex = hit_bShapeVertexToLocal(shape,gvertex);
 		local[overtex] = 1;
 	}
 	
@@ -1560,17 +1666,18 @@ HitCom hit_comSparseUpdateBitmap(HitLayout lay, const void * tileP, HitType base
 	*/
 
 
-	int nrecv = 0;
-	for(i=0; i<hit_bShapeNvertices(shape); i++){
+	HitInd nrecv = 0;
+	for(HitInd i=0; i<hit_bShapeNvertices(shape); i++){
 
 		if( local[i] && part[i] != lay.group){
 			recvcnts[part[i]] ++;
 			nrecv ++;
 		}
 	}
+	if (nrecv > INT_MAX) hit_error_here("hit_comSparseUpdateBitmap does not yet support cardinalities bigger than INT_MAX data.");
 
 	recvdispls[0] = 0;
-	for(i=1;i<numProcs;i++){
+	for(int i=1;i<numProcs;i++){
 		recvdispls[i] = recvdispls[i-1] + recvcnts[i-1];
 	}
 
@@ -1580,11 +1687,14 @@ HitCom hit_comSparseUpdateBitmap(HitLayout lay, const void * tileP, HitType base
 	// hit_malloc(recv,sizeof(int) * (size_t) nrecv, int*);
 	hit_malloc(recv, int, nrecv);
 
-	for(i=0; i<hit_bShapeNvertices(shape); i++){
+	for(HitInd i=0; i<hit_bShapeNvertices(shape); i++){
 
 		if( local[i] && part[i] != lay.group){
 			int p = part[i];
-			recv[ recvdispls[p] +  auxcounts[p] ] = hit_bShapeNameList(shape,0).names[i];
+			if (hit_bShapeNameList(shape,0).names[i] > INT_MAX) hit_error_here("hit_comSparseUpdateBitmap does not yet support cardinalities bigger than INT_MAX data.");
+			recv[ recvdispls[p] +  auxcounts[p] ] = (int)hit_bShapeNameList(shape,0).names[i];
+			// Not performant, but avoids changing auxcounts type
+			if (auxcounts[p] >= INT_MAX) hit_error_here("hit_comSparseUpdateBitmap does not yet support cardinalities bigger than INT_MAX data.");
 			auxcounts[p]++;
 		}
 	}
@@ -1616,7 +1726,7 @@ HitCom hit_comSparseUpdateBitmap(HitLayout lay, const void * tileP, HitType base
 	hit_mpiTestError(ok,"Failed while sending the recvcnts");
 	
 	senddispls[0] = 0;
-	for(i=1;i<numProcs;i++){
+	for(int i=1;i<numProcs;i++){
 		senddispls[i] = senddispls[i-1] + sendcnts[i-1];
 	}
 	
@@ -1746,9 +1856,11 @@ HitCom hit_comSparseScatterInternal(HitLayout lay, const void * tilePSend, const
 	// @arturo Aug 2015: Change in a name of internal function
 	//if(hit_tileType(*tileRecv) == HIT_GC_TILE){
 	if(hit_tileClass(*tileRecv) == HIT_GC_TILE){
-		newCom.count = hit_cShapeNvertices(lay.shape);
+		if (hit_cShapeNvertices(lay.shape) > INT_MAX) hit_error_here("hit_comSparseScatterInternal does not yet support cardinalities bigger than INT_MAX data.");
+		newCom.count = (int)hit_cShapeNvertices(lay.shape);
 	} else {
-		newCom.count = hit_bShapeNvertices(lay.shape);
+		if (hit_bShapeNvertices(lay.shape) > INT_MAX) hit_error_here("hit_comSparseScatterInternal does not yet support cardinalities bigger than INT_MAX data.");
+		newCom.count = (int)hit_bShapeNvertices(lay.shape);
 	}
 
 
@@ -1762,6 +1874,7 @@ HitCom hit_comSparseScatterInternal(HitLayout lay, const void * tilePSend, const
 		hit_malloc(newCom.alltoallv->sdispls,sizeof(int) * (size_t) numProcs,int*);
 		*/
 
+		if (lay.info.layoutList.numElementsTotal > INT_MAX) hit_error_here("hit_comSparseScatterInternal does not yet support cardinalities bigger than INT_MAX data.");
 		for(i=0;i<lay.info.layoutList.numElementsTotal;i++){
 			newCom.alltoallv->sendcnts[ lay.info.layoutList.assignedGroups[i] ]++;
 		}
@@ -1777,7 +1890,7 @@ HitCom hit_comSparseScatterInternal(HitLayout lay, const void * tilePSend, const
 		hit_vmalloc(newCom.dataSend, tileSend->baseExtent * (size_t) total_size);
 		
 		newCom.alltoallv->sparse->originData = tileSend->dataVertices;
-		newCom.alltoallv->sparse->nsend = lay.info.layoutList.numElementsTotal;
+		newCom.alltoallv->sparse->nsend = (int)lay.info.layoutList.numElementsTotal;
 		newCom.alltoallv->sparse->send = lay.info.layoutList.assignedGroups;
 	}
 	newCom.dataRecv = tileRecv->dataVertices;
@@ -1837,7 +1950,7 @@ HitCom hit_comAllDistribute(	HitLayout lay,
 		nSets *= hit_sigCard(hit_shapeSig(lay.origShape,i));
 	}
 	*/
-	int nSets = hit_shapeCard( lay.origShape );
+	HitInd nSets = hit_shapeCard( lay.origShape );
 
 	/* 6. COMMUNICATION OF PART SIZES */
 	int i;
@@ -1974,6 +2087,7 @@ HitCom hit_comSparseScatterRowsInternal(HitLayout lay, const void * tilePSend, c
 		hit_malloc(newCom.alltoallv->sdispls,sizeof(int) * (size_t) numProcs,int*);
 		*/
 
+		if (lay.info.layoutList.numElementsTotal > INT_MAX) hit_error_here("hit_comSparseScatterRowsInternal does not yet support cardinalities bigger than INT_MAX data.");
 		for(i=0;i<lay.info.layoutList.numElementsTotal;i++){
 			int p = lay.info.layoutList.assignedGroups[i];
 
@@ -1993,7 +2107,7 @@ HitCom hit_comSparseScatterRowsInternal(HitLayout lay, const void * tilePSend, c
 		hit_vmalloc(newCom.dataSend, tileSend->baseExtent * (size_t) total_size );
 
 		newCom.alltoallv->sparse->originData = tileSend->data;
-		newCom.alltoallv->sparse->nsend = lay.info.layoutList.numElementsTotal;
+		newCom.alltoallv->sparse->nsend = (int)lay.info.layoutList.numElementsTotal;
 		newCom.alltoallv->sparse->send = lay.info.layoutList.assignedGroups;
 
 		newCom.alltoallv->sparse->rows = hit_cShapeXadj(lay.origShape);
@@ -2341,7 +2455,8 @@ void hit_comDoSparseUpdateCSR(HitCom *issue){
 	/* 1. Copy the local values to the send vector */
 	for(i=0;i<issue->alltoallv->sparse->nsend;i++){
 		int vertex = issue->alltoallv->sparse->send[i];
-		int lvertex = hit_cShapeVertexToLocal(issue->alltoallv->sparse->shape,vertex);
+		if (hit_cShapeVertexToLocal(issue->alltoallv->sparse->shape,vertex) > INT_MAX) hit_error_here("hit_comDoSparseUpdateCSR does not yet support cardinalities bigger than INT_MAX data.");
+		int lvertex = (int)hit_cShapeVertexToLocal(issue->alltoallv->sparse->shape,vertex);
 
 		memcpy( (char*)issue->dataSend + (size_t) i * baseExtent,
 				(char*)issue->alltoallv->sparse->originData + (size_t) lvertex * baseExtent ,
@@ -2362,8 +2477,8 @@ void hit_comDoSparseUpdateCSR(HitCom *issue){
 	/* 3. Extract the updated values from the recv vector. */
 	for(i=0;i<issue->alltoallv->sparse->nrecv;i++){
 		int vertex = issue->alltoallv->sparse->recv[i];
-		
-		int lvertex  = hit_cShapeVertexToLocal(issue->alltoallv->sparse->shape,vertex);
+		if (hit_cShapeVertexToLocal(issue->alltoallv->sparse->shape,vertex) > INT_MAX) hit_error_here("hit_comDoSparseUpdateCSR does not yet support cardinalities bigger than INT_MAX data.");
+		int lvertex  = (int)hit_cShapeVertexToLocal(issue->alltoallv->sparse->shape,vertex);
 
 		memcpy( (char*)issue->alltoallv->sparse->originData + (size_t) lvertex * baseExtent,
 				(char*)issue->dataRecv + (size_t) i * baseExtent,
@@ -2383,7 +2498,8 @@ void hit_comDoSparseUpdateBitmap(HitCom *issue){
 	/* 1. Copy the local values to the send vector */
 	for(i=0;i<issue->alltoallv->sparse->nsend;i++){
 		int vertex = issue->alltoallv->sparse->send[i];
-		int lvertex = hit_bShapeVertexToLocal(issue->alltoallv->sparse->shape,vertex);
+		if (hit_bShapeVertexToLocal(issue->alltoallv->sparse->shape,vertex) > INT_MAX) hit_error_here("hit_comDoSparseUpdateBitmap does not yet support cardinalities bigger than INT_MAX data.");
+		int lvertex = (int)hit_bShapeVertexToLocal(issue->alltoallv->sparse->shape,vertex);
 		
 		memcpy( (char*)issue->dataSend + (size_t) i * baseExtent,
 				(char*)issue->alltoallv->sparse->originData + (size_t) lvertex * baseExtent ,
@@ -2404,8 +2520,8 @@ void hit_comDoSparseUpdateBitmap(HitCom *issue){
 	/* 3. Extract the updated values from the recv vector. */
 	for(i=0;i<issue->alltoallv->sparse->nrecv;i++){
 		int vertex = issue->alltoallv->sparse->recv[i];
-		
-		int lvertex = hit_bShapeVertexToLocal(issue->alltoallv->sparse->shape,vertex);
+		if (hit_bShapeVertexToLocal(issue->alltoallv->sparse->shape,vertex) > INT_MAX) hit_error_here("hit_comDoSparseUpdateBitmap does not yet support cardinalities bigger than INT_MAX data.");
+		int lvertex = (int)hit_bShapeVertexToLocal(issue->alltoallv->sparse->shape,vertex);
 
 		memcpy( (char*)issue->alltoallv->sparse->originData + (size_t) lvertex * baseExtent,
 				(char*)issue->dataRecv + (size_t) i * baseExtent,

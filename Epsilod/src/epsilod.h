@@ -13,6 +13,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#ifdef _CTRL_ARCH_CUDA_
+#include <cuda_runtime_api.h>
+#endif // _CTRL_ARCH_CUDA_
 
 #include EPSILOD_TYPES_INCLUDE
 #include <epsilod_types.h>
@@ -86,7 +89,7 @@ typedef struct EpsilodCommArgs {
 void epsilod_print_usage();
 
 /* Parallel stencil skeleton launcher prototype (public API). */
-void stencilComputation(int                    sizes[],
+void stencilComputation(HitInd                 sizes[],
 						HitShape               stencilShape,
 						float                  stencilData[],
 						float                  factor,

@@ -9,8 +9,8 @@
 #define _TEST_COMMON_H_
 
 typedef struct {
-	int x, y;
-} vec2i;
+	long x, y;
+} vec2l;
 
 typedef struct {
 	float x, y;

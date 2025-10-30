@@ -1,3 +1,10 @@
+TODO - International Journal of Parallel Programming
+====
+The assets related to the IJPP article will be available in this repository from 3 to 9 November. They include:
+ * EPSILOD code - DONE
+ * Celerity, Muesli and Nvidia reference codes - DONE
+ * DSL specification
+ 
 Controllers library
 ====
 Controllers is a library written in C99 that provides a simplified way to program application that can exploit heterogeneous computational platforms including accelerators and/or multi-core CPUs.

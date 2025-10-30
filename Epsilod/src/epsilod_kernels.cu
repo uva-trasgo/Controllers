@@ -86,8 +86,16 @@ CTRL_KERNEL(updateCell_default_4D, GENERIC, DEFAULT, KHitTile_float matrix, cons
 #endif
 
 /* Copy kernel for device initialization */
-CTRL_KERNEL(epsilod_dev_copy, GENERIC, DEFAULT, KHitTile(EPSILOD_BASE_TYPE) matrix, const KHitTile(EPSILOD_BASE_TYPE) matrix_out, {
+CTRL_KERNEL(epsilod_dev_copy_1d, GENERIC, DEFAULT, KHitTile(EPSILOD_BASE_TYPE) matrix, const KHitTile(EPSILOD_BASE_TYPE) matrix_out, {
 	hit(matrix_out, thr_i) = hit(matrix, thr_i);
+});
+
+CTRL_KERNEL(epsilod_dev_copy_2d, GENERIC, DEFAULT, KHitTile(EPSILOD_BASE_TYPE) matrix, const KHitTile(EPSILOD_BASE_TYPE) matrix_out, {
+	hit(matrix_out, thr_i, thr_j) = hit(matrix, thr_i, thr_j);
+});
+
+CTRL_KERNEL(epsilod_dev_copy_3d, GENERIC, DEFAULT, KHitTile(EPSILOD_BASE_TYPE) matrix, const KHitTile(EPSILOD_BASE_TYPE) matrix_out, {
+	hit(matrix_out, thr_i, thr_j, thr_k) = hit(matrix, thr_i, thr_j, thr_k);
 });
 
 /* Empty kernel: to signal subselection and root tiles as modified to track dependencies */

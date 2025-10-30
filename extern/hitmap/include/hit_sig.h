@@ -47,6 +47,22 @@
 #ifndef _HitSig_
 #define _HitSig_
 
+/*
+ * Type for the indexes and sizes of signatures and shapes
+ */
+typedef	long	HitInd;
+
+/**
+ * Type for conversion to floating point of indexes and sizes of signatures and shapes
+ */
+typedef	long double	HitIndF;
+
+/**
+ * Functions to round floating point indexes
+ */
+#define	hit_indFloor( exp )		(HitInd)floorl( exp )
+#define	hit_indCeil( exp )		(HitInd)ceill( exp )
+
 /* Hit SIGNATURES */
 /**
  * @struct HitSig
@@ -54,7 +70,7 @@
  * ADT for signatures of an index domain dimension.
  *
  * A signature defines a subset of Z.
- * A 1-dimensional domain signature is a triplet of three integer values [begin:end:stride]. 
+ * A 1-dimensional domain signature is a triplet of three HitInd values [begin:end:stride]. 
  * They identify the first and last valid indexes in that domain (begin, end), 
  * and also a stride value, that indicates indexes at regular intervals, starting at the
  * begin index.
@@ -77,9 +93,9 @@
  *
  */
 typedef struct {
-	int begin;	/**< The begin index of the dimension */
-	int end;	/**< The end index of the dimension */
-	int stride; /**< The stride for regular sparse domains */
+	HitInd begin;	/**< The begin index of the dimension */
+	HitInd end;	/**< The end index of the dimension */
+	HitInd stride; /**< The stride for regular sparse domains */
 } HitSig;
 
 
@@ -117,7 +133,7 @@ extern HitSig	HIT_SIG_WHOLE;
  * @param[in] stride Stride for the selected valid indexes in the domain, starting at begin.
  * @return A new signature variable.
  */
-static inline HitSig hit_sig(int begin, int end, int stride) {
+static inline HitSig hit_sig(HitInd begin, HitInd end, HitInd stride) {
 	HitSig a = { begin, end, stride };
 	return a;
 }
@@ -131,7 +147,7 @@ static inline HitSig hit_sig(int begin, int end, int stride) {
  * @param[in] numElems Number of elements in the domain
  * @return A new signature value with the range [0,numElems-1:1].
  */
-static inline HitSig hit_sigStd(int numElems) {
+static inline HitSig hit_sigStd(HitInd numElems) {
 	HitSig a = { 0, numElems-1, 1 };
 	return a;
 }
@@ -141,10 +157,10 @@ static inline HitSig hit_sigStd(int numElems) {
  *
  * This constructor builds a signature containing one and only one index.
  *
- * @param[in] ind An integer index.
+ * @param[in] ind An HitInd index.
  * @return A new signature value with a single index in its range [index:index:1].
  */
-static inline HitSig hit_sigIndex(int ind) {
+static inline HitSig hit_sigIndex(HitInd ind) {
 	HitSig a = { ind, ind, 1 };
 	return a;
 }
@@ -157,7 +173,7 @@ static inline HitSig hit_sigIndex(int ind) {
  * @hideinitializer
  *
  * @param[in] sig \e HitSig Domain signature.
- * @retval	int  Count of valid indexes in the domain.
+ * @retval	HitInd  Count of valid indexes in the domain.
  */
 #define	hit_sigCard(sig)	(((sig).end-(sig).begin)/(sig).stride+1)
 
@@ -180,7 +196,7 @@ static inline HitSig hit_sigIndex(int ind) {
  * @hideinitializer
  *
  * @param[in] sig \e HitSig Domain signature.
- * @param[in] ind \e int Index value.
+ * @param[in] ind \e HitInd Index value.
  * @retval	int Logical value. True if ind is a valid index in the domain.
  */
 #define hit_sigIn(sig,ind)	((ind)>=(sig).begin && (ind)<=(sig).end && (((ind)-(sig).begin)%(sig).stride == 0))
@@ -192,7 +208,7 @@ static inline HitSig hit_sigIndex(int ind) {
  * @hideinitializer
  *
  * @param[in] sig \e HitSig Domain signature.
- * @param[in] ind \e int Index value.
+ * @param[in] ind \e HitInd Index value.
  * @retval	int Index value in array coordinate system.
  */
 #define	hit_sigTileToArray(sig,ind)	((ind)*(sig).stride+(sig).begin)
@@ -203,7 +219,7 @@ static inline HitSig hit_sigIndex(int ind) {
  * @hideinitializer
  *
  * @param[in] sig \e HitSig Domain signature.
- * @param[in] ind \e int Index value.
+ * @param[in] ind \e HitInd Index value.
  * @retval	int Index value in tile coordinate system.
  */
 #define	hit_sigArrayToTile(sig,ind)	(   (int)(((ind)-(sig).begin)/(sig).stride)   ) 

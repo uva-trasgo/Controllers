@@ -45,6 +45,7 @@
 
 #include <stdio.h>
 #include <math.h>
+#include <limits.h>
 
 #include <hit_layout.h>
 #include <hit_funcop.h>
@@ -61,7 +62,7 @@
 	+ (hit_min(procId, blocksCard % HIT_LAY_SIG_DIVISOR))
 
 /* TOOL: EXTERN DECLARATION FOR vfor LOOPS */
-int hit_lsig_vfor_index[HIT_MAXDIMS];
+HitInd hit_lsig_vfor_index[HIT_MAXDIMS];
 
 /* NULL SIGNATURE LAYOUT VALUE */
 HitLayoutSig HIT_LAYOUTSIG_NULL = HIT_SIGLAYOUT_NULL_STATIC;
@@ -82,7 +83,7 @@ HitLayout HIT_LAYOUT_NULL = HIT_LAYOUT_NULL_STATIC;
 /* NOTE: AN INVERSE FUNCTION IS ALSO PROVIDED FOR EACH SIGNATURE */
 
 /* A.1.1. GENERIC SIGNATURES: COPY SIGNATURE -- NON-PARTITIONED DIMENSION */
-int	hit_layout_plug_layCopy_Sig(int procId, int procsCard, int blocksCard,
+int	hit_layout_plug_layCopy_Sig(int procId, int procsCard, HitInd blocksCard,
 												float* extraParameter,
 												HitSig input, HitSig *res ) {
 	HIT_NOT_USED( procId );
@@ -95,10 +96,10 @@ int	hit_layout_plug_layCopy_Sig(int procId, int procsCard, int blocksCard,
 	/* RETURN ACTIVE */
 	return 1;
 }
-int	hit_layout_plug_layCopy_SigInv(int procId, int procsCard, int blocksCard,
+int	hit_layout_plug_layCopy_SigInv(int procId, int procsCard, HitInd blocksCard,
 												float* extraParameter,
 												HitSig input,
-												int ind ) {
+												HitInd ind ) {
 	HIT_NOT_USED( procsCard );
 	HIT_NOT_USED( blocksCard );
 	HIT_NOT_USED( input );
@@ -112,7 +113,7 @@ int	hit_layout_plug_layCopy_SigInv(int procId, int procsCard, int blocksCard,
 }
 
 /* A.1.2. GENERIC SIGNATURES: ALL IN ONE -- NON-PARTITIONED DIMENSION */
-int	hit_layout_plug_layAllInOne_Sig(int procId, int procsCard, int blocksCard,
+int	hit_layout_plug_layAllInOne_Sig(int procId, int procsCard, HitInd blocksCard,
 												float* extraParameter,
 												HitSig input, HitSig *res ) {
 	HIT_NOT_USED( procsCard );
@@ -134,10 +135,10 @@ int	hit_layout_plug_layAllInOne_Sig(int procId, int procsCard, int blocksCard,
 	/* RETURN ACTIVE */
 	return active;
 }
-int	hit_layout_plug_layAllInOne_SigInv(int procId, int procsCard, int blocksCard,
+int	hit_layout_plug_layAllInOne_SigInv(int procId, int procsCard, HitInd blocksCard,
 												float* extraParameter,
 												HitSig input,
-												int ind ) {
+												HitInd ind ) {
 	HIT_NOT_USED( procsCard );
 	HIT_NOT_USED( blocksCard );
 	HIT_NOT_USED( input );
@@ -154,7 +155,7 @@ int	hit_layout_plug_layAllInOne_SigInv(int procId, int procsCard, int blocksCard
 
 /* A.2 GENERIC MAX/MIN CARD FUNCTIONS */
 /* A.2.1 GENERIC MAX CARD: COPY SIGNATURE  -- NON-PARTITIONED DIMENSION */
-int	hit_layout_plug_layCopy_maxCard( int procsCard, int blocksCard, float* extraParameter ) {
+HitInd	hit_layout_plug_layCopy_maxCard( int procsCard, HitInd blocksCard, float* extraParameter ) {
 	HIT_NOT_USED( procsCard );
 	HIT_NOT_USED( extraParameter );
 
@@ -162,14 +163,14 @@ int	hit_layout_plug_layCopy_maxCard( int procsCard, int blocksCard, float* extra
 }
 
 /* A.2.2. GENERIC MAX CARD: REGULAR (BLOCKING/CYCLIC) */
-int	hit_layout_plug_layRegular_maxCard( int procsCard, int blocksCard, float* extraParameter ) {
+HitInd	hit_layout_plug_layRegular_maxCard( int procsCard, HitInd blocksCard, float* extraParameter ) {
 	HIT_NOT_USED( extraParameter );
 
-	return (int)ceil( (double)blocksCard / procsCard);
+	return hit_indCeil( (HitIndF)blocksCard / procsCard);
 }
 
 /* A.2.3 GENERIC MIN CARD: COPY SIGNATURE  -- NON-PARTITIONED DIMENSION */
-int	hit_layout_plug_layCopy_minCard( int procsCard, int blocksCard, float* extraParameter ) {
+HitInd	hit_layout_plug_layCopy_minCard( int procsCard, HitInd blocksCard, float* extraParameter ) {
 	HIT_NOT_USED( procsCard );
 	HIT_NOT_USED( extraParameter );
 
@@ -177,23 +178,23 @@ int	hit_layout_plug_layCopy_minCard( int procsCard, int blocksCard, float* extra
 }
 
 /* A.2.4. GENERIC MIN CARD: REGULAR (BLOCKING/CYCLIC) */
-int	hit_layout_plug_layRegular_minCard( int procsCard, int blocksCard, float* extraParameter ) {
+HitInd	hit_layout_plug_layRegular_minCard( int procsCard, HitInd blocksCard, float* extraParameter ) {
 	HIT_NOT_USED( extraParameter );
 
-	return (int)floor( (double)blocksCard / procsCard);
+	return hit_indFloor( (HitIndF)blocksCard / procsCard);
 }
 
 /* A.3 GENERIC NUM ACTIVES FUNCTIONS */
 /* A.3.1. GENERIC NUM. ACTIVES: REGULAR (BLOCKING/CYCLIC) */
-int	hit_layout_plug_layRegular_numActives( int procsCard, int blocksCard, float* extraParameter ) {
+int	hit_layout_plug_layRegular_numActives( int procsCard, HitInd blocksCard, float* extraParameter ) {
 	HIT_NOT_USED( extraParameter );
 
 //	printf("CTRL REGULAR_numActive: Rank: %d --- %d, %d, %f\n", hit_Rank, procsCard, blocksCard, extraParameter );
-	return hit_min( blocksCard, procsCard );
+	return (int)hit_min( blocksCard, procsCard );
 }
 
 /* A.3.2. GENERIC NUM. ACTIVES: WHOLE STRUCTURE IN ONE */
-int	hit_layout_plug_layAllInOne_numActives( int procsCard, int blocksCard, float* extraParameter ) {
+int	hit_layout_plug_layAllInOne_numActives( int procsCard, HitInd blocksCard, float* extraParameter ) {
 	HIT_NOT_USED( procsCard );
 	HIT_NOT_USED( blocksCard );
 	HIT_NOT_USED( extraParameter );
@@ -206,13 +207,13 @@ int	hit_layout_plug_layAllInOne_numActives( int procsCard, int blocksCard, float
 /* A.4 GENERIC FUNCTIONS TO TRASNFORM TOPOLOGY RANKS TO ACTIVE RANKS AND VICEVERSA */
 /* A.4.1. GENERIC REGULAR CONTIGUOUS: REGULAR (BLOCKING/CYCLIC) WITH NON-ACTIVE AT THE END */
 int	hit_layout_plug_layRegularContiguos_ranks( char topoActiveMode, 
-							int procId, int procsCard, int blocksCard, float* extraParameter ) {
+							int procId, int procsCard, HitInd blocksCard, float* extraParameter ) {
 	HIT_NOT_USED( extraParameter );
 
 	/* MODE: TOPO TO ACTIVE */
 	if ( topoActiveMode == HIT_LAY_RANKS_TOPO_TO_ACTIVE ) {
 		/* GET NUM ACTIVES, ASSERT: procId IS ACTIVE */
-		int actives = hit_min( blocksCard, procsCard );
+		int actives = (int) hit_min( blocksCard, procsCard );
 		if ( procId < 0 || procId > actives ) return HIT_RANK_NULL;
 		else return procId;
 	}
@@ -223,7 +224,7 @@ int	hit_layout_plug_layRegularContiguos_ranks( char topoActiveMode,
 
 /* A.4.2. GENERIC REGULAR F: REGULAR (BLOCKING/CYCLIC) WITH GROUPS, FIRST IS LEADER */
 int	hit_layout_plug_layRegularF_ranks( char topoActiveMode, 
-							int procId, int procsCard, int blocksCard, float* extraParameter ) {
+							int procId, int procsCard, HitInd blocksCard, float* extraParameter ) {
 	HIT_NOT_USED( extraParameter );
 
 	/* MODE INDEPENDENT */
@@ -234,14 +235,14 @@ int	hit_layout_plug_layRegularF_ranks( char topoActiveMode,
 
 	/* MODE: TOPO TO ACTIVE */
 	if ( topoActiveMode == HIT_LAY_RANKS_TOPO_TO_ACTIVE ) 
-		return (int)(procId * (double)blocksCard / procsCard );
+		return (int)(procId * (HitIndF)blocksCard / procsCard );
 	/* MODE: ACTIVE TO TOPO */
-	else return (int)ceil( procId * (double)procsCard / blocksCard );
+	else return (int)hit_indCeil( procId * (HitIndF)procsCard / blocksCard );
 }
 
 /* A.4.3. GENERIC REGULAR L: REGULAR (BLOCKING/CYCLIC) WITH GROUPS, LAST IS LEADER */
 int	hit_layout_plug_layRegularL_ranks( char topoActiveMode, 
-							int procId, int procsCard, int blocksCard, float* extraParameter ) {
+							int procId, int procsCard, HitInd blocksCard, float* extraParameter ) {
 	HIT_NOT_USED( extraParameter );
 
 	/* MODE INDEPENDENT */
@@ -252,14 +253,14 @@ int	hit_layout_plug_layRegularL_ranks( char topoActiveMode,
 
 	/* MODE: TOPO TO ACTIVE */
 	if ( topoActiveMode == HIT_LAY_RANKS_TOPO_TO_ACTIVE ) 
-		return (int)(procId * (double)blocksCard / procsCard );
+		return (int)(procId * (HitIndF)blocksCard / procsCard );
 	/* MODE: ACTIVE TO TOPO */
-	else return (int)ceil( (procId+1) * (double)procsCard / blocksCard ) - 1;
+	else return (int)hit_indCeil( (procId+1) * (HitIndF)procsCard / blocksCard ) - 1;
 }
 
 /* A.4.4. GENERIC ALL IN ONE: ONLY ONE ACTIVE (LEADER) */
 int	hit_layout_plug_layAllInOne_ranks( char topoActiveMode, 
-							int procId, int procsCard, int blocksCard, float* extraParameter ) {
+							int procId, int procsCard, HitInd blocksCard, float* extraParameter ) {
 	HIT_NOT_USED( topoActiveMode );
 	HIT_NOT_USED( procsCard );
 	HIT_NOT_USED( blocksCard );
@@ -339,7 +340,7 @@ HitLayout	hit_layout_plug_layCopy(int freeTopo, HitTopology topo, HitShape shape
 
 /* 1. LAYOUT (SIGNATURES): BLOCKS */
 /* 1.1. BLOCKS: SIGNATURE */
-int	hit_layout_plug_layBlocks_Sig(int procId, int procsCard, int blocksCard,
+int	hit_layout_plug_layBlocks_Sig(int procId, int procsCard, HitInd blocksCard,
 												float* extraParameter,
 												HitSig input, HitSig *res ) {
 	HIT_NOT_USED( extraParameter );
@@ -350,7 +351,7 @@ int	hit_layout_plug_layBlocks_Sig(int procId, int procsCard, int blocksCard,
 		return 0;
 	}
 
-	int begin = HIT_LAY_SIG_BEGIN(procId);
+	HitInd begin = HIT_LAY_SIG_BEGIN(procId);
 
 	/* DETECT NON-ACTIVE VIRTUAL PROCESS (NOT ENOUGH LOGICAL PROCESSES) */
 	if ( begin >= blocksCard ) {
@@ -373,10 +374,10 @@ int	hit_layout_plug_layBlocks_Sig(int procId, int procsCard, int blocksCard,
 	/* RETURN ACTIVE */
 	return 1;
 }
-int	hit_layout_plug_layBlocks_SigInv(int procId, int procsCard, int blocksCard,
+int	hit_layout_plug_layBlocks_SigInv(int procId, int procsCard, HitInd blocksCard,
 												float* extraParameter,
 												HitSig input,
-												int ind ) {
+												HitInd ind ) {
 	HIT_NOT_USED( procId );
 	HIT_NOT_USED( extraParameter );
 
@@ -384,10 +385,13 @@ int	hit_layout_plug_layBlocks_SigInv(int procId, int procsCard, int blocksCard,
 	if ( ! hit_sigIn( input, ind ) ) return HIT_RANK_NULL;
 
 	/* RETURN PROC ID */
-	int tileInd = (ind - input.begin) / input.stride;
-	int id = tileInd * hit_min(blocksCard, procsCard) / blocksCard;
-	if ( (id+1) * blocksCard / hit_min(blocksCard, procsCard) == tileInd ) return id+1;
-	else return id;
+	HitInd tileInd = (ind - input.begin) / input.stride;
+	HitInd id = tileInd * hit_min(blocksCard, procsCard) / blocksCard;
+	if ( (id+1) * blocksCard / hit_min(blocksCard, procsCard) == tileInd )
+		id++;
+	if (id > INT_MAX)
+		hit_error_here("Process id integer overflow.");
+	return (int)id;
 }
 
 
@@ -525,7 +529,7 @@ HitLayout	hit_layout_plug_layDimBlocks(int freeTopo, HitTopology topo, HitShape 
 }
 
 /* 1.2.1. BLOCKS WITH MINIMUM: SIGNATURE */
-int	hit_layout_plug_layMinBlocks_Sig(int procId, int procsCard, int blocksCard,
+int	hit_layout_plug_layMinBlocks_Sig(int procId, int procsCard, HitInd blocksCard,
 												float* extraParameter,
 												HitSig input, HitSig *res ) {
 	int minimum = (int)*extraParameter;
@@ -538,10 +542,10 @@ int	hit_layout_plug_layMinBlocks_Sig(int procId, int procsCard, int blocksCard,
 
 	/* COMPUTE SIZE */
 	// INTEGER DIVISION: DETECT IF ANYONE COULD RECEIVE LESS THAN MINIMUM
-	int size = blocksCard / hit_min(blocksCard, procsCard);
+	HitInd size = blocksCard / hit_min(blocksCard, procsCard);
 	if ( size < minimum ) {
 		/* DETECT NON-ACTIVE VIRTUAL PROCESS (NOT ENOUGH LOGICAL PROCESSES) */
-		int begin = procId * minimum;
+		HitInd begin = procId * minimum;
 		if ( begin >= blocksCard ) {
 			/* RETURN NUL SIGNATURE AND NON-ACTIVE */
 			(*res) = HIT_SIG_NULL;
@@ -557,10 +561,10 @@ int	hit_layout_plug_layMinBlocks_Sig(int procId, int procsCard, int blocksCard,
 		//return hit_layout_plug_layBlocks_Sig(procId, procsCard, blocksCard, 0.0f, input, res );
 		return hit_layout_plug_layBlocks_Sig(procId, procsCard, blocksCard, NULL, input, res );
 }
-int	hit_layout_plug_layMinBlocks_SigInv(int procId, int procsCard, int blocksCard,
+int	hit_layout_plug_layMinBlocks_SigInv(int procId, int procsCard, HitInd blocksCard,
 												float* extraParameter,
 												HitSig input,
-												int ind ) {
+												HitInd ind ) {
 	HIT_NOT_USED( procId );
 	int minimum = (int)*extraParameter;
 
@@ -569,45 +573,49 @@ int	hit_layout_plug_layMinBlocks_SigInv(int procId, int procsCard, int blocksCar
 
 	/* COMPUTE SIZE */
 	// INTEGER DIVISION: DETECT IF ANYONE CAN RECEIVE LESS THAN MINIMUM
-	int size = blocksCard / hit_min(blocksCard, procsCard);
+	HitInd size = blocksCard / hit_min(blocksCard, procsCard);
 
 	/* RETURN PROC ID */
-	int tileInd = (ind - input.begin) / input.stride;
-	if ( size < minimum ) 
-		return tileInd / minimum;
+	HitInd tileInd = (ind - input.begin) / input.stride;
+	if ( size < minimum ) {
+		tileInd /= minimum;
+		if (tileInd > INT_MAX)
+			hit_error_here("Process id integer overflow.");
+		return (int)tileInd;
+	}
 	else 
 		//return hit_layout_plug_layBlocks_SigInv(procId, procsCard, blocksCard, 0.0, input, ind );
 		return hit_layout_plug_layBlocks_SigInv(procId, procsCard, blocksCard, NULL, input, ind );
 }
 
 /* 1.2.2. BLOCKS WITH MINIMUM: maxCard */
-int	hit_layout_plug_layMinBlocks_maxCard( int procsCard, int blocksCard, float* extraParameter ) {
+HitInd	hit_layout_plug_layMinBlocks_maxCard( int procsCard, HitInd blocksCard, float* extraParameter ) {
 	int minimum = (int)*extraParameter;
 
-	int regularMaxSize = hit_layout_plug_layRegular_maxCard( procsCard, blocksCard, extraParameter );
+	HitInd regularMaxSize = hit_layout_plug_layRegular_maxCard( procsCard, blocksCard, extraParameter );
 	if ( regularMaxSize < minimum ) return minimum;
 	else return regularMaxSize;
 }
 /* 1.2.3. BLOCKS WITH MINIMUM: minCard */
-int	hit_layout_plug_layMinBlocks_minCard( int procsCard, int blocksCard, float* extraParameter ) {
+HitInd	hit_layout_plug_layMinBlocks_minCard( int procsCard, HitInd blocksCard, float* extraParameter ) {
 	int minimum = (int)*extraParameter;
 
-	int regularMinSize = hit_layout_plug_layRegular_minCard( procsCard, blocksCard, extraParameter );
+	HitInd regularMinSize = hit_layout_plug_layRegular_minCard( procsCard, blocksCard, extraParameter );
 	if ( regularMinSize < minimum ) return minimum;
 	else return regularMinSize;
 }
 /* 1.2.4. BLOCKS WITH MINIMUM: numActives */
-int	hit_layout_plug_layMinBlocks_numActives( int procsCard, int blocksCard, float* extraParameter ) {
+int	hit_layout_plug_layMinBlocks_numActives( int procsCard, HitInd blocksCard, float* extraParameter ) {
 	int minimum = (int)*extraParameter;
-	return hit_min( procsCard, blocksCard/minimum );
+	return (int)hit_min( procsCard, blocksCard/minimum );
 }
 /* 1.2.5. BLOCKS WITH MINIMUM: NON-ACTIVE AT THE END */
 int	hit_layout_plug_layMinBlocks_ranks( char topoActiveMode, 
-							int procId, int procsCard, int blocksCard, float* extraParameter ) {
+							int procId, int procsCard, HitInd blocksCard, float* extraParameter ) {
 	/* MODE: TOPO TO ACTIVE */
 	if ( topoActiveMode == HIT_LAY_RANKS_TOPO_TO_ACTIVE ) {
 		/* GET NUM ACTIVES, ASSERT: procId IS ACTIVE */
-		int actives = hit_layout_plug_layMinBlocks_numActives( procsCard, blocksCard, extraParameter );
+		HitInd actives = hit_layout_plug_layMinBlocks_numActives( procsCard, blocksCard, extraParameter );
 		if ( procId < 0 || procId > actives ) return HIT_RANK_NULL;
 		else return procId;
 	}
@@ -617,7 +625,7 @@ int	hit_layout_plug_layMinBlocks_ranks( char topoActiveMode,
 
 
 /* 1.4.M. BLOCKS WITH A MINIMUM SIZE: LAYOUT FUNCTION INTERFACE */
-HitLayout	hit_layout_plug_layMinBlocks(int freeTopo, HitTopology topo, HitShape shape, int minElems ) {
+HitLayout	hit_layout_plug_layMinBlocks(int freeTopo, HitTopology topo, HitShape shape, HitInd minElems ) {
 	HitLayout res;
 	float extraParameterValue = (float)minElems;
 
@@ -687,7 +695,7 @@ HitLayout	hit_layout_plug_layMinBlocks(int freeTopo, HitTopology topo, HitShape 
 /* 1.X LAYOUT (SIGNATURES): BLOCKS NO REPEATED, NON-ACTIVES AT THE END 
  * 		THIS IS AN ALTERNATIVE IMPLEMENTATION TO THE CURRENT BLOCKS LAYOUT */
 /* 1.1. BLOCKS X: SIGNATURE */
-int	hit_layout_plug_layBlocksX_Sig(int procId, int procsCard, int blocksCard, HitSig input, HitSig *res ) {
+int	hit_layout_plug_layBlocksX_Sig(int procId, int procsCard, HitInd blocksCard, HitSig input, HitSig *res ) {
 	/* DETECT NON-ACTIVE VIRTUAL PROCESS (NOT ENOUGH LOGICAL PROCESSES) */
 	if ( blocksCard <= procsCard ) {
 		if ( procId >= blocksCard ) {
@@ -704,7 +712,7 @@ int	hit_layout_plug_layBlocksX_Sig(int procId, int procsCard, int blocksCard, Hi
 	}
 	/* MORE LOGICAL PROCESSES THAN VIRTUAL PROCESSORS */
 	else {
-		int begin = HIT_LAY_SIG_BEGIN(procId);
+		HitInd begin = HIT_LAY_SIG_BEGIN(procId);
 
 		/* BEGIN */
 		(*res).begin = begin * input.stride + input.begin;
@@ -794,18 +802,18 @@ HitLayout	hit_layout_plug_layBlocksX(int freeTopo, HitTopology topo, HitShape sh
 
 /* 2. LAYOUT (SIGNATURES): BLOCK LOCATED ON GROUP LEADERS (First processor is leader) */
 /* 2.1. BLOCKSF: SIGNATURE */
-int	hit_layout_plug_layBlocksF_Sig(int procId, int procsCard, int blocksCard,
+int	hit_layout_plug_layBlocksF_Sig(int procId, int procsCard, HitInd blocksCard,
 												float* extraParameter,
 												HitSig input, HitSig *res ) {
 	HIT_NOT_USED( extraParameter );
 
 	/* COMPUTE BLOCK SIZE AND STARTING POINT */
-	double ratio = (double)blocksCard / procsCard;
-	double beginFrac = procId * ratio;
-	int begin = (int)beginFrac;
+	HitIndF ratio = (HitIndF)blocksCard / procsCard;
+	HitIndF beginFrac = procId * ratio;
+	HitInd begin = (HitInd)beginFrac;
 
 	/* DETECT NON-ACTIVE VIRTUAL PROCESS (NOT ENOUGH LOGICAL PROCESSES) */
-	if ( floor(beginFrac) == floor(beginFrac-ratio) ) {
+	if ( hit_indFloor(beginFrac) == hit_indFloor(beginFrac-ratio) ) {
 		/* RETURN NUL SIGNATURE AND NON-ACTIVE */
 		(*res) = HIT_SIG_NULL;
 		return 0;
@@ -816,8 +824,8 @@ int	hit_layout_plug_layBlocksF_Sig(int procId, int procsCard, int blocksCard,
 		(*res).begin = begin * input.stride + input.begin;
 
 		/* END */
-		int adjust = (blocksCard > procsCard) ? 1 : 0;
-		int end = ((procId + adjust) * blocksCard / procsCard ) - adjust;
+		HitInd adjust = (blocksCard > procsCard) ? 1 : 0;
+		HitInd end = ((procId + adjust) * blocksCard / procsCard ) - adjust;
 		(*res).end = end * input.stride + input.begin;
 
 		/* STRIDE */
@@ -870,8 +878,8 @@ HitLayout	hit_layout_plug_layBlocksF(int freeTopo, HitTopology topo, HitShape sh
 	HitRanks group = HIT_RANKS_NULL;
 	int dim;
 	for (dim=0; dim<hit_shapeDims(shape); dim++) {
-		double ratio = (double) hit_sigCard(hit_shapeSig(shape,dim)) / topo.card[dim];
-		double ratioInv = (double) topo.card[dim] / hit_sigCard(hit_shapeSig(shape,dim));
+		HitIndF ratio = (HitIndF) hit_sigCard(hit_shapeSig(shape,dim)) / topo.card[dim];
+		HitIndF ratioInv = (HitIndF) topo.card[dim] / hit_sigCard(hit_shapeSig(shape,dim));
 
 		if(  ratio >= 1  ){
 			group.rank[dim] = topo.self.rank[dim];
@@ -880,7 +888,7 @@ HitLayout	hit_layout_plug_layBlocksF(int freeTopo, HitTopology topo, HitShape sh
 		} else {
 			group.rank[dim] = (int)(topo.self.rank[dim] * ratio);
 			//leader.rank[dim] =  (int) ceil(ratioInv * group.rank[dim]);
-			res.leaderRanks.rank[dim] =  (int) ceil(ratioInv * group.rank[dim]);
+			res.leaderRanks.rank[dim] =  (int) hit_indCeil(ratioInv * group.rank[dim]);
 		}
 	}
 
@@ -899,15 +907,15 @@ HitLayout	hit_layout_plug_layBlocksF(int freeTopo, HitTopology topo, HitShape sh
 
 /* 3. LAYOUT (SIGNATURES): BLOCK LOCATED AT LAST ELEMENT OF GROUP (Last processor is leader) */
 /* 3.1. BLOCKSL: SIGNATURE */
-int	hit_layout_plug_layBlocksL_Sig(int procId, int procsCard, int blocksCard,
+int	hit_layout_plug_layBlocksL_Sig(int procId, int procsCard, HitInd blocksCard,
 												float* extraParameter,
 												HitSig input, HitSig *res ) {
 	HIT_NOT_USED( extraParameter );
 
 	/* COMPUTE BLOCK SIZE AND STARTING POINT */
-	double ratio = (double)blocksCard / procsCard;
-	double beginFrac = procId * ratio;
-	int begin = (int)beginFrac;
+	HitIndF ratio = (HitIndF)blocksCard / procsCard;
+	HitIndF beginFrac = procId * ratio;
+	HitInd begin = (HitInd)beginFrac;
 
 #ifdef DEBUG_HITLIB
 	printf("CTRL procId: %d, procsCard %d, blocksCard: %d\n", procId, procsCard, blocksCard);
@@ -922,7 +930,7 @@ int	hit_layout_plug_layBlocksL_Sig(int procId, int procsCard, int blocksCard,
 	/* DETECT NON-ACTIVE VIRTUAL PROCESS (NOT ENOUGH LOGICAL PROCESSES) */
 	//if ( (beginFrac+ratio) != floor(beginFrac+ratio) ) { // Old
 	//if( floor(beginFrac) == floor(beginFrac-ratio) ) { // BlocksF
-	if( floor(beginFrac) == floor(beginFrac+ratio) ) {
+	if( hit_indFloor(beginFrac) == hit_indFloor(beginFrac+ratio) ) {
 		/* RETURN NUL SIGNATURE AND NON-ACTIVE */
 		(*res) = HIT_SIG_NULL;
 		return 0;
@@ -933,8 +941,8 @@ int	hit_layout_plug_layBlocksL_Sig(int procId, int procsCard, int blocksCard,
 		(*res).begin = begin * input.stride + input.begin;
 
 		/* END */
-		int adjust = (blocksCard > procsCard) ? 1 : 0;
-		int end = ((procId + adjust) * blocksCard / procsCard ) - adjust;
+		HitInd adjust = (blocksCard > procsCard) ? 1 : 0;
+		HitInd end = ((procId + adjust) * blocksCard / procsCard ) - adjust;
 		(*res).end = end * input.stride + input.begin;
 
 		/* STRIDE */
@@ -988,8 +996,8 @@ HitLayout	hit_layout_plug_layBlocksL(int freeTopo, HitTopology topo, HitShape sh
 	HitRanks group = HIT_RANKS_NULL;
 	int dim;
 	for (dim=0; dim<hit_shapeDims(shape); dim++) {
-		double ratio = (double) hit_sigCard(hit_shapeSig(shape,dim)) / topo.card[dim];
-		double ratioInv = (double) topo.card[dim] / hit_sigCard(hit_shapeSig(shape,dim));
+		HitIndF ratio = (HitIndF) hit_sigCard(hit_shapeSig(shape,dim)) / topo.card[dim];
+		HitIndF ratioInv = (HitIndF) topo.card[dim] / hit_sigCard(hit_shapeSig(shape,dim));
 
 		if(  ratio >= 1  ){
 			group.rank[dim] = topo.self.rank[dim];
@@ -998,7 +1006,7 @@ HitLayout	hit_layout_plug_layBlocksL(int freeTopo, HitTopology topo, HitShape sh
 		} else {
 			group.rank[dim] = (int)(topo.self.rank[dim] * ratio);
 			//leader.rank[dim] =  ((int) ceil(ratioInv * (group.rank[dim]+1)) ) -1;
-			res.leaderRanks.rank[dim] =  ((int) ceil(ratioInv * (group.rank[dim]+1)) ) -1;
+			res.leaderRanks.rank[dim] =  ((int) hit_indCeil(ratioInv * (group.rank[dim]+1)) ) -1;
 		}
 
 	}
@@ -1017,7 +1025,7 @@ HitLayout	hit_layout_plug_layBlocksL(int freeTopo, HitTopology topo, HitShape sh
 
 /* 4. LAYOUT (SIGNATURES): CYCLIC */
 /* 4.1. CYCLIC: SIGNATURE */
-int	hit_layout_plug_layCyclic_Sig(int procId, int procsCard, int blocksCard,
+int	hit_layout_plug_layCyclic_Sig(int procId, int procsCard, HitInd blocksCard,
 												float* extraParameter,
 												HitSig input, HitSig *res ) {
 	HIT_NOT_USED( extraParameter );
@@ -1032,7 +1040,7 @@ int	hit_layout_plug_layCyclic_Sig(int procId, int procsCard, int blocksCard,
 	(*res).begin = input.begin + input.stride * procId;
 
 	/* END */
-	int tmp = (blocksCard / procsCard - 1) * procsCard + procId;
+	HitInd tmp = (blocksCard / procsCard - 1) * procsCard + procId;
 	if ( procId < blocksCard % procsCard ) tmp = tmp + procsCard;
 	(*res).end = input.begin + tmp * input.stride;
 
@@ -1042,10 +1050,10 @@ int	hit_layout_plug_layCyclic_Sig(int procId, int procsCard, int blocksCard,
 	/* RETURN ACTIVE */
 	return 1;
 }
-int	hit_layout_plug_layCyclic_SigInv(int procId, int procsCard, int blocksCard,
+int	hit_layout_plug_layCyclic_SigInv(int procId, int procsCard, HitInd blocksCard,
 												float* extraParameter,
 												HitSig input,
-												int ind ) {
+												HitInd ind ) {
 	HIT_NOT_USED( procId );
 	HIT_NOT_USED( blocksCard );
 	HIT_NOT_USED( extraParameter );
@@ -1054,8 +1062,8 @@ int	hit_layout_plug_layCyclic_SigInv(int procId, int procsCard, int blocksCard,
 	if ( ! hit_sigIn( input, ind ) ) return HIT_RANK_NULL;
 
 	/* RETURN PROC ID */
-	int tileInd = (ind - input.begin) / input.stride;
-	return tileInd % procsCard;
+	HitInd tileInd = (ind - input.begin) / input.stride;
+	return (int)(tileInd % procsCard);
 }
 
 
@@ -1194,7 +1202,7 @@ HitLayout	hit_layout_plug_layInLeader(int freeTopo, HitTopology topo, HitShape s
 
 /* 8.  LAYOUT (SIGNATURES): BLOCKS DIM WEIGHTED TO RESTRICTED DIM */
 /* 8.1. BLOCKS DIM WEIGHTED: SIGNATURE */
-int hit_layout_plug_layDimBlocksWeighted_Sig(int procId, int procsCard, int blocksCard, float *extraParam, HitSig input, HitSig *res)
+int hit_layout_plug_layDimBlocksWeighted_Sig(int procId, int procsCard, HitInd blocksCard, float *extraParam, HitSig input, HitSig *res)
 {
 	HIT_NOT_USED(procsCard);
 
@@ -1214,8 +1222,8 @@ int hit_layout_plug_layDimBlocksWeighted_Sig(int procId, int procsCard, int bloc
 		return 0;
 	}
 
-	int begin = (int)(load_ratios->ratios[procId] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard);
-	int end = ((int)(load_ratios->ratios[procId + 1] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard)) - 1;
+	HitInd begin = (HitInd)(load_ratios->ratios[procId] / load_ratios->ratios[load_ratios->num_procs] * (HitIndF)blocksCard);
+	HitInd end = ((HitInd)(load_ratios->ratios[procId + 1] / load_ratios->ratios[load_ratios->num_procs] * (HitIndF)blocksCard)) - 1;
 
 	if (end - begin < 0)
 	{
@@ -1235,8 +1243,8 @@ int hit_layout_plug_layDimBlocksWeighted_Sig(int procId, int procsCard, int bloc
 	/* RETURN ACTIVE */
 	return 1;
 }
-int hit_layout_plug_layDimBlocksWeighted_SigInv(int procId, int procsCard, int blocksCard,
-										   float *extraParameter, HitSig input, int ind)
+int hit_layout_plug_layDimBlocksWeighted_SigInv(int procId, int procsCard, HitInd blocksCard,
+										   float *extraParameter, HitSig input, HitInd ind)
 {
 	HIT_NOT_USED(procId);
 	HIT_NOT_USED(procsCard);
@@ -1255,8 +1263,8 @@ int hit_layout_plug_layDimBlocksWeighted_SigInv(int procId, int procsCard, int b
 	float *weights = load_ratios->ratios;
 
 	/* FIND WEIGHT */
-	int tileInd = (ind - input.begin) / input.stride;
-	float weightAprox = (float)tileInd * weights[load_ratios->num_procs] / (float)blocksCard;
+	HitInd tileInd = (ind - input.begin) / input.stride;
+	HitIndF weightAprox = (HitIndF)tileInd * weights[load_ratios->num_procs] / blocksCard;
 
 	/* BIN-LIKE	SEARCH IN ARRAY OF WEIGHTS (SORTED)*/
 	int l = 0, r = load_ratios->num_procs - 1, c;
@@ -1281,8 +1289,8 @@ int hit_layout_plug_layDimBlocksWeighted_SigInv(int procId, int procsCard, int b
 	while (i < load_ratios->num_procs)
 	{
 
-		int begin =(int)(weights[i] / weights[load_ratios->num_procs] * (float)blocksCard);
-		int end = ((int)(weights[i + 1] / weights[load_ratios->num_procs] * (float)blocksCard)) - 1;
+		HitInd begin =(HitInd)(weights[i] / weights[load_ratios->num_procs] * (HitIndF)blocksCard);
+		HitInd end = ((HitInd)(weights[i + 1] / weights[load_ratios->num_procs] * (HitIndF)blocksCard)) - 1;
 
 		if (end - begin >= 0)
 			break;
@@ -1291,14 +1299,14 @@ int hit_layout_plug_layDimBlocksWeighted_SigInv(int procId, int procsCard, int b
 
 	/* RETURN PROC */
 	/* IF PRECISION WAS LOST, AND THE INDEX IS AT THE BEGINNING OF THE NEXT PROC(NOT EMPTY) */
-	if ((int)(weights[i]/ weights[load_ratios->num_procs] * (float)blocksCard ) == tileInd)
+	if ((HitInd)(weights[i]/ weights[load_ratios->num_procs] * (HitIndF)blocksCard ) == tileInd)
 		return i;
 	else
 		return proc;
 }
 
 /* 8.2.A BLOCKS DIM WEIGHTED: MAX CARDINALITY */
-int hit_layout_plug_layDimBlocksWeighted_maxCard(int procsCard, int blocksCard, float *extraParameter)
+HitInd hit_layout_plug_layDimBlocksWeighted_maxCard(int procsCard, HitInd blocksCard, float *extraParameter)
 {
 	HIT_NOT_USED(procsCard);
 
@@ -1309,7 +1317,7 @@ int hit_layout_plug_layDimBlocksWeighted_maxCard(int procsCard, int blocksCard, 
 	/* Load ratios */
 	HitWeights *load_ratios = (HitWeights *)extraParameter;
 
-	float threshold = load_ratios->ratios[load_ratios->num_procs] / (float)blocksCard;
+	HitIndF threshold = load_ratios->ratios[load_ratios->num_procs] / (HitIndF)blocksCard;
 	int i, proc = 0;
 	float max = 0;
 
@@ -1318,10 +1326,10 @@ int hit_layout_plug_layDimBlocksWeighted_maxCard(int procsCard, int blocksCard, 
 	{
 		if (load_ratios->ratios[i + 1] - load_ratios->ratios[i] + threshold >= max)
 		{
-			if ((int)(load_ratios->ratios[i + 1] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard) -
-					(int)(load_ratios->ratios[i] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard) >
-				(int)(load_ratios->ratios[proc + 1] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard) -
-					(int)(load_ratios->ratios[proc] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard))
+			if ((HitInd)(load_ratios->ratios[i + 1] / load_ratios->ratios[load_ratios->num_procs] * (HitIndF)blocksCard) -
+					(HitInd)(load_ratios->ratios[i] / load_ratios->ratios[load_ratios->num_procs] * (HitIndF)blocksCard) >
+				(HitInd)(load_ratios->ratios[proc + 1] / load_ratios->ratios[load_ratios->num_procs] * (HitIndF)blocksCard) -
+					(HitInd)(load_ratios->ratios[proc] / load_ratios->ratios[load_ratios->num_procs] * (HitIndF)blocksCard))
 			{
 				max = load_ratios->ratios[i + 1] - load_ratios->ratios[i];
 				proc = i;
@@ -1330,13 +1338,13 @@ int hit_layout_plug_layDimBlocksWeighted_maxCard(int procsCard, int blocksCard, 
 		}
 	}
 
-	return (int)(load_ratios->ratios[proc + 1] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard) -
-		   (int)(load_ratios->ratios[proc] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard);
+	return (HitInd)(load_ratios->ratios[proc + 1] / load_ratios->ratios[load_ratios->num_procs] * (HitIndF)blocksCard) -
+		   (HitInd)(load_ratios->ratios[proc] / load_ratios->ratios[load_ratios->num_procs] * (HitIndF)blocksCard);
 	;
 }
 
 /* 8.2.B BLOCKS DIM WEIGHTED: MIN CARDINALITY */
-int hit_layout_plug_layDimBlocksWeighted_minCard(int procsCard, int blocksCard, float *extraParameter)
+HitInd hit_layout_plug_layDimBlocksWeighted_minCard(int procsCard, HitInd blocksCard, float *extraParameter)
 {
 	HIT_NOT_USED(procsCard);
 
@@ -1350,19 +1358,19 @@ int hit_layout_plug_layDimBlocksWeighted_minCard(int procsCard, int blocksCard, 
 	if (load_ratios->num_procs <= 0)
 		return 0;
 
-	float threshold = load_ratios->ratios[load_ratios->num_procs] / (float)blocksCard;
+	HitIndF threshold = load_ratios->ratios[load_ratios->num_procs] / (HitIndF)blocksCard;
 	int i = 0, proc = 0;
-	float min = load_ratios->ratios[i + 1] - load_ratios->ratios[i];
+	HitIndF min = load_ratios->ratios[i + 1] - load_ratios->ratios[i];
 
 	/* Find the minimum ratio (min Card) */
 	for (i = 1; i < load_ratios->num_procs; i++)
 	{
 		if (load_ratios->ratios[i + 1] - load_ratios->ratios[i] - threshold <= min)
 		{
-			if ((int)(load_ratios->ratios[i + 1] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard) -
-					(int)(load_ratios->ratios[i] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard) <
-				(int)(load_ratios->ratios[proc + 1] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard) -
-					(int)(load_ratios->ratios[proc] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard))
+			if ((HitInd)(load_ratios->ratios[i + 1] / load_ratios->ratios[load_ratios->num_procs] * (HitIndF)blocksCard) -
+					(HitInd)(load_ratios->ratios[i] / load_ratios->ratios[load_ratios->num_procs] * (HitIndF)blocksCard) <
+				(HitInd)(load_ratios->ratios[proc + 1] / load_ratios->ratios[load_ratios->num_procs] * (HitIndF)blocksCard) -
+					(HitInd)(load_ratios->ratios[proc] / load_ratios->ratios[load_ratios->num_procs] * (HitIndF)blocksCard))
 			{
 				min = load_ratios->ratios[i + 1] - load_ratios->ratios[i];
 				proc = i;
@@ -1371,13 +1379,13 @@ int hit_layout_plug_layDimBlocksWeighted_minCard(int procsCard, int blocksCard, 
 		}
 	}
 
-	return (int)(load_ratios->ratios[proc + 1] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard) -
-		   (int)(load_ratios->ratios[proc] / load_ratios->ratios[load_ratios->num_procs] * (float)blocksCard);
+	return (HitInd)(load_ratios->ratios[proc + 1] / load_ratios->ratios[load_ratios->num_procs] * (HitIndF)blocksCard) -
+		   (HitInd)(load_ratios->ratios[proc] / load_ratios->ratios[load_ratios->num_procs] * (HitIndF)blocksCard);
 }
 
 /* 8.3 BLOCKS DIM WEIGHTED: RANKS */
 int hit_layout_plug_layDimBlocksWeighted_ranks(char topoActiveMode,
-										  int procId, int procsCard, int blocksCard, float *extraParameter)
+										  int procId, int procsCard, HitInd blocksCard, float *extraParameter)
 {
 	HIT_NOT_USED(procsCard);
 
@@ -1393,15 +1401,16 @@ int hit_layout_plug_layDimBlocksWeighted_ranks(char topoActiveMode,
 
 	float *weights = load_ratios->ratios;
 
-	int i = 0, num_proc = -1, begin, end;
+	int i = 0, num_proc = -1;
+	HitInd begin, end;
 
 	/* MODE: TOPO TO ACTIVE */
 	if (topoActiveMode == HIT_LAY_RANKS_TOPO_TO_ACTIVE)
 	{
 		for (i = 0; i <= procId; i++)
 		{
-			begin = (int) (weights[i] / weights[load_ratios->num_procs] * (float)blocksCard);
-			end = ((int)(weights[i + 1] / weights[load_ratios->num_procs] * (float)blocksCard)) - 1;
+			begin = (HitInd) (weights[i] / weights[load_ratios->num_procs] * (HitIndF)blocksCard);
+			end = ((HitInd)(weights[i + 1] / weights[load_ratios->num_procs] * (HitIndF)blocksCard)) - 1;
 
 			if (end - begin >= 0)
 				num_proc++;
@@ -1417,8 +1426,8 @@ int hit_layout_plug_layDimBlocksWeighted_ranks(char topoActiveMode,
 	{
 		while (num_proc < procId && i < load_ratios->num_procs)
 		{
-			begin = (int) (weights[i] / weights[load_ratios->num_procs] * (float)blocksCard);
-			end = ((int)(weights[i + 1] / weights[load_ratios->num_procs] * (float)blocksCard)) - 1;
+			begin = (HitInd) (weights[i] / weights[load_ratios->num_procs] * (HitIndF)blocksCard);
+			end = ((HitInd)(weights[i + 1] / weights[load_ratios->num_procs] * (HitIndF)blocksCard)) - 1;
 
 			if (end - begin >= 0)
 				num_proc++;
@@ -1435,7 +1444,7 @@ int hit_layout_plug_layDimBlocksWeighted_ranks(char topoActiveMode,
 }
 
 /* 8.4 BLOCKS DIM WEIGHTED: NUM ACTIVES */
-int hit_layout_plug_layDimBlocksWeighted_numActives(int procsCard, int blocksCard, float *extraParameter)
+int hit_layout_plug_layDimBlocksWeighted_numActives(int procsCard, HitInd blocksCard, float *extraParameter)
 {
 
 	HIT_NOT_USED(procsCard);
@@ -1453,8 +1462,8 @@ int hit_layout_plug_layDimBlocksWeighted_numActives(int procsCard, int blocksCar
 
 	for (i = 0; i < load_ratios->num_procs; i++)
 	{
-			int begin = (int) (weights[i] / weights[load_ratios->num_procs] * (float)blocksCard);
-			int end = ((int)(weights[i + 1] / weights[load_ratios->num_procs] * (float)blocksCard)) - 1;
+			HitInd begin = (HitInd) (weights[i] / weights[load_ratios->num_procs] * (HitIndF)blocksCard);
+			HitInd end = ((HitInd)(weights[i + 1] / weights[load_ratios->num_procs] * (HitIndF)blocksCard)) - 1;
 
 		if (end - begin >= 0)
 			actives++;
@@ -1625,7 +1634,7 @@ HitLayout hit_layout_plug_layDimWeighted_Blocks(int freeTopo, HitTopology topo, 
 
 /* 10. LAYOUT (SIGNATURES): BLOCKS WITH LOAD BALANCE IN ONE DIMENSION */
 /* 10.1. BLOCKS BALANCE: SIGNATURE */
-int	hit_layout_plug_layBlocksBalance_Sig(int procId, int procsCard, int blocksCard,
+int	hit_layout_plug_layBlocksBalance_Sig(int procId, int procsCard, HitInd blocksCard,
 												float* extraParameter,
 												HitSig input, HitSig *res ) {
 
@@ -1636,12 +1645,12 @@ int	hit_layout_plug_layBlocksBalance_Sig(int procId, int procsCard, int blocksCa
 	}
 
 	/* COMPUTE FIRST BLOCK OF ACTIVE PROCESSORS PART: PROPORTIONAL TO LOAD */
-	int firstSize = (int)ceilf(*extraParameter * (float)blocksCard);
+	HitInd firstSize = hit_indCeil(*extraParameter * (HitIndF)blocksCard);
 	/* COMPUTE LAST ACTIVE PROCESSOR PART: PROPORTIONAL TO INVERSE LOAD */
-	int lastSize = blocksCard - firstSize;
+	HitInd lastSize = blocksCard - firstSize;
 
 	/* DETECT NON-ACTIVE VIRTUAL PROCESS (NOT ENOUGH LOGICAL PROCESSES) */
-	int lastProc = hit_min( procsCard-1, firstSize );
+	int lastProc = (int)hit_min( procsCard-1, firstSize );
 	if ( procId > lastProc ) {
 		/* RETURN NUL SIGNATURE AND NON-ACTIVE */
 		(*res) = HIT_SIG_NULL;
@@ -1668,10 +1677,10 @@ int	hit_layout_plug_layBlocksBalance_Sig(int procId, int procsCard, int blocksCa
 	/* CALL TO REGULAR BLOCKS PLUG-IN */
 	return hit_layout_plug_layBlocks_Sig( procId, lastProc, firstSize, extraParameter, input, res );
 }
-int	hit_layout_plug_layBlocksBalance_SigInv(int procId, int procsCard, int blocksCard,
+int	hit_layout_plug_layBlocksBalance_SigInv(int procId, int procsCard, HitInd blocksCard,
 												float* extraParameter,
 												HitSig input,
-												int ind ) {
+												HitInd ind ) {
 
 	/* CHECK: THE INDEX SHOULD BE IN THE INPUT DOMAIN */
 	if ( ! hit_sigIn( input, ind ) ) return HIT_RANK_NULL;
@@ -1680,58 +1689,58 @@ int	hit_layout_plug_layBlocksBalance_SigInv(int procId, int procsCard, int block
 	if ( procsCard < 2 && procId == 0 ) return 0;
 
 	/* COMPUTE FIRST BLOCK OF ACTIVE PROCESSORS PART: PROPORTIONAL TO LOAD */
-	int firstSize = (int)ceilf(*extraParameter * (float)blocksCard);
+	HitInd firstSize = (int)hit_indCeil(*extraParameter * (HitIndF)blocksCard);
 	/* COMPUTE LAST ACTIVE PROCESSOR PART: PROPORTIONAL TO INVERSE LOAD */
-	int lastSize = blocksCard - firstSize;
-	int lastProc = hit_min( procsCard-1, firstSize );
+	HitInd lastSize = blocksCard - firstSize;
+	int lastProc = (int)hit_min( procsCard-1, firstSize );
 
 	/* REST OF PROCCESORS: CORRECT INPUT END */
 	input.end = input.end - lastSize * input.stride;
 
 	/* RETURN PROC ID */
-	int tileInd = (ind - input.begin) / input.stride;
+	HitInd tileInd = (ind - input.begin) / input.stride;
 	if ( tileInd >= firstSize ) return procsCard-1;
 	else return hit_layout_plug_layBlocks_SigInv( procId, lastProc, firstSize, extraParameter, input, ind );
 }
 
 
 /* 10.2. BLOCKS BALANCE: MAX CARDINALITY */
-int	hit_layout_plug_layBlocksBalance_maxCard( int procsCard, int blocksCard, float* extraParameter ) {
+HitInd	hit_layout_plug_layBlocksBalance_maxCard( int procsCard, HitInd blocksCard, float* extraParameter ) {
 	/* IF LESS THAN TWO PROCS. RETURN FULL SIGNATURE */
 	if ( procsCard < 2 ) return blocksCard;
 
 	/* COMPUTE FIRST BLOCK OF ACTIVE PROCESSORS PART: PROPORTIONAL TO LOAD */
-	int firstSize = (int)ceilf(*extraParameter * (float)blocksCard);
+	HitInd firstSize = (HitInd)hit_indCeil(*extraParameter * (HitIndF)blocksCard);
 	/* COMPUTE LAST ACTIVE PROCESSOR PART: PROPORTIONAL TO INVERSE LOAD */
-	int lastSize = blocksCard - firstSize;
+	HitInd lastSize = blocksCard - firstSize;
 	/* DETECT NON-ACTIVE VIRTUAL PROCESS (NOT ENOUGH LOGICAL PROCESSES) */
-	int lastProc = hit_min( procsCard-1, firstSize );
+	int lastProc = (int)hit_min( procsCard-1, firstSize );
 
 	/* COMPUTE MAX CARDS */
-	int others = hit_layout_plug_layRegular_maxCard( lastProc, firstSize, extraParameter );
+	HitInd others = hit_layout_plug_layRegular_maxCard( lastProc, firstSize, extraParameter );
 	return (lastSize > others) ? lastSize:others;
 }
 
 /* 10.2.b BLOCKS BALANCE: MIN CARDINALITY */
-int	hit_layout_plug_layBlocksBalance_minCard( int procsCard, int blocksCard, float* extraParameter ) {
+HitInd	hit_layout_plug_layBlocksBalance_minCard( int procsCard, HitInd blocksCard, float* extraParameter ) {
 	/* IF LESS THAN TWO PROCS. RETURN FULL SIGNATURE */
 	if ( procsCard < 2 ) return blocksCard;
 
 	/* COMPUTE FIRST BLOCK OF ACTIVE PROCESSORS PART: PROPORTIONAL TO LOAD */
-	int firstSize = (int)ceilf(*extraParameter * (float)blocksCard);
+	HitInd firstSize = (HitInd)hit_indCeil(*extraParameter * (HitIndF)blocksCard);
 	/* COMPUTE LAST ACTIVE PROCESSOR PART: PROPORTIONAL TO INVERSE LOAD */
-	int lastSize = blocksCard - firstSize;
+	HitInd lastSize = blocksCard - firstSize;
 	/* DETECT NON-ACTIVE VIRTUAL PROCESS (NOT ENOUGH LOGICAL PROCESSES) */
-	int lastProc = hit_min( procsCard-1, firstSize );
+	int lastProc = (int)hit_min( procsCard-1, firstSize );
 
 	/* COMPUTE MAX CARDS */
-	int others = hit_layout_plug_layRegular_minCard( lastProc, firstSize, extraParameter );
+	HitInd others = hit_layout_plug_layRegular_minCard( lastProc, firstSize, extraParameter );
 	return (lastSize < others) ? lastSize:others;
 }
 
 
 /* 10.3. BLOCKS BALANCE: NUM. ACTIVES */
-int	hit_layout_plug_layBlocksBalance_numActives( int procsCard, int blocksCard, float* extraParameter ) {
+int	hit_layout_plug_layBlocksBalance_numActives( int procsCard, HitInd blocksCard, float* extraParameter ) {
 	/* ASSERT: BLOCKS CARD BIGGER THAN 0 */
 	if ( blocksCard < 1 ) return 0;
 
@@ -1739,7 +1748,7 @@ int	hit_layout_plug_layBlocksBalance_numActives( int procsCard, int blocksCard, 
 	if ( procsCard < 2 ) return 1;
 
 	/* COMPUTE FIRST BLOCK PART: PROPORTIONAL TO LOAD */
-	int firstSize = (int)ceilf(*extraParameter * (float)blocksCard);
+	HitInd firstSize = (HitInd)hit_indCeil(*extraParameter * (HitIndF)blocksCard);
 
 	/* DEGENERATED CASE */
 	if ( firstSize == 0 )  return 1;
@@ -1754,12 +1763,12 @@ int	hit_layout_plug_layBlocksBalance_numActives( int procsCard, int blocksCard, 
 
 /* 10.4. BLOCKS BALANCE: RANKS */
 int	hit_layout_plug_layBlocksBalance_ranks( char topoActiveMode, 
-							int procId, int procsCard, int blocksCard, float* extraParameter ) {
+							int procId, int procsCard, HitInd blocksCard, float* extraParameter ) {
 
 	/* MODE: TOPO TO ACTIVE */
 	if ( topoActiveMode == HIT_LAY_RANKS_TOPO_TO_ACTIVE ) {
 		/* GET NUM ACTIVES, ASSERT: procId IS ACTIVE */
-		int actives = hit_layout_plug_layBlocksBalance_numActives( procsCard, blocksCard, extraParameter );
+		HitInd actives = hit_layout_plug_layBlocksBalance_numActives( procsCard, blocksCard, extraParameter );
 		if ( procId < 0 || procId > actives ) return HIT_RANK_NULL;
 		else return procId;
 	}
@@ -1840,7 +1849,7 @@ HitLayout	hit_layout_plug_layBlocksBalance(int freeTopo, HitTopology topo, HitSh
 	return res;
 }
 
-int     perform_weighted_distribution(int procsCard, int blocksCard, float* weights, int* result){
+int     perform_weighted_distribution(int procsCard, HitInd blocksCard, float* weights, int* result){
 
         /*SUM WEIGHTS & SAFETY CHECK: NO NEGATIVE LOADS*/
         int i;
@@ -1871,7 +1880,7 @@ int     perform_weighted_distribution(int procsCard, int blocksCard, float* weig
         for (i = 0; i < procsCard; i++)
                 {
                 //Number of data elements that should be assigned to process i (float)
-                floatElemDimProcess[i] = (weights[i] / sumWeights) * blocksCard;
+                floatElemDimProcess[i] = (weights[i] / sumWeights) * (double)blocksCard;
                 //If normalization is not required, use the line below instead
                 //      floatElemDimProcess[i] = weights[i] * blocksCard;
                 //Since the number of data elements assigned must be an integer, truncate the previous number
@@ -1918,7 +1927,7 @@ int     perform_weighted_distribution(int procsCard, int blocksCard, float* weig
 
 }
 
-int     hit_layout_plug_layWeighted_Sig(int procId, int procsCard, int blocksCard,
+int     hit_layout_plug_layWeighted_Sig(int procId, int procsCard, HitInd blocksCard,
                                                                 float* extraParameter,
                                                                 HitSig input, HitSig *res ) {
         /* REJECT EMPTY INPUT SIGNATURES */
@@ -1963,10 +1972,10 @@ int     hit_layout_plug_layWeighted_Sig(int procId, int procsCard, int blocksCar
         return 1;
 }
 
-int     hit_layout_plug_layWeighted_SigInv(int procId, int procsCard, int blocksCard,
+int     hit_layout_plug_layWeighted_SigInv(int procId, int procsCard, HitInd blocksCard,
                                                                                                 float* extraParameter,
                                                                                                 HitSig input,
-                                                                                                int ind ) {
+                                                                                                HitInd ind ) {
         HIT_NOT_USED( procId );
 
         /* CHECK: THE INDEX SHOULD BE IN THE INPUT DOMAIN */
@@ -1987,16 +1996,16 @@ int     hit_layout_plug_layWeighted_SigInv(int procId, int procsCard, int blocks
         //For k = 0 (first element of the block assigned to the processor), we have
         //  ((ind - input.begin) / input.stride) = (cumSumIntElemDimProcess);
         //Let's scan for its value
-        int cumSumIntElemDimTARGETProcess = ((ind - input.begin) / input.stride);
+        HitInd cumSumIntElemDimTARGETProcess = ((ind - input.begin) / input.stride);
 
         int i;
-        int cumSumIntElemDimProcess = 0;
+        HitInd cumSumIntElemDimProcess = 0;
         for (i = 0; i <  procsCard; i++){
                 cumSumIntElemDimProcess += weightedDistRes[i];
                 if (cumSumIntElemDimProcess >= cumSumIntElemDimTARGETProcess) break;
                 }
 #ifdef DEBUG
-        int begin, end;
+        HitInd begin, end;
         begin  = input.begin + (cumSumIntElemDimProcess * input.stride);
         end    = begin + ((weightedDistRes[i] - 1) * input.stride);
         if (! ((ind >= begin) && (ind <= end)))
@@ -2025,7 +2034,7 @@ int     hit_layout_plug_layWeighted_ranks( char topoActiveMode,
 
 }
 
-int     hit_layout_plug_layWeighted_maxCard( int procsCard, int blocksCard, float* extraParameter ) {
+HitInd     hit_layout_plug_layWeighted_maxCard( int procsCard, HitInd blocksCard, float* extraParameter ) {
 
         int weightedDistRes[procsCard];
         perform_weighted_distribution(procsCard, blocksCard, extraParameter, weightedDistRes);
@@ -2037,7 +2046,7 @@ int     hit_layout_plug_layWeighted_maxCard( int procsCard, int blocksCard, floa
         return maxCard;
 }
 
-int     hit_layout_plug_layWeighted_minCard( int procsCard, int blocksCard, float* extraParameter ) {
+HitInd     hit_layout_plug_layWeighted_minCard( int procsCard, HitInd blocksCard, float* extraParameter ) {
 
         int weightedDistRes[procsCard];
         perform_weighted_distribution(procsCard, blocksCard, extraParameter, weightedDistRes);
@@ -2049,14 +2058,14 @@ int     hit_layout_plug_layWeighted_minCard( int procsCard, int blocksCard, floa
         return minCard;
 }
 
-int     hit_layout_plug_layWeighted_numActives( int procsCard, int blocksCard, float* extraParameter ) {
+int     hit_layout_plug_layWeighted_numActives( int procsCard, HitInd blocksCard, float* extraParameter ) {
 
         int weightedDistRes[procsCard];
         perform_weighted_distribution(procsCard, blocksCard, extraParameter, weightedDistRes);
 
-	int i;
+
         int numDimActiveLayProcesses = 0;
-        for (i = 0; i < procsCard; i++)
+        for (int i = 0; i < procsCard; i++)
                 {if (weightedDistRes[i] != 0) numDimActiveLayProcesses++;}
         return numDimActiveLayProcesses;
 }
@@ -2222,13 +2231,10 @@ HitShape hit_layMaxShape( HitLayout lay ) {
 
 		/* 1A. COPY ORIGINAL SHAPE */
 		newShp = hit_layShape(lay);
-
 		/* 2A. EXTEND THE END TO ALLOW THE BIGGEST PIECES TO FIT */
 		int i;
 		for (i=0; i<hit_shapeDims(newShp); i++)
-			hit_shapeSig(newShp,i).end = hit_shapeSig(newShp,i).begin + 
-										( lay.maxSize[i] - 1 ) * hit_shapeSig(newShp,i).stride ;
-
+			hit_shapeSig(newShp,i).end = hit_shapeSig(newShp,i).begin + ( lay.maxSize[i] - (HitInd)1 ) * hit_shapeSig(newShp,i).stride;					
 	} else{
 
 		/* 1B. MAKE A NEW SHAPE */
@@ -2359,7 +2365,7 @@ int	hit_layout_wrapperShape(	int topoType,
 			/* NORMAL RANK */
 			else {
 				int procsCard = card[dim];
-				int blocksCard = hit_sigCard(hit_shapeSig(shape,dim));
+				HitInd blocksCard = hit_sigCard(hit_shapeSig(shape,dim));
 				int tmpActive;
 
 				/* GENERIC vs. RESTRICTED DIMENSION: DIFFERENT SIGNATURE FUNCTION */
@@ -2496,7 +2502,7 @@ HitRanks hit_layTransformRanks( char topoActiveMode, HitLayout self, HitRanks ra
 	for (dim = 0; dim < hit_shapeDims(self.shape); dim++) {
 		/* 2.1. ALIASES FOR LAYOUT INFORMATION (DIMENSION DEPENDENT) */
 		int procsCard = self.topo.card[dim];
-		int blocksCard = hit_sigCard(hit_shapeSig(self.origShape,dim));
+		HitInd blocksCard = hit_sigCard(hit_shapeSig(self.origShape,dim));
 
 		/* 2.2. TOPO TO ACTIVE RANK */
 		if ( restrictedDim == dim )
@@ -2559,7 +2565,7 @@ HitRanks hit_layActiveIdRanks(HitLayout lay, int linear){
 int	hit_layNeighborFrom(HitLayout self, int source, int dim, int shift) {
 	/* 1. ALIASES FOR LAYOUT INFORMATION */
 	int procsCard = self.topo.card[dim];
-	int blocksCard = hit_sigCard(hit_shapeSig(self.origShape,dim));
+	HitInd blocksCard = hit_sigCard(hit_shapeSig(self.origShape,dim));
 	float* extraParameter = self.info.layoutSig.extraParameter;
 	int numActives = self.numActives[ dim ];
 	int restrictedDim = self.info.layoutSig.restrictToDim;
@@ -2586,7 +2592,7 @@ int	hit_layNeighborFrom(HitLayout self, int source, int dim, int shift) {
 int	hit_layNeighborFromTopoRank(HitLayout self, int source, int dim, int shift) {
 	/* 1. ALIASES FOR LAYOUT INFORMATION */
 	int procsCard = self.topo.card[dim];
-	int blocksCard = hit_sigCard(hit_shapeSig(self.origShape,dim));
+	HitInd blocksCard = hit_sigCard(hit_shapeSig(self.origShape,dim));
 	float* extraParameter = self.info.layoutSig.extraParameter;
 	int restrictedDim = self.info.layoutSig.restrictToDim;
 
@@ -2757,7 +2763,7 @@ HitLayout	hit_layout_wrapper(	HitTopology topo,
 					hit_sigCard(hit_shapeSig(shape,dim));
 			*/
 
-			int blocksCard = hit_sigCard(hit_shapeSig(shape,dim));
+			HitInd blocksCard = hit_sigCard(hit_shapeSig(shape,dim));
 			
 			/* 5.0. PROJECTION ON PLAIN TOPOLOGY @arturo: 2019/01/11 */
 			int plainProjection = ( topo.type == HIT_TOPOLOGY_PLAIN && restrictToDim != HIT_LAYOUT_NODIM );
@@ -2766,11 +2772,16 @@ HitLayout	hit_layout_wrapper(	HitTopology topo,
 				if ( dim == restrictToDim ) 
 					res.numActives[dim] = activesRestrictedF( topo.card[0], blocksCard, extraParameter);
 				// DIMENSIONS OUT OF TOPOLOGY: ALL ACTIVE
-				else 
-					res.numActives[dim] = blocksCard;
+				else {
+					if (blocksCard > INT_MAX) hit_error_here("Layout: Block cardinality exceeds maximum int size.");
+					res.numActives[dim] = (int) blocksCard;
+				}
 			}
 			/* 5.1. DIMENSIONS OUT OF TOPOLOGY: ALL ACTIVE */
-			else if ( dim >= topo.numDims ) res.numActives[dim] = blocksCard;
+			else if ( dim >= topo.numDims ) {
+				if (blocksCard > INT_MAX) hit_error_here("Layout: Block cardinality exceeds maximum int size.");
+				res.numActives[dim] = (int) blocksCard;
+			}
 			/* 5.2. DIMENSION RESTRICTED TO A SPECIFIC SIGNATURE FUNCTION */
 			else if ( dim == restrictToDim ) 
 				res.numActives[dim] = activesRestrictedF( topo.card[dim], blocksCard, extraParameter);
@@ -2803,7 +2814,7 @@ HitLayout	hit_layout_wrapper(	HitTopology topo,
 
 		/* 7. COMPUTE MAX/MIN SIZES */
 		for (dim=0; dim<hit_shapeDims(shape); dim++) {
-			int blocksCard = hit_sigCard(hit_shapeSig(shape,dim));
+			HitInd blocksCard = hit_sigCard(hit_shapeSig(shape,dim));
 			/* 7.1. DIMENSIONS OUT OF TOPOLOGY: NON-PARTITIONED, SIGNATURE COPIED IN ALL PROCS */
 			if ( dim >= topo.numDims ) {
 				res.maxSize[dim] = blocksCard;
@@ -2859,7 +2870,7 @@ int hit_layNumActives( HitLayout lay ) {
 
 
 /* COMPUTE THE ACTIVE RANK OF THE OWNER OF A GIVEN INDEX */
-int hit_layDimOwner( HitLayout lay, int dim, int ind ) {
+int hit_layDimOwner( HitLayout lay, int dim, HitInd ind ) {
 
 	/* 1. DIMENSIONS OUT OF TOPOLOGY */
 	if ( dim >= lay.topo.numDims ) return HIT_RANK_NULL;
@@ -3037,7 +3048,7 @@ HitTopology hit_layActivesTopology( HitLayout lay ) {
  * hit_layout_list_initGroups
  * Init the layout structure whit n elements
  */
-void hit_layout_list_initGroups(HitLayout * lay, int numElementsTotal) {
+void hit_layout_list_initGroups(HitLayout * lay, HitInd numElementsTotal) {
 
 	lay->group = HIT_GROUP_ID_NULL;
 
@@ -3135,9 +3146,8 @@ HitLayout hit_layout_plug_layIndependentLB( int freeTopo, HitTopology topo , Hit
 
 	HitLayout lay = HIT_LAYOUT_NULL;
 	double totWeight = 0.0;
-	int i;
 	int proc;
-	int nElements;
+	HitInd nElements;
 	int totProcs;
 	int numGroups;
 	int nProcs;
@@ -3151,7 +3161,7 @@ HitLayout hit_layout_plug_layIndependentLB( int freeTopo, HitTopology topo , Hit
 
 	/* NUMBER OF PROCESSORS */
 	nProcs = 1;
-	for(i=0;i<topo.numDims;i++){
+	for(int i=0;i<topo.numDims;i++){
 		nProcs *= topo.card[i];
 		lay.numActives[i] = topo.card[i];
 	}
@@ -3173,7 +3183,7 @@ setbuf(stdout, NULL);
 
 	/* SAFETY CHECK: CONSISTENCY OF INPUT DATA, NO NEGATIVE LOADS */
 #ifndef Hit_UNSAFE
-	for (i=0; i<nElements; i++) {
+	for (HitInd i=0; i<nElements; i++) {
 		if (weights[i]<0.0){
 			hit_errInternal(__FUNCTION__,"Weight input data is incorrect (check workload expressions)","",__FILE__,__LINE__);	
 		}
@@ -3182,7 +3192,7 @@ setbuf(stdout, NULL);
 
 	/* COMPUTE TOTAL WORKLOAD */
 	totProcs = 0;
-	for (i=0; i<nElements; i++) totWeight = totWeight + weights[i];
+	for (HitInd i=0; i<nElements; i++) totWeight = totWeight + weights[i];
 #ifdef DEBUG
 printf("TotWeight-A %lf\n", totWeight);
 #endif
@@ -3194,7 +3204,7 @@ printf("TotWeight-B %lf\n", totWeight);
 #endif
 
 	/* NORMALIZE THE NUMBER OF PROCESSOR PER ELEMENT, ROUND DOWN */
-	for (i=0; i<nElements; i++) {
+	for (HitInd i=0; i<nElements; i++) {
 		normWeight[i] = nProcs * weights[i] / totWeight;
 		numProcs[i] = (int)normWeight[i];
 		normWeight[i] = normWeight[i] - numProcs[i];
@@ -3210,7 +3220,7 @@ printf("CTRL Total norm. weight %lf\n", normW);
 #endif
 
 	/* ASSIGN THE REST OF PROCESSORS */
-	for (i=0; i<(nProcs-totProcs); i++) {
+	for (int i=0; i<(nProcs-totProcs); i++) {
 		/* ASSIGN IT TO THE ELEMENT WITH THE BIGGEST REST OF NORM. WEIGHT */
 		double maxWeight = normWeight[0];
 		int maxPos = 0;
@@ -3234,7 +3244,7 @@ printf("CTRL numProcs[%i] =  %d . %lf\n", i, numProcs[i],normWeight[i]);
 	/* CREATE PROCESSOR-GROUPS AND ASSIGN ELEMENTS */
 	proc = 0;
 	numGroups = 0;
-	for (i=0; i<nElements; i++) {
+	for (HitInd i=0; i<nElements; i++) {
 		if ( numProcs[i] > 0 ) {
 			hit_layout_list_addGroup(&lay, proc, numProcs[i]);
 			proc = proc + numProcs[i];
@@ -3247,7 +3257,7 @@ printf("CTRL numProcs[%i] =  %d . %lf\n", i, numProcs[i],normWeight[i]);
 	}
 
 	/* ELEMENTS WITH NO PROCCESSOR YET ASSIGNED */
-	for (i=0; i<nElements; i++) {
+	for (HitInd i=0; i<nElements; i++) {
 		if (numProcs[i]==0) {
 			/* ASSIGN IT TO THE LESS REST OF NORM. WEIGHT GROUP */
 			double minWeight = normWeightPerGroup[0];
@@ -3294,9 +3304,8 @@ HitLayout hit_layout_plug_layContiguous(int freeTopo, HitTopology topo, HitShape
 	HitLayout lay = HIT_LAYOUT_NULL;
 	double totWeight;		// Total weight
 	double avgWeight;		// Average weight
-	int i;
 	int proc;
-	int nElements;
+	HitInd nElements;
 	int nProcs;
 
 	lay.topo = topo;
@@ -3306,7 +3315,7 @@ HitLayout hit_layout_plug_layContiguous(int freeTopo, HitTopology topo, HitShape
 
 	/* NUMBER OF PROCESSORS */
 	nProcs = 1;
-	for(i=0;i<topo.numDims;i++){
+	for(int i=0;i<topo.numDims;i++){
 		nProcs *= topo.card[i];
 		lay.numActives[i] = topo.card[i];
 	}
@@ -3319,7 +3328,7 @@ HitLayout hit_layout_plug_layContiguous(int freeTopo, HitTopology topo, HitShape
 
 	/* SAFETY CHECK: CONSISTENCY OF INPUT DATA, NO NEGATIVE LOADS */
 #ifndef Hit_UNSAFE
-	for (i=0; i<nElements; i++) {
+	for (HitInd i=0; i<nElements; i++) {
 		if (weights[i]<0.0){
 			hit_errInternal(__FUNCTION__,"Weight input data is incorrect (check workload expressions)","",__FILE__,__LINE__);
 		}
@@ -3328,7 +3337,7 @@ HitLayout hit_layout_plug_layContiguous(int freeTopo, HitTopology topo, HitShape
 
 	/* COMPUTE TOTAL WORKLOAD */
 	totWeight = 0.0;
-	for (i=0; i<nElements; i++) totWeight += weights[i];
+	for (HitInd i=0; i<nElements; i++) totWeight += weights[i];
 
 	/* SAFETY CHECK: CONSISTENCY OF INPUT DATA, TOTAL WEIGHT 0 */
 	if (totWeight == 0.0) totWeight = 1.0;	/* Avoid division by 0 */
@@ -3347,7 +3356,7 @@ HitLayout hit_layout_plug_layContiguous(int freeTopo, HitTopology topo, HitShape
 	int	acumElements = 0;
 
 	/* ASSIGN ELEMENTS TO PROCESSORS */
-	for(i=0; i<nElements; i++) {
+	for(HitInd i=0; i<nElements; i++) {
 		localElements++;
 		localWeight = localWeight + weights[i];
 		lay.info.layoutList.assignedGroups[i] = proc;
@@ -3424,7 +3433,7 @@ HitLayout hit_layout_plug_layContiguous(int freeTopo, HitTopology topo, HitShape
 
 	/* CALCULATE THE LEADERS */
 	int act_leader = 0;
-	for(i=0;i<lay.info.layoutList.numGroups;i++){
+	for(int i=0;i<lay.info.layoutList.numGroups;i++){
 		lay.info.layoutList.groups[i].leader = act_leader;
 		act_leader += lay.info.layoutList.groups[i].numProcs;
 	}
@@ -3450,7 +3459,7 @@ HitLayout hit_layout_plug_layContiguous(int freeTopo, HitTopology topo, HitShape
 void hit_bShapeBcastInternal(HitShape * shape, HitTopology topo){
 
 	int ok;
-	int cards[2];
+	HitInd cards[2];
 	// @arturo Mar 2013
 	//MPI_Comm comm = *((MPI_Comm *)topo.pTopology.lowLevel);
 	MPI_Comm comm = topo.pTopology->comm;
@@ -3480,15 +3489,19 @@ void hit_bShapeBcastInternal(HitShape * shape, HitTopology topo){
 			hit_bShapeNameList(*shape,1).flagNames = HIT_SHAPE_NAMES_NOARRAY;
 	}
 
-	int nbits = cards[0] * cards[1];
-	int ndata = (int)(hit_bitmapShapeIndex(nbits) + (hit_bitmapShapeOffset(nbits)==0 ? 0 : 1));
+	HitInd nbits = cards[0] * cards[1];
+	HitInd ndata = (HitInd)(hit_bitmapShapeIndex(nbits) + (hit_bitmapShapeOffset(nbits)==0 ? 0 : 1));
 
-	ok = MPI_Bcast(hit_bShapeData(*shape),ndata,HIT_BITMAP_COMM_TYPE,0,comm);
+	if (ndata > INT_MAX) hit_error_here("Bitmap does not yet support structures bigger than INT_MAX data.");
+	for (int i = 0; i < 2; i++)
+		if (cards[i] > INT_MAX) hit_error_here("Bitmap does not yet support cardinalities bigger than INT_MAX data.");
+
+	ok = MPI_Bcast(hit_bShapeData(*shape),(int)ndata,HIT_BITMAP_COMM_TYPE,0,comm);
 	hit_mpiTestError(ok,"Error in bitmap hit_bitmapShapeBcastInternal");
 
-	ok = MPI_Bcast(hit_cShapeNameList(*shape,0).names, cards[0], MPI_INT, 0, comm);
+	ok = MPI_Bcast(hit_cShapeNameList(*shape,0).names, (int)cards[0], MPI_INT, 0, comm);
 	hit_mpiTestError(ok,"Error in bitmap hit_bitmapShapeBcastInternal");
-	ok = MPI_Bcast(hit_cShapeNameList(*shape,1).names, cards[1], MPI_INT, 0, comm);
+	ok = MPI_Bcast(hit_cShapeNameList(*shape,1).names, (int)cards[1], MPI_INT, 0, comm);
 	hit_mpiTestError(ok,"Error in bitmap hit_bitmapShapeBcastInternal");
 
 	hit_cShapeNameList(*shape,0).nNames = cards[0];
@@ -3522,24 +3535,23 @@ HitLayout hit_layout_plug_layBitmap(int freeTopo, HitTopology topo, HitShape * s
 	//lay.active = hit_layout_plug_layBlocks_Sig(procId, procsCard,hit_bShapeNvertices(shape), 0.0, input, &output);
 	lay.active = hit_layout_plug_layBlocks_Sig(procId, procsCard,hit_bShapeNvertices(shape), NULL, input, &output);
 	lay.pTopology[0] = hit_ptopSplit(topo.pTopology, lay.active);
-	int nactives = hit_min(hit_bShapeNvertices(shape), procsCard);
+	int nactives = (int)hit_min(hit_bShapeNvertices(shape), procsCard);
 	lay.numActives[0] = nactives;
 
 	hit_layout_list_initGroups(&lay, hit_bShapeNvertices(shape));
-	int i;
-	for(i=0;i<nactives;i++){
+	for(int i=0;i<nactives;i++){
 		hit_layout_list_addGroup(&lay, i, 1);
 		HitSig part_i;
 		//hit_layout_plug_layBlocks_Sig(i, nactives,hit_bShapeNvertices(shape), 0.0, input, &part_i);
 		hit_layout_plug_layBlocks_Sig(i, nactives,hit_bShapeNvertices(shape), NULL, input, &part_i);
-		int j;
+		HitInd j;
 		for(j=part_i.begin; j<=part_i.end; j++){
 			lay.info.layoutList.assignedGroups[j] = i;
 		}
 	
 	}
 	
-	int * names =  hit_bShapeNameList(shape,0).names + output.begin;
+	HitInd * names =  hit_bShapeNameList(shape,0).names + output.begin;
 	lay.shape = hit_bShapeSelect(shape, hit_sigCard(output), names);
 
 	if( freeTopo ) hit_topFree( topo );
@@ -3552,8 +3564,8 @@ HitLayout hit_layout_plug_layBitmap(int freeTopo, HitTopology topo, HitShape * s
 void hit_cShapeBcastInternal(HitShape * shape, HitTopology topo){
 
 	int ok;
-	int cards[2];
-	int nz;
+	HitInd cards[2];
+	HitInd nz;
 	// @arturo Mar 2013
 	//MPI_Comm comm = *((MPI_Comm *)topo.pTopology.lowLevel);
 	MPI_Comm comm = topo.pTopology->comm;
@@ -3586,13 +3598,16 @@ void hit_cShapeBcastInternal(HitShape * shape, HitTopology topo){
 			hit_cShapeNameList(*shape,1).flagNames = HIT_SHAPE_NAMES_NOARRAY;
 	}
 
-	ok = MPI_Bcast(hit_cShapeXadj(*shape), cards[0]+1, MPI_INT, 0, comm);
+	if (nz > INT_MAX) hit_error_here("Sparse structures do not yet support cardinalities bigger than INT_MAX data.");
+	if (cards[0] > INT_MAX || cards[0] + 1 > INT_MAX || cards[1] > INT_MAX) hit_error_here("Sparse structures do not yet support cardinalities bigger than INT_MAX data.");
+
+	ok = MPI_Bcast(hit_cShapeXadj(*shape), (int)cards[0]+1, MPI_INT, 0, comm);
 	hit_mpiTestError(ok,"Error in sparseShapeBcast");
-	ok = MPI_Bcast(hit_cShapeAdjncy(*shape), nz, MPI_INT, 0, comm);
+	ok = MPI_Bcast(hit_cShapeAdjncy(*shape), (int)nz, MPI_INT, 0, comm);
 	hit_mpiTestError(ok,"Error in sparseShapeBcast");
-	ok = MPI_Bcast(hit_cShapeNameList(*shape,0).names, cards[0], MPI_INT, 0, comm);
+	ok = MPI_Bcast(hit_cShapeNameList(*shape,0).names, (int)cards[0], MPI_INT, 0, comm);
 	hit_mpiTestError(ok,"Error in sparseShapeBcast");
-	ok = MPI_Bcast(hit_cShapeNameList(*shape,1).names, cards[1], MPI_INT, 0, comm);
+	ok = MPI_Bcast(hit_cShapeNameList(*shape,1).names, (int)cards[1], MPI_INT, 0, comm);
 	hit_mpiTestError(ok,"Error in sparseShapeBcast");
 
 	hit_cShapeNameList(*shape,0).nNames = cards[0];
@@ -3626,26 +3641,24 @@ HitLayout hit_layout_plug_laySparseRows(int freeTopo, HitTopology topo, HitShape
 	//lay.active = hit_layout_plug_layBlocks_Sig(procId, procsCard,  hit_cShapeCard(shape,0), 0.0, input, &output);
 	lay.active = hit_layout_plug_layBlocks_Sig(procId, procsCard,  hit_cShapeCard(shape,0), NULL, input, &output);
 	lay.pTopology[0] = hit_ptopSplit(topo.pTopology, lay.active);
-	int nactives = hit_min(hit_cShapeCard(shape,0), procsCard);
+	int nactives = (int)hit_min(hit_cShapeCard(shape,0), procsCard);
 	lay.numActives[0] = nactives;
 
 	// @note @javfres This only work for whole rows
 	hit_layout_list_initGroups(&lay, hit_cShapeCard(shape,0));
 
-	int i;
-	for(i=0;i<procsCard;i++){
+	for(int i=0;i<procsCard;i++){
 		hit_layout_list_addGroup(&lay, i, 1);
 		HitSig part_i;
 		//hit_layout_plug_layBlocks_Sig(i, procsCard,hit_cShapeCard(shape,0), 0.0, input, &part_i);
 		hit_layout_plug_layBlocks_Sig(i, procsCard,hit_cShapeCard(shape,0), NULL, input, &part_i);
-		int j;
-		for(j=part_i.begin; j<=part_i.end; j++){
+		for(HitInd j=part_i.begin; j<=part_i.end; j++){
 			lay.info.layoutList.assignedGroups[j] = i;
 		}
 
 	}
 
-	int * names = hit_cShapeNameList(shape,0).names + output.begin;
+	HitInd * names = hit_cShapeNameList(shape,0).names + output.begin;
 	lay.shape = hit_cShapeSelectRows(shape, hit_sigCard(output), names);
 
 	if( freeTopo ) hit_topFree( topo );
@@ -3679,26 +3692,24 @@ HitLayout hit_layout_plug_laySparseBitmapRows(int freeTopo, HitTopology topo, Hi
 	//lay.active = hit_layout_plug_layBlocks_Sig(procId, procsCard,  hit_bShapeCard(shape,0), 0.0, input, &output);
 	lay.active = hit_layout_plug_layBlocks_Sig(procId, procsCard,  hit_bShapeCard(shape,0), NULL, input, &output);
 	lay.pTopology[0] = hit_ptopSplit(topo.pTopology, lay.active);
-	int nactives = hit_min(hit_bShapeCard(shape,0), procsCard);
+	int nactives = (int)hit_min(hit_bShapeCard(shape,0), procsCard);
 	lay.numActives[0] = nactives;
 
 
 	// @note @javfres Esto solo funciona para filas enteras.
 	hit_layout_list_initGroups(&lay, hit_bShapeCard(shape,0));
 
-	int i;
-	for(i=0;i<procsCard;i++){
+	for(int i=0;i<procsCard;i++){
 		hit_layout_list_addGroup(&lay, i, 1);
 		HitSig part_i;
 		//hit_layout_plug_layBlocks_Sig(i, procsCard,hit_bShapeCard(shape,0), 0.0, input, &part_i);
 		hit_layout_plug_layBlocks_Sig(i, procsCard,hit_bShapeCard(shape,0), NULL, input, &part_i);
-		int j;
-		for(j=part_i.begin; j<=part_i.end; j++){
+		for(HitInd j=part_i.begin; j<=part_i.end; j++){
 			lay.info.layoutList.assignedGroups[j] = i;
 		}
 	}
 
-	int * names = hit_bShapeNameList(shape,0).names + output.begin;
+	HitInd * names = hit_bShapeNameList(shape,0).names + output.begin;
 	lay.shape = hit_bShapeSelectRows(shape, hit_sigCard(output), names);
 
 	if( freeTopo ) hit_topFree( topo );

@@ -45,7 +45,7 @@
 #include "hit_blockTile.h"
 
 /* A. INITIALIZE DOMAIN */
-void hit_blockTileNew( HitBlockTile *container, void *originalVar, int blockSizes[ HIT_MAXDIMS ] ) {
+void hit_blockTileNew( HitBlockTile *container, void *originalVar, HitInd blockSizes[ HIT_MAXDIMS ] ) {
 	HitTile *original = (HitTile *)originalVar;
 
 	/* 1. GENERATE NEW SHAPE: COMPUTE NUMBER OF BLOCKS PER DIMENSION */	
@@ -53,7 +53,7 @@ void hit_blockTileNew( HitBlockTile *container, void *originalVar, int blockSize
 	HitShape blocksShape = hit_tileShape( *original );
 	int dim;
 	for ( dim=0; dim < hit_tileDims( *original ); dim++ ) {
-		int numBlocks = (int)ceil( (double)hit_shapeSigCard( blocksShape, dim ) / blockSizes[dim] );
+		HitInd numBlocks = hit_indCeil( (HitIndF)hit_shapeSigCard( blocksShape, dim ) / blockSizes[dim] );
 		hit_shapeSig( blocksShape, dim ) = hit_sigStd( numBlocks );
 	}
 
@@ -112,8 +112,8 @@ void hit_blockTileAllocInternal( HitBlockTile *container, size_t baseSizeExtent,
 
 	/* 2.1. 1D-ARRAYS */
 	if ( hit_tileDims( *container ) == 1 ) {
-		int lastElement = hit_tileDimCard( *(original), 0 );
-		int lastBlockSize = lastElement % container->childSize[0];
+		HitInd lastElement = hit_tileDimCard( *(original), 0 );
+		HitInd lastBlockSize = lastElement % container->childSize[0];
 		if ( lastBlockSize != 0 ) {
 			// IF THE LAST BLOCK IS NOT SELECTED, SKIP
 			if ( hit_tileDimEnd(*container,0) == hit_tileDimEnd(*fullBlockTile,0) ) {
@@ -134,8 +134,8 @@ void hit_blockTileAllocInternal( HitBlockTile *container, size_t baseSizeExtent,
 	}
 	/* 2.2. 2D-ARRAYS */
 	else if ( hit_tileDims( *container ) == 2 ) {
-		int lastElement[2];
-		int lastBlockSize[2];
+		HitInd lastElement[2];
+		HitInd lastBlockSize[2];
 		for (dim=0; dim<2; dim++) {
 			lastElement[dim] = hit_tileDimCard( *(original), dim );
 			lastBlockSize[dim] = lastElement[dim] % container->childSize[dim];
@@ -143,12 +143,12 @@ void hit_blockTileAllocInternal( HitBlockTile *container, size_t baseSizeExtent,
 				// IF THE LAST BLOCK IS NOT SELECTED, SKIP
 				if ( hit_tileDimEnd(*container,dim) == hit_tileDimEnd(*fullBlockTile,dim) ) {
 					// FOR EACH LAST BLOCK (EXCEPT CORNER BLOCK)
-					int numBlock[2] = { hit_tileDimCard(*container,0)-1, hit_tileDimCard(*container,1)-1 };
+					HitInd numBlock[2] = { hit_tileDimCard(*container,0)-1, hit_tileDimCard(*container,1)-1 };
 					HitShape noPaddedShape = blockShape;
 					hit_shapeSig( noPaddedShape, dim ) = hit_sigStd(lastBlockSize[dim]);
 
 					// DETECT IF I HAVE THE CORNER BLOCK TO SKIP IT
-					int cornerBlock = 
+					HitInd cornerBlock = 
 						hit_tileDimEnd(*container,0) == hit_tileDimEnd(*fullBlockTile,0) 
 						&& hit_tileDimEnd(*container,1) == hit_tileDimEnd(*fullBlockTile,1);
 

@@ -1039,6 +1039,10 @@ void Ctrl_Cuda_EvalTaskAllocTile(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 	Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)(p_tile->ext);
 	Ctrl_Tile_Impl *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
 
+	p_tile->memStatus = HIT_MS_NOMEM;
+	hit_tileAlignUpdateAcumCards((void *)p_tile, HIT_MEM_ALIGN_BSIZE, 128 / p_tile->baseExtent);
+	p_tile->memStatus = HIT_MS_OWNER;
+
 	if (p_tile_data_impl->type == CTRL_TYPE_NULL)
 		Ctrl_Cuda_InitTile(p_ctrl, p_task);
 

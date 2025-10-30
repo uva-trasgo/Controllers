@@ -561,22 +561,22 @@ void Ctrl_Cpu_ExecMemcpy(HitTile *p_tile, Ctrl_Cpu *p_ctrl, int direction) {
 			memcpy(dst, src, (size_t)flat_tile.acumCard * flat_tile.baseExtent);
 			break;
 		case 2:
-			for (int i = 0; i < flat_tile.card[0]; i++)
+			for (HitInd i = 0; i < flat_tile.card[0]; i++)
 				memcpy((void *)((char *)dst + flat_tile.baseExtent * i * flat_tile.origAcumCard[1]),
 					   (void *)((char *)src + flat_tile.baseExtent * i * flat_tile.origAcumCard[1]),
 					   (size_t)flat_tile.card[1] * flat_tile.baseExtent);
 			break;
 		case 3:
-			for (int i = 0; i < flat_tile.card[0]; i++)
-				for (int j = 0; j < flat_tile.card[1]; j++)
+			for (HitInd i = 0; i < flat_tile.card[0]; i++)
+				for (HitInd j = 0; j < flat_tile.card[1]; j++)
 					memcpy((void *)((char *)dst + flat_tile.baseExtent * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2])),
 						   (void *)((char *)src + flat_tile.baseExtent * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2])),
 						   (size_t)flat_tile.card[2] * flat_tile.baseExtent);
 			break;
 		case 4:
-			for (int i = 0; i < flat_tile.card[0]; i++)
-				for (int j = 0; j < flat_tile.card[1]; j++)
-					for (int k = 0; k < flat_tile.card[2]; k++)
+			for (HitInd i = 0; i < flat_tile.card[0]; i++)
+				for (HitInd j = 0; j < flat_tile.card[1]; j++)
+					for (HitInd k = 0; k < flat_tile.card[2]; k++)
 						memcpy((void *)((char *)dst + flat_tile.baseExtent * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2] + k * flat_tile.origAcumCard[3])),
 							   (void *)((char *)src + flat_tile.baseExtent * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2] + k * flat_tile.origAcumCard[3])),
 							   (size_t)flat_tile.card[3] * flat_tile.baseExtent);

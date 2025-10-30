@@ -110,7 +110,7 @@ void hit_gbTileAllocInternal(void *newVarP, const char *name, const char *file, 
  * @param vertex The vertex coordinate.
  * @return The index element.
  */
-int hit_gbTileGraphVertexAtIndex(void * varP, int vertex);
+HitInd hit_gbTileGraphVertexAtIndex(void * varP, HitInd vertex);
 
 /**
  * Gets the index of a sparse element in local coordinates.
@@ -120,13 +120,13 @@ int hit_gbTileGraphVertexAtIndex(void * varP, int vertex);
  * @param local2 The second coordinate.
  * @return The index element.
  */
-static inline int hit_gbTileEdgeAtIndex(void * varP, int local1, int local2){
+static inline HitInd hit_gbTileEdgeAtIndex(void * varP, HitInd local1, HitInd local2){
 
 	/* 1. Get the shape of the tile */
 	HitTile *var = (HitTile *)varP;
 	HitShape shape = hit_tileShape(*var);
 
-	int nvertices = hit_bShapeNvertices(shape);
+	HitInd nvertices = hit_bShapeNvertices(shape);
 
 	return local1 * nvertices + local2;
 }
@@ -140,7 +140,7 @@ static inline int hit_gbTileEdgeAtIndex(void * varP, int local1, int local2){
  * @param pos2 The second coordinate.
  * @return The index element.
  */
-int hit_gbTileGraphEdgeAtIndex(void * varP, int pos1, int pos2);
+HitInd hit_gbTileGraphEdgeAtIndex(void * varP, HitInd pos1, HitInd pos2);
 
 
 /* 3. ELEMENT ACCESS FUNCTIONS */
@@ -184,7 +184,7 @@ int hit_gbTileGraphEdgeAtIndex(void * varP, int pos1, int pos2);
 
 /**
  * Access function to an edge element using a shape iterator.
- * @fn hit_gbTileEdgeIteratorAt(HitGBTile var, int vertex, int edge_index);
+ * @fn hit_gbTileEdgeIteratorAt(HitGBTile var, HitInd vertex, HitInd edge_index);
  * @memberof HitGBTile
  * @param var The tile.
  * @param vertex The vertex.
@@ -196,7 +196,7 @@ int hit_gbTileGraphEdgeAtIndex(void * varP, int pos1, int pos2);
 /**
  * Access function to an edge element using a shape iterator.
  * It uses the Skip iterator version.
- * @fn hit_gbTileEdgeIteratorAt(HitGBTile var, int vertex, int edge_index);
+ * @fn hit_gbTileEdgeIteratorAt(HitGBTile var, HitInd vertex, HitInd edge_index);
  * @memberof HitGBTile
  * @param var The tile.
  * @param vertex The vertex.

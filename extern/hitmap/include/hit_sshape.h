@@ -67,7 +67,7 @@
  * The cardinality of a shape is the number of all possible valid indexes combinations.
  *
  * This shape allows to define the domain of dense arrays with multiple indexes in a range 
- * of positive/negative integers with an optional stride.
+ * of positive/negative HitInd integers with an optional stride.
  *
  * Member functions are documented in \ref hit_sshape.h.
  *
@@ -226,7 +226,7 @@ static inline HitShape hit_shape4(HitSig s1, HitSig s2, HitSig s3, HitSig s4) {
  * @hideinitializer
  *
  * @param[in] nd 	\e int Number of dimensions.
- * @param[in] "..."	\e int_list A list of "nd" integer indexes.
+ * @param[in] "..."	\e int_list A list of "nd" HitInd integer indexes.
  * @retval	HitShape  A new shape value with one multidimensional index.
  */
 #define hit_shapeIndex(nd, ...)	hit_shapeIndex##nd(__VA_ARGS__)
@@ -235,7 +235,7 @@ static inline HitShape hit_shape4(HitSig s1, HitSig s2, HitSig s3, HitSig s4) {
 /**
  * Hit Signature Shape constructor for one dimension, select only one index element.
  */
-static inline HitShape hit_shapeIndex1( int idx ) {
+static inline HitShape hit_shapeIndex1( HitInd idx ) {
 	HitShape a = { HIT_SIG_SHAPE, { { 1, { hit_sig( idx, idx, 1 ) } }} };
 	return a;
 }
@@ -243,7 +243,7 @@ static inline HitShape hit_shapeIndex1( int idx ) {
 /**
  * Hit Signature Shape constructor for two dimensions, select only one index element per dimension.
  */
-static inline HitShape hit_shapeIndex2( int idx1, int idx2 ) {
+static inline HitShape hit_shapeIndex2( HitInd idx1, HitInd idx2 ) {
 	HitShape a = { HIT_SIG_SHAPE, { { 2, {
 			hit_sig( idx1, idx1, 1 ),
 			hit_sig( idx2, idx2, 1 ) 
@@ -254,7 +254,7 @@ static inline HitShape hit_shapeIndex2( int idx1, int idx2 ) {
 /**
  * Hit Signature Shape constructor for three dimensions, select only one index element per dimension.
  */
-static inline HitShape hit_shapeIndex3( int idx1, int idx2, int idx3 ) {
+static inline HitShape hit_shapeIndex3( HitInd idx1, HitInd idx2, HitInd idx3 ) {
 	HitShape a = { HIT_SIG_SHAPE, { { 3, {
 			hit_sig( idx1, idx1, 1 ),
 			hit_sig( idx2, idx2, 1 ),
@@ -266,7 +266,7 @@ static inline HitShape hit_shapeIndex3( int idx1, int idx2, int idx3 ) {
 /**
  * Hit Signature Shape constructor for four dimensions, select only one index element per dimension.
  */
-static inline HitShape hit_shapeIndex4( int idx1, int idx2, int idx3, int idx4 ) {
+static inline HitShape hit_shapeIndex4( HitInd idx1, HitInd idx2, HitInd idx3, HitInd idx4 ) {
 	HitShape a = { HIT_SIG_SHAPE, { { 4, {
 			hit_sig( idx1, idx1, 1 ),
 			hit_sig( idx2, idx2, 1 ),
@@ -294,7 +294,7 @@ static inline HitShape hit_shapeIndex4( int idx1, int idx2, int idx3, int idx4 )
  * @hideinitializer
  *
  * @param[in] nd 	\e int Number of dimensions.
- * @param[in] "..."	\e int_list A list of "nd" positive integer size values.
+ * @param[in] "..."	\e int_list A list of "nd" positive Hitind integer size values.
  * @retval	HitShape  A new shape value.
  */
 #define hit_shapeStd(nd, ...)	hit_shapeStd##nd(__VA_ARGS__)
@@ -304,7 +304,7 @@ static inline HitShape hit_shapeIndex4( int idx1, int idx2, int idx3, int idx4 )
 /**
  * Hit Signature Shape constructor for one dimension, standard domain
  */
-static inline HitShape hit_shapeStd1( int _size ) {
+static inline HitShape hit_shapeStd1( HitInd _size ) {
 	HitShape a = { HIT_SIG_SHAPE, { { 1, { hit_sigStd( _size ) } } } };
 	return a;
 }
@@ -312,7 +312,7 @@ static inline HitShape hit_shapeStd1( int _size ) {
 /**
  * Hit Signature Shape constructor for two dimensions, standard domain
  */
-static inline HitShape hit_shapeStd2( int size1, int size2 ) {
+static inline HitShape hit_shapeStd2( HitInd size1, HitInd size2 ) {
 	HitShape a = { HIT_SIG_SHAPE, { { 2, {
 			hit_sigStd( size1 ),
 			hit_sigStd( size2 ) 
@@ -323,7 +323,7 @@ static inline HitShape hit_shapeStd2( int size1, int size2 ) {
 /**
  * Hit Signature Shape constructor for three dimensions, standard domain
  */
-static inline HitShape hit_shapeStd3( int size1, int size2, int size3 ) {
+static inline HitShape hit_shapeStd3( HitInd size1, HitInd size2, HitInd size3 ) {
 	HitShape a = { HIT_SIG_SHAPE, { { 3, {
 			hit_sigStd( size1 ),
 			hit_sigStd( size2 ),
@@ -335,7 +335,7 @@ static inline HitShape hit_shapeStd3( int size1, int size2, int size3 ) {
 /**
  * Hit Signature Shape constructor for four dimensions, standard domain
  */
-static inline HitShape hit_shapeStd4( int size1, int size2, int size3, int size4 ) {
+static inline HitShape hit_shapeStd4( HitInd size1, HitInd size2, HitInd size3, HitInd size4 ) {
 	HitShape a = { HIT_SIG_SHAPE, { { 4, {
 			hit_sigStd( size1 ),
 			hit_sigStd( size2 ),
@@ -412,7 +412,7 @@ static inline HitShape hit_shapeStd4( int size1, int size2, int size3, int size4
  *
  * @param[in] shape \e HitShape A domain shape.
  * @param[in] dim 	\e int A dimension,
- * @retval int	The cardinality of the dimensional signature of that shape.
+ * @retval HitInd	The cardinality of the dimensional signature of that shape.
  */
 #define	hit_shapeSigCard(shape,dim)	hit_sigCard((hit_sShapeAccess((shape))).sig[(dim)])
 
@@ -425,9 +425,9 @@ static inline HitShape hit_shapeStd4( int size1, int size2, int size3, int size4
  * @param[in] shape A domain shape.
  * @return The cardinality of the indexes set of that shape.
  */
-static inline int hit_shapeCard( HitShape shape ) {
+static inline HitInd hit_shapeCard( HitShape shape ) {
 	int i;
-	int result = 1;
+	HitInd result = 1;
 	for ( i=0; i<hit_shapeDims( shape ); i++ )
 		result = result * hit_shapeSigCard( shape, i );
 	return result;
@@ -621,7 +621,7 @@ HitShape hit_shapeArrayToTile(HitShape sh1, HitShape sh2);
  * 				A negative offser moves the border inside the shape.
  * @return The expanded shape.
  */
-HitShape hit_shapeDimExpand( HitShape shape, int dim, int position, int offset );
+HitShape hit_shapeDimExpand( HitShape shape, int dim, int position, HitInd offset );
 
 /* 9.2 Hit SHAPE EXPAND */
 /**
@@ -639,7 +639,7 @@ HitShape hit_shapeDimExpand( HitShape shape, int dim, int position, int offset )
  * 				A negative offser moves the border inside the shape.
  * @return The expanded shape.
  */
-HitShape hit_shapeExpand(HitShape shape,int dims,int offset);
+HitShape hit_shapeExpand(HitShape shape,int dims,HitInd offset);
 
 /* 9.3 Hit SHAPE GET BORDER */
 /**
@@ -653,15 +653,15 @@ HitShape hit_shapeExpand(HitShape shape,int dims,int offset);
  * @deprecated The name will be changed to use the hit_sshape prefix.
  *
  * @param shape A HitShape.
- * @param dim The dimension.
+ * @param dim The dimension, uses row-major order standard.
  * @param position Flag to select the border:
  * 						\arg \c HIT_SHAPE_BEGIN For the starting border in the dimension.
  * 						\arg \c HIT_SHAPE_END For the ending border in the dimension.
  * @param offset A positive offset moves the border outside the shape.
  * 				A negative offser moves the border inside the shape.
- * @return A shape representing the selected border.
+ * @return A shape representing the selected border. Will return shape if the dim parameter is greater or lesser than the actual number of Dimensions in the shape. 
  */
-HitShape hit_shapeBorder(HitShape shape, int dim, int position, int offset);
+HitShape hit_shapeBorder(HitShape shape, int dim, int position, HitInd offset);
 
 /* 9.4 Hit SHAPE TRANSFORM */
 /**
@@ -690,7 +690,7 @@ HitShape hit_shapeBorder(HitShape shape, int dim, int position, int offset);
  * 		express the offset as raw coordinates, ignorig strides.
  * @return A shape representing the transformed shape.
  */
-HitShape hit_shapeTransform(HitShape shape, int dim, int action, int offset);
+HitShape hit_shapeTransform(HitShape shape, int dim, int action, HitInd offset);
 
 /**@}*/
 
@@ -707,7 +707,7 @@ HitShape hit_shapeTransform(HitShape shape, int dim, int action, int offset);
  *
  * @deprecated The name will be changed to use the hit_sshape prefix.
  *
- * @param[out] var	\e int Variable index to be used as counter in the loop.
+ * @param[out] var	\e HitInd Variable index to be used as counter in the loop.
  * @param[in] shape \e HitShape A domain shape.
  * @param[in] dim	\e int Number of the dimension.
  */

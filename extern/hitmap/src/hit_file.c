@@ -60,6 +60,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <ctype.h>
+#include <stdint.h>
 
 #include <hit_error.h>
 #include <hit_allocP.h>
@@ -283,7 +284,7 @@ HitShape hit_fileMMRead_toCSR_Internal(const char *fileName, int create_graph, i
 
 	// 2.1 Read the matrix allocating storage arrays
 
-	read_mm_matrix ((char *)fileName, &Nr, &Nc, &nz, &xadj, &adjncy, &val);
+	read_mm_matrix ((char *)(intptr_t)fileName, &Nr, &Nc, &nz, &xadj, &adjncy, &val);
 
 
 	// 3. TRANSFORM THE CSR TO 0-index AND SIMETRIZE
@@ -598,8 +599,8 @@ void hit_fileHBWriteInternal(const char * hbfile, HitShape shape, int rank, cons
 	FILE * file = fopen(hbfile, "w");
 
 	// Number of Vertices and edges
-	int nvertices = hit_cShapeNvertices(shape);
-	int nedges = hit_cShapeNedges(shape);
+	HitInd nvertices = hit_cShapeNvertices(shape);
+	HitInd nedges = hit_cShapeNedges(shape);
 
 	// LINE 1
 	// 1.1 Title (72 characters)
@@ -612,11 +613,11 @@ void hit_fileHBWriteInternal(const char * hbfile, HitShape shape, int rank, cons
 	//2.1 TOTCRD, total number of data lines, (14 characters)
 	//2.2 PTRCRD, number of data lines for pointers, (14 characters)
 	//2.3 INDCRD, number of data lines for row or variable indices, (14 characters)
-	int ptrcrd = (int) ceil(((double) nvertices + 1) / NUMBERS_LINE );
-	int indcrd = (int) ceil((double) nedges / NUMBERS_LINE );
-	fprintf(file,"%14d",ptrcrd + indcrd);
-	fprintf(file,"%14d",ptrcrd);
-	fprintf(file,"%14d",indcrd);
+	HitInd ptrcrd = (HitInd) ceill(((HitIndF) nvertices + 1) / NUMBERS_LINE );
+	HitInd indcrd = (HitInd) ceill((HitIndF) nedges / NUMBERS_LINE );
+	fprintf(file,"%14ld",ptrcrd + indcrd);
+	fprintf(file,"%14ld",ptrcrd);
+	fprintf(file,"%14ld",indcrd);
 	//2.4 VALCRD, number of data lines for numerical values of matrix entries, (14 characters)
 	//2.5 RHSCRD, number of data lines for right hand side vectors, starting guesses, and solutions, (14 characters)
 	fprintf(file,"%14d",0);
@@ -630,11 +631,11 @@ void hit_fileHBWriteInternal(const char * hbfile, HitShape shape, int rank, cons
 	// blank space, (11 characters)
 	fprintf(file,"%11s","");
 	// NROW, integer, number of rows or variables, (14 characters)
-	fprintf(file,"%14d", nvertices);
+	fprintf(file,"%14ld", nvertices);
 	// NCOL, integer, number of columns or elements, (14 characters)
-	fprintf(file,"%14d", nvertices);
+	fprintf(file,"%14ld", nvertices);
 	// NNZERO, number of nonzero entries. (14 characters)
-	fprintf(file,"%14d", nedges);
+	fprintf(file,"%14ld", nedges);
 	// NELTVL, this is 0. (14 characters)
 	fprintf(file,"%14d", 0);
 	fprintf(file,"\n");
@@ -651,21 +652,19 @@ void hit_fileHBWriteInternal(const char * hbfile, HitShape shape, int rank, cons
 	fprintf(file,"%-20s","");
 	//fprintf(file,"\n");
 
-	int i;
-
-	for(i=0;i<=nvertices;i++){
+	for(HitInd i=0;i<=nvertices;i++){
 
 		if(i % NUMBERS_LINE == 0 ) fprintf(file,"\n");
-		int vertex = hit_cShapeXadj(shape)[i];
-		fprintf(file, "%8d",vertex+1);
+		HitInd vertex = hit_cShapeXadj(shape)[i];
+		fprintf(file, "%8ld",vertex+1);
 	}
 
 
-	for(i=0;i<nedges;i++){
+	for(HitInd i=0;i<nedges;i++){
 
 		if(i % NUMBERS_LINE == 0 ) fprintf(file,"\n");
-		int edge = hit_cShapeAdjncy(shape)[i];
-		fprintf(file, "%8d",edge+1);
+		HitInd edge = hit_cShapeAdjncy(shape)[i];
+		fprintf(file, "%8ld",edge+1);
 	}
 
 	fclose(file);
@@ -690,8 +689,8 @@ void hit_fileHBWriteBitmapInternal(const char * hbfile, HitShape shape, int rank
 	//FILE * file = stdout;
 
 	// Number of Vertices and edges
-	int nvertices = hit_bShapeNvertices(shape);
-	int nedges = hit_bShapeNedges(shape);
+	HitInd nvertices = hit_bShapeNvertices(shape);
+	HitInd nedges = hit_bShapeNedges(shape);
 
 	// LINE 1
 	// 1.1 Title (72 characters)
@@ -704,11 +703,11 @@ void hit_fileHBWriteBitmapInternal(const char * hbfile, HitShape shape, int rank
 	//2.1 TOTCRD, total number of data lines, (14 characters)
 	//2.2 PTRCRD, number of data lines for pointers, (14 characters)
 	//2.3 INDCRD, number of data lines for row or variable indices, (14 characters)
-	int ptrcrd = (int) ceil(((double) nvertices + 1) / NUMBERS_LINE );
-	int indcrd = (int) ceil((double) nedges / NUMBERS_LINE );
-	fprintf(file,"%14d",ptrcrd + indcrd);
-	fprintf(file,"%14d",ptrcrd);
-	fprintf(file,"%14d",indcrd);
+	HitInd ptrcrd = (HitInd) ceill(((HitIndF) nvertices + 1) / NUMBERS_LINE );
+	HitInd indcrd = (HitInd) ceill((HitIndF) nedges / NUMBERS_LINE );
+	fprintf(file,"%14ld",ptrcrd + indcrd);
+	fprintf(file,"%14ld",ptrcrd);
+	fprintf(file,"%14ld",indcrd);
 	//2.4 VALCRD, number of data lines for numerical values of matrix entries, (14 characters)
 	//2.5 RHSCRD, number of data lines for right hand side vectors, starting guesses, and solutions, (14 characters)
 	fprintf(file,"%14d",0);
@@ -722,11 +721,11 @@ void hit_fileHBWriteBitmapInternal(const char * hbfile, HitShape shape, int rank
 	// blank space, (11 characters)
 	fprintf(file,"%11s","");
 	// NROW, integer, number of rows or variables, (14 characters)
-	fprintf(file,"%14d", nvertices);
+	fprintf(file,"%14ld", nvertices);
 	// NCOL, integer, number of columns or elements, (14 characters)
-	fprintf(file,"%14d", nvertices);
+	fprintf(file,"%14ld", nvertices);
 	// NNZERO, number of nonzero entries. (14 characters)
-	fprintf(file,"%14d", nedges);
+	fprintf(file,"%14ld", nedges);
 	// NELTVL, this is 0. (14 characters)
 	fprintf(file,"%14d", 0);
 	fprintf(file,"\n");
@@ -744,34 +743,34 @@ void hit_fileHBWriteBitmapInternal(const char * hbfile, HitShape shape, int rank
 	//fprintf(file,"\n");
 
 
-	int indexId = 0;
-	int vertex;
+	HitInd indexId = 0;
+	HitInd vertex;
 	hit_bShapeVertexIterator(vertex,shape){
 
 		if(vertex % NUMBERS_LINE == 0 ) fprintf(file,"\n");
-		fprintf(file, "%8d",indexId+1);
+		fprintf(file, "%8ld",indexId+1);
 
-		int edge;
+		HitInd edge;
 		hit_bShapeEdgeIterator(edge,shape,vertex){
 			indexId++;
 		}
 
 	}
 	if(vertex % NUMBERS_LINE == 0 ) fprintf(file,"\n");
-	fprintf(file, "%8d",indexId+1);
+	fprintf(file, "%8ld",indexId+1);
 
-	int edge_count = 0;
+	HitInd edge_count = 0;
 	hit_bShapeVertexIterator(vertex,shape){
 
-		int edge;
+		HitInd edge;
 		hit_bShapeEdgeIterator(edge,shape,vertex){
 
 			if(edge_count % NUMBERS_LINE == 0 ) fprintf(file,"\n");
 			edge_count++;
 
-			int target = hit_bShapeEdgeTarget(shape,edge);
+			HitInd target = hit_bShapeEdgeTarget(shape,edge);
 
-			fprintf(file, "%8d",target+1);
+			fprintf(file, "%8ld",target+1);
 
 		}
 
@@ -1038,19 +1037,18 @@ void hit_fileCSRWriteInternal(const char * csrfile, HitShape shape, int rank, co
 
 
 	// Print the number of vertices
-	int n = hit_cShapeNvertices(shape);
-	fprintf(file,"%d\n",n);
+	HitInd n = hit_cShapeNvertices(shape);
+	fprintf(file,"%ld\n",n);
 
 	// Print xadj.
-	int i;
-	for(i=0;i<n+1;i++){
+	for(HitInd i=0;i<n+1;i++){
 		fprintf(file,"%d ",hit_cShapeXadj(shape)[i]);
 	}
 	fprintf(file,"\n");
 
 	// Print adjncy
 	int nedges = hit_cShapeXadj(shape)[n];
-	for(i=0;i<nedges;i++){
+	for(int i=0;i<nedges;i++){
 		fprintf(file,"%d ",hit_cShapeAdjncy(shape)[i]);
 	}
 	fprintf(file,"\n");

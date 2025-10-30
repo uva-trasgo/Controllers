@@ -15,20 +15,18 @@
 
 CTRL_KERNEL(initCell_gassimulation, GENERIC, DEFAULT, KHitTile_cell_t tileMat, EpsilodCoords global_coords, Epsilod_ext ext_params, {
 	cell_t c = ((cell_t){{0.}});
-	// printf("Thr: %d, %d, %d\n", thr_i, thr_j, thr_k );
 
 	const vec3f                   *offsets   = ext_params.offsets;
 	const GASSIMULATION_CELL_TYPE *wis       = ext_params.wis;
 	GASSIMULATION_CELL_TYPE        cellwidth = ext_params.cellwidth;
 
 	// Global coordinates
-	// Switch j and i to mimic muesli
-	// Subtract the stencil radius as we have added an extra border to de matrix
-	int radius = 1;
-	int x      = thr_j + global_coords.offset[1] - radius;
-	int y      = thr_i + global_coords.offset[0] - radius;
-	int z      = thr_k + global_coords.offset[2] - radius;
-	// Subtract double the stencil radius as we have added an extra border to de matrix
+	// Subtract the stencil radius as we have added an extra border to the matrix
+	int    radius = 1;
+	HitInd y      = thr_i + global_coords.offset[0] - radius;
+	HitInd x      = thr_j + global_coords.offset[1] - radius;
+	HitInd z      = thr_k + global_coords.offset[2] - radius;
+	// Subtract double the stencil radius as we have added an extra border to the matrix
 	int size_x = global_coords.size[0] - 2 * radius;
 	int size_y = global_coords.size[1] - 2 * radius;
 	int size_z = global_coords.size[2] - 2 * radius;
@@ -44,29 +42,11 @@ CTRL_KERNEL(initCell_gassimulation, GENERIC, DEFAULT, KHitTile_cell_t tileMat, E
 			vec3f                   scaled;
 			VEC3_SCALE(scaled, offsets[i], cw);
 			GASSIMULATION_CELL_TYPE dot = VEC3_DOT(scaled, v);
-			// float dot = offsets[i].x * 0.1f;
-			c.data[i] = wi * 1.f * (1 + (1 / (cw * cw)) * (3 * dot + (9 / (2 * cw * cw)) * dot * dot - (3.f / 2) * VEC3_DOT(v, v)));
-			// c.data[i] = wi * 1.f * (1 + (1 / (cw * cw)) * (3 * dot + (9 / (2 * cw * cw)) * dot * dot - (3.f / 2) * 0.01f));
-			// c.data[i] = i % 10 + (float)x / 100 + (float)y / 10000 + (float)z / 1000000;
+			c.data[i]                   = wi * 1.f * (1 + (1 / (cw * cw)) * (3 * dot + (9 / (2 * cw * cw)) * dot * dot - (3.f / 2) * VEC3_DOT(v, v)));
 		}
 
-		// This boolean emulates an unexpected behaviour in muesli's example
-		// When executed on gpu, power funcion receiving a negative base returns NaN, despite the exponent being an integer
-		// This causes the power part of the condition to be false under those circumstances
-		bool bases_positive = true; // x - 50 >= 0 && y - 50 >= 0 && z - 8 >= 0;
-		if (x <= 1 || y <= 1 || z <= 1 || x >= size_x - 2 || y >= size_y - 2 || z >= size_z - 2
-			// @arturo TODO: No linka con rintf, pero creo que está -lm puesto.... revisar
-			|| (bases_positive && rintf(rintf(POW(x - 50, 2)) + rintf(POW(y - 50, 2)) + rintf(POW(z - 8, 2))) <= 225)) {
-			// c.data[0]         = 0.;
-			// floatparts *parts = (floatparts *)c.data;
-			// parts->sign       = 0;
-			// parts->exponent   = MAX_EXPONENT;
-
-			// @arturo
-			// TODO: REvisar esta condición, estamos dentro de un condicional que dice casi
-			// lo mismo, excepto que aquí sólo afecta a los bordes finales si son de la parte
-			// extendida extra... o es -2 y sobra el condicional, o algo es diferente entre
-			// los bordes iniciales y finales, raro, raro.
+		if (x <= 1 || y <= 1 || z <= 1 || x >= size_x - 2 || y >= size_y - 2 || z >= size_z - 2 ||
+			(rintf(rintf(POW(x - 50, 2)) + rintf(POW(y - 50, 2)) + rintf(POW(z - 8, 2))) <= 225)) {
 			if (x <= 1 || x >= size_x - 1 || y <= 1 || y >= size_y - 1 || z <= 1 || z >= size_z - 1) {
 				// parts->mantissa = 1 << (MANTISSA_SIZE - 1) | FLAG_KEEP_VELOCITY;
 				c.data[0] = INFINITY;
@@ -119,7 +99,7 @@ CTRL_KERNEL(updateCell_gassimulation, GENERIC, DEFAULT, KHitTile_cell_t matrix, 
 			hit(matrix, x, y, z) = cell;
 		} else {
 			GASSIMULATION_CELL_TYPE p  = 0;
-			vec3f                   vp = {0}; // We initialize this way to prevent compilation errors due to commas
+			vec3f                   vp = {0};
 			for (size_t i = 0; i < Q; i++) {
 				p += cell.data[i];
 				vec3f scaled;

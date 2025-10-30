@@ -9,7 +9,7 @@
 #define _POISSON_TYPES_H_
 
 typedef struct {
-	int x, y;
-} vec2i;
+	long x, y;
+} vec2l;
 
 #endif

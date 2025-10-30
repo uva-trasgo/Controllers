@@ -30,6 +30,10 @@ CTRL_KERNEL(initCell_wavesim, GENERIC, DEFAULT, KHitTile_float matrix, EpsilodCo
 
 /* KERNEL GENERIC: WAVESIM INIT COPY */
 CTRL_KERNEL(initCellCopy_wavesim, GENERIC, DEFAULT, KHitTile(EPSILOD_BASE_TYPE) matrix, const KHitTile(EPSILOD_BASE_TYPE) matrixCopy, EpsilodCoords global_coords, KHitTile_float stencil, float factor, const Epsilod_ext ext_params, {
+	if (!(thr_i >= 2 && thr_i < matrix.card[0] - 2 &&
+		  thr_j >= 2 && thr_j < matrix.card[1] - 2))
+		return;
+
 	const int y = thr_i;
 	const int x = thr_j;
 
@@ -42,7 +46,7 @@ CTRL_KERNEL(initCellCopy_wavesim, GENERIC, DEFAULT, KHitTile(EPSILOD_BASE_TYPE) 
 	const int y_g = y + global_coords.offset[0] - radius;
 	const int x_g = x + global_coords.offset[1] - radius;
 
-	const vec2i size = ((vec2i){global_coords.size[1] - 2 * radius, global_coords.size[0] - 2 * radius});
+	const vec2l size = ((vec2l){global_coords.size[1] - 2 * radius, global_coords.size[0] - 2 * radius});
 
 	const size_t py = y_g < size.y - 1 ? y + 1 : y;
 	const size_t my = y_g > 0 ? y - 1 : y;
@@ -62,6 +66,10 @@ CTRL_KERNEL(initCellCopy_wavesim, GENERIC, DEFAULT, KHitTile(EPSILOD_BASE_TYPE) 
 
 /* KERNEL GENERIC: WAVESIM */
 CTRL_KERNEL(updateCell_wavesim, GENERIC, DEFAULT, KHitTile(EPSILOD_BASE_TYPE) matrix, const KHitTile(EPSILOD_BASE_TYPE) matrixCopy, EpsilodCoords global_coords, KHitTile_float stencil, float factor, const Epsilod_ext ext_params, {
+	if (!(thr_i >= 2 && thr_i < matrix.card[0] - 2 &&
+		  thr_j >= 2 && thr_j < matrix.card[1] - 2))
+		return;
+
 	const int y = thr_i;
 	const int x = thr_j;
 
@@ -74,7 +82,7 @@ CTRL_KERNEL(updateCell_wavesim, GENERIC, DEFAULT, KHitTile(EPSILOD_BASE_TYPE) ma
 	const int y_g = y + global_coords.offset[0] - radius;
 	const int x_g = x + global_coords.offset[1] - radius;
 
-	const vec2i size = ((vec2i){global_coords.size[1] - 2 * radius, global_coords.size[0] - 2 * radius});
+	const vec2l size = ((vec2l){global_coords.size[1] - 2 * radius, global_coords.size[0] - 2 * radius});
 
 	const size_t py = y_g < size.y - 1 ? y + 1 : y;
 	const size_t my = y_g > 0 ? y - 1 : y;

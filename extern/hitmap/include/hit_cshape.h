@@ -77,7 +77,7 @@ extern HitShape HIT_CSR_SHAPE_NULL;
  * @param nedges number of edges.
  * @return the new CSR Sparse Shape.
  */
-HitShape hit_csrShape(int nvertices, int nedges);
+HitShape hit_csrShape(HitInd nvertices, HitInd nedges);
 
 /**
  * Sparse CSR matrix shape constructor.
@@ -87,7 +87,7 @@ HitShape hit_csrShape(int nvertices, int nedges);
  * @param nz Number of nonzero elements.
  * @return the new CSR Sparse Shape.
  */
-HitShape hit_csrShapeMatrix(int n, int m, int nz);
+HitShape hit_csrShapeMatrix(HitInd n, HitInd m, HitInd nz);
 
 /**
  * Hit CSR Shape destructor.
@@ -168,7 +168,7 @@ void hit_cShapeFree(HitShape shape);
  * @param y The col index.
  * @return 1 if the element exists, 0 otherwise.
  */
-int hit_cShapeElemExists(HitShape shape, int x, int y);
+int hit_cShapeElemExists(HitShape shape, HitInd x, HitInd y);
 
 
 /**
@@ -194,7 +194,7 @@ int hit_cShapeElemExists(HitShape shape, int x, int y);
 /**
  * Returns the number of edges from a given vertex.
  * @memberof HitCShape
- * @fn int hit_cShapeNEdgesFromVertex(HitShape s, int vertex)
+ * @fn int hit_cShapeNEdgesFromVertex(HitShape s, HitInd vertex)
  * @param s A CShape.
  * @param vertex A vertex.
  * @return The number of edges.
@@ -212,7 +212,7 @@ int hit_cShapeElemExists(HitShape shape, int x, int y);
 /**
  * Returns the target vertex of an edge.
  * @memberof HitCShape
- * @fn int hit_cShapeEdgeTarget(HitShape s, int edge)
+ * @fn int hit_cShapeEdgeTarget(HitShape s, HitInd edge)
  * @param s A HitCShape.
  * @param edge An edge.
  * @return A vertex.
@@ -224,7 +224,7 @@ int hit_cShapeElemExists(HitShape shape, int x, int y);
 /**
  * Translates a vertex in the local domain (start at 0) to
  * the global domain of vertices.
- * @fn int hit_cShapeVertexToGlobal(HitShape s, int vertex)
+ * @fn int hit_cShapeVertexToGlobal(HitShape s, HitInd vertex)
  * @memberof HitCShape
  * @param s The CShape.
  * @param vertex The local vertex.
@@ -284,7 +284,7 @@ int hit_cShapeElemExists(HitShape shape, int x, int y);
  * @param vertices An array with the selected vertices in the global domain.
  * @return a New CShape.
  */
-HitShape hit_cShapeSelect(HitShape s, int nvertices, int * vertices);
+HitShape hit_cShapeSelect(HitShape s, HitInd nvertices, HitInd * vertices);
 
 
  /**
@@ -297,7 +297,7 @@ HitShape hit_cShapeSelect(HitShape s, int nvertices, int * vertices);
   * @return a New CShape.
   *
   */
-HitShape hit_cShapeSelectRows(HitShape shape, int n, int * names);
+HitShape hit_cShapeSelectRows(HitShape shape, HitInd n, HitInd * names);
 
 
 /**
@@ -335,7 +335,7 @@ HitShape hit_cShapeReorder(HitShape s, int * newNames);
  * @param shape The CShape pointer of the graph.
  * @param x A row/vertex (in global coordinates).
  */
-void hit_cShapeAddEmptyRow_or_Vertex(HitShape * shape, int x, int mode);
+void hit_cShapeAddEmptyRow_or_Vertex(HitShape * shape, HitInd x, int mode);
 
 /**
  * Adds the edge x->y.
@@ -423,7 +423,7 @@ void hit_cShapeCreateInvNames(HitShape * shape);
  * @param y The y coordinate or destination vertex.
  * @param mode The Matrix or Graph mode
  */
-void hit_cShapeAddElem_or_Edge(HitShape * shape, int x, int y, int mode);
+void hit_cShapeAddElem_or_Edge(HitShape * shape, HitInd x, HitInd y, int mode);
 
 
 /**

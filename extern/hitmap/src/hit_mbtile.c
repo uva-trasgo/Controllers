@@ -83,30 +83,30 @@ void hit_mbTileAllocInternal(void *newVarP, const char *name, const char *file, 
 }
 
 
-int hit_mbTileElemAtIndex(void * varP, int row, int column){
+HitInd hit_mbTileElemAtIndex(void * varP, HitInd row, HitInd column){
 	
 	/* 1. Get the shape of the tile */
 	HitTile *var = (HitTile *)varP;
 	HitShape shape = hit_tileShape(*var);
 
 	//int card1 = hit_bShapeCard(shape,0);
-	int card2 = hit_bShapeCard(shape,1);
+	HitInd card2 = hit_bShapeCard(shape,1);
 
 	return row * card2 + column;
 }
 
 
-int hit_mbTileGraphElemAtIndex(void * varP, int pos1, int pos2){
+HitInd hit_mbTileGraphElemAtIndex(void * varP, HitInd pos1, HitInd pos2){
 
 	/* 1. Get the shape of the tile */
 	HitTile *var = (HitTile *)varP;
 	HitShape shape = hit_tileShape(*var);
 
-	int row = hit_bShapeCoordToLocal(shape,0,pos1);
-	int column = hit_bShapeCoordToLocal(shape,1,pos2);
+	HitInd row = hit_bShapeCoordToLocal(shape,0,pos1);
+	HitInd column = hit_bShapeCoordToLocal(shape,1,pos2);
 
 	//int card1 = hit_bShapeCard(shape,0);
-	int card2 = hit_bShapeCard(shape,1);
+	HitInd card2 = hit_bShapeCard(shape,1);
 	
 	return row * card2 + column;
 }
@@ -120,8 +120,8 @@ void hit_mbTileClear(void * tileP){
 	HitTile *tile = (HitTile *)tileP;
 	//HitShape shape = hit_tileShape(*tile);
 
-	int card1 = tile->card[1];
-	int card2 = tile->card[1];
+	HitInd card1 = tile->card[1];
+	HitInd card2 = tile->card[1];
 
 	bzero(tile->data, tile->baseExtent  * (size_t) (card1 * card2) );
 }

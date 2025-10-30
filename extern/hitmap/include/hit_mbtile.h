@@ -114,7 +114,7 @@ void hit_mbTileAllocInternal(void *newVarP, const char *name, const char *file, 
  * @param local2 The second coordinate.
  * @return The index element.
  */
-int hit_mbTileElemAtIndex(void * varP, int local1, int local2);
+HitInd hit_mbTileElemAtIndex(void * varP, HitInd local1, HitInd local2);
 
 /**
  * Gets the index of a sparse element in global coordinates.
@@ -124,7 +124,7 @@ int hit_mbTileElemAtIndex(void * varP, int local1, int local2);
  * @param local2 The second coordinate.
  * @return The index element.
  */
-int hit_mbTileGraphElemAtIndex(void * varP, int pos1, int pos2);
+HitInd hit_mbTileGraphElemAtIndex(void * varP, HitInd pos1, HitInd pos2);
 
 
 

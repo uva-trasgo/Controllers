@@ -329,6 +329,12 @@ extern HitOp HIT_OP_MAX_DOUBLE;
 
 /* Hit MPI INITIALIZATION FUNCTION */
 /**
+ * hit_comActive: Check if hit_com has been initialized
+ * @return int  0 if not initialized
+ */
+int hit_comActive();
+
+/**
  * hit_comInit: initializes the communication environment
  * @param pargc pointer to the counter arguments of the main routine
  * @param pargv pointer to the arguments of the main routine

@@ -85,10 +85,10 @@ typedef struct HitTile {
 	int			type;				/**< Type of the HitTile: Tile, cTile, mTile, gcTile, gbTile, mcTile, mbTile. */
 	size_t			baseExtent;			/**< Size of the variable type. */
 	HitShape		shape;				/**< Shape of the Tile. */
-	int			card[HIT_MAXDIMS];		/**< Dimension cardinalities. */
-	int			acumCard;			/**< Flattened cardinality. */
-	int			origAcumCard[HIT_MAXDIMS+1];	/**< Dimension accumulated cardinalities. */
-	int			qstride[HIT_MAXDIMS];		/**< Memory stride for stride subselections */
+	HitInd			card[HIT_MAXDIMS];		/**< Dimension cardinalities. */
+	HitInd			acumCard;			/**< Flattened cardinality. */
+	HitInd			origAcumCard[HIT_MAXDIMS+1];	/**< Dimension accumulated cardinalities. */
+	HitInd			qstride[HIT_MAXDIMS];		/**< Memory stride for stride subselections */
 	void			*data;				/**< Data pointer. It may be different to memPtr if it is a subselection tile. */
 	void			*dataVertices;			/**< Data pointer to store the vertices in a graph tile. */
 	void			*memPtr;			/**< Memory pointer. It keeps the original pointer to the allocated memory. */
@@ -101,8 +101,8 @@ typedef struct HitTile {
 	char			hierDepth;			/**< Hierarchical depth status. */
 	struct		 	HitTile	*ancestor;		/**< Pointer to the ancestor in a multilevel hierarchy. */
 	struct		 	HitTile	*unpadded;		/**< Pointer to a selection without padding. */
-	int			childBegin[HIT_MAXDIMS];	/**< Starting array coordinate of first child in regular hierarchical structures, where all children have the same type and shape. */
-	int			childSize[HIT_MAXDIMS];		/**< Normalized sizes of children in regular hierarchical structures, where all children have the same type and shape. */
+	HitInd			childBegin[HIT_MAXDIMS];	/**< Starting array coordinate of first child in regular hierarchical structures, where all children have the same type and shape. */
+	HitInd			childSize[HIT_MAXDIMS];		/**< Normalized sizes of children in regular hierarchical structures, where all children have the same type and shape. */
 } HitTile ;
 
 /** @cond INTERNAL */
@@ -130,10 +130,10 @@ typedef HitTile *HitPTile;
  	int			type;							\
  	size_t			baseExtent;						\
  	HitShape		shape;							\
- 	int			card[HIT_MAXDIMS];					\
- 	int			acumCard;						\
- 	int			origAcumCard[HIT_MAXDIMS+1];				\
- 	int			qstride[HIT_MAXDIMS];					\
+ 	HitInd			card[HIT_MAXDIMS];					\
+ 	HitInd		acumCard;						\
+	HitInd		origAcumCard[HIT_MAXDIMS+1];				\
+	HitInd		qstride[HIT_MAXDIMS];					\
  	baseType		*data;							\
  	baseType		*dataVertices;						\
  	baseType		*memPtr;						\
@@ -145,8 +145,8 @@ typedef HitTile *HitPTile;
  	char			hierDepth;						\
  	struct HitTile		*ancestor;						\
  	struct HitTile		*unpadded;						\
- 	int			childBegin[HIT_MAXDIMS];				\
- 	int			childSize[HIT_MAXDIMS];					\
+	HitInd			childBegin[HIT_MAXDIMS];				\
+	HitInd			childSize[HIT_MAXDIMS];					\
  } HitTile_##baseType
 //, *HitPTile_##baseType
 
@@ -229,6 +229,9 @@ void hit_tileSingleInternal( void *tileP, void *var, size_t size );
 void hit_tileDomainInternal(void *newVarP, size_t baseExtent, int hierDepth, int numDims, ...);
 void hit_tileDomainShapeInternal(void *newVarP, size_t baseExtent, int hierDepth, HitShape shape);
 void hit_tileAllocInternal(void *newVarP, const char *name, const char *file, int numLine);
+void hit_tileAllocAlignInternal(void *newVarP, int policy, int block_size, const char *name, const char *file, int numLine);
+HitInd hit_tileAlignSizeInternal(void *newVarP, int policy, int block_size, const char *name, const char *file, int numLine);
+void hit_tileAlignUpdateAcumCards(void *newVarP, int policy, int block_size);
 void hit_tileFreeRecInternal(void * var);
 void hit_tileFillInternal(void * var, void * value, const char *name, const char *file, int numLine);
 void hit_tileCloneInternal(void *newVar, const void *oldVar, const char *name, const char *file, int numLine);
@@ -280,7 +283,7 @@ int hit_tileSelectArrayCoordsInternal(void *newVar, const void *oldVar, HitShape
  * hit_tileGet: obtains an element of a HitTile.
  * @param var		A HitTile derived type variable.
  * @param ndims		Number of dimensions of the array. It must be known in compilation time. Limited by HIT_MAXDIMS.
- * @param ...		A list of integer positive numbers defining the coordinate in each dimension.
+ * @param ...		A list of HitInd integer positive numbers defining the coordinate in each dimension.
  * @return 		Element read.
  */
 #define hit_tileGet(var,ndims,...)	hit_tileElemAt(var,ndims,__VA_ARGS__)
@@ -290,7 +293,7 @@ int hit_tileSelectArrayCoordsInternal(void *newVar, const void *oldVar, HitShape
  * @param var		A HitTile derived type variable.
  * @param ndims		Number of dimensions of the array. It must be known in compilation time. Limited by HIT_MAXDIMS.
  * @param val		Value to write.
- * @param ...		A list of integer positive numbers defining the coordinate in each dimension.
+ * @param ...		A list of HitInd integer positive numbers defining the coordinate in each dimension.
  */
 #define hit_tileSet(var,ndims,val,...)	hit_tileElemAt(var,ndims,__VA_ARGS__) = (val)
 
@@ -299,7 +302,7 @@ int hit_tileSelectArrayCoordsInternal(void *newVar, const void *oldVar, HitShape
  * hit_tileGetArrayCoords: obtains an element of a HitTile.
  * @param var		A HitTile derived type variable.
  * @param ndims		Number of dimensions of the array. It must be known in compilation time. Limited by HIT_MAXDIMS.
- * @param ...		A list of integer positive numbers defining the array coordinate in each dimension.
+ * @param ...		A list of HitInd integer positive numbers defining the array coordinate in each dimension.
  * @return 		Element read.
  */
 #define hit_tileGetArrayCoords(var,ndims,...)	hit_tileElemAtArrayCoords(var,ndims,__VA_ARGS__)
@@ -309,7 +312,7 @@ int hit_tileSelectArrayCoordsInternal(void *newVar, const void *oldVar, HitShape
  * @param var		A HitTile derived type variable.
  * @param ndims		Number of dimensions of the array. It must be known in compilation time. Limited by HIT_MAXDIMS.
  * @param val		Value to write.
- * @param ...		A list of integer positive numbers defining the array coordinate in each dimension.
+ * @param ...		A list of HitInd integer positive numbers defining the array coordinate in each dimension.
  */
 #define hit_tileSetArrayCoords(var,ndims,val,...)	hit_tileElemAtArrayCoords(var,ndims,__VA_ARGS__) = (val)
 
@@ -319,7 +322,7 @@ int hit_tileSelectArrayCoordsInternal(void *newVar, const void *oldVar, HitShape
  * hit_tileGetNoStride: obtains an element of a HitTile (with no stride in the selection).
  * @param var		A HitTile derived type variable.
  * @param ndims		Number of dimensions of the array. It must be known in compilation time. Limited by HIT_MAXDIMS.
- * @param ...		A list of integer positive numbers defining the coordinate in each dimension.
+ * @param ...		A list of HitInd integer positive numbers defining the coordinate in each dimension.
  * @return 		Element read.
  */
 #define hit_tileGetNoStride(var,ndims,...)	hit_tileElemAtNoStride(var,ndims,__VA_ARGS__)
@@ -329,7 +332,7 @@ int hit_tileSelectArrayCoordsInternal(void *newVar, const void *oldVar, HitShape
  * @param var		A HitTile derived type variable.
  * @param ndims		Number of dimensions of the array. It must be known in compilation time. Limited by HIT_MAXDIMS.
  * @param val		Value to write.
- * @param ...		A list of integer positive numbers defining the coordinate in each dimension.
+ * @param ...		A list of HitInd integer positive numbers defining the coordinate in each dimension.
  */
 #define hit_tileSetNoStride(var,ndims,val,...)	hit_tileElemAtNoStride(var,ndims,__VA_ARGS__) = (val)
 /** @endcond */

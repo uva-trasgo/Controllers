@@ -55,9 +55,9 @@ int hit_envYesNo( const char *var ) {
 		if ( !strcmp( env_var, "yes" ) ) return 1;
 		if ( !strcmp( env_var, "n" ) ) return 0;
 		if ( !strcmp( env_var, "no" ) ) return 0;
-		if ( hit_Rank == 0 ) hit_warn( var, "environment variable has an unknown value, using default value:", str_def );
+		if ( !hit_comActive() || hit_Rank == 0 ) hit_warn( var, "environment variable has an unknown value, using default value:", str_def );
 	}
-	else if ( hit_Rank == 0 ) hit_warn( var, "environment variable is not defined, using default value:", str_def );
+	else if ( !hit_comActive() || hit_Rank == 0 ) hit_warn( var, "environment variable is not defined, using default value:", str_def );
 	return 1;
 }
 
@@ -70,9 +70,9 @@ int hit_envNoYes( const char *var ) {
 		if ( !strcmp( env_var, "yes" ) ) return 1;
 		if ( !strcmp( env_var, "n" ) ) return 0;
 		if ( !strcmp( env_var, "no" ) ) return 0;
-		if ( hit_Rank == 0 ) hit_warn( var, "environment variable has an unknown value, using default value:", str_def );
+		if ( !hit_comActive() || hit_Rank == 0 ) hit_warn( var, "environment variable has an unknown value, using default value:", str_def );
 	}
-	else if ( hit_Rank == 0 ) hit_warn( var, "environment variable is not defined, using default value:", str_def );
+	else if ( !hit_comActive() || hit_Rank == 0 ) hit_warn( var, "environment variable is not defined, using default value:", str_def );
 	return 0;
 }
 
@@ -89,9 +89,9 @@ int hit_envYesNoDefault( const char *var, int default_value ) {
 		if ( !strcmp( env_var, "yes" ) ) return 1;
 		if ( !strcmp( env_var, "n" ) ) return 0;
 		if ( !strcmp( env_var, "no" ) ) return 0;
-		if ( hit_Rank == 0 ) hit_warn( var, "environment variable has an unknown value, using default value:", str_def );
+		if ( !hit_comActive() || hit_Rank == 0 ) hit_warn( var, "environment variable has an unknown value, using default value:", str_def );
 	}
-	else if ( hit_Rank == 0 ) hit_warn( var, "environment variable is not defined, using default value:", str_def );
+	else if ( !hit_comActive() || hit_Rank == 0 ) hit_warn( var, "environment variable is not defined, using default value:", str_def );
 	return default_value;
 }
 
@@ -105,9 +105,9 @@ int hit_envOptions( const char *var, const char **options ) {
 			if ( !strcmp( env_var, options[ind] ) ) return ind;
 
 		if ( options[ind] == NULL ) 
-			if ( hit_Rank == 0 ) hit_warn( var, "environment variable has an unknown value, using default value:", options[0] );
+			if ( !hit_comActive() || hit_Rank == 0 ) hit_warn( var, "environment variable has an unknown value, using default value:", options[0] );
 	}
-	else if ( hit_Rank == 0 ) hit_warn( var, "environment variable is not defined, using default value:", options[0] );
+	else if ( !hit_comActive() || hit_Rank == 0 ) hit_warn( var, "environment variable is not defined, using default value:", options[0] );
 	return 0;
 }
 
@@ -116,13 +116,13 @@ int hit_envOptions( const char *var, const char **options ) {
 int hit_envInteger( const char *var, int default_value ) {
 	char *env_var = getenv( var );
 	if ( env_var == NULL ) {
-		if ( hit_Rank == 0 ) hit_warnInt( var, "environment variable is not defined, using default value:", default_value );
+		if ( !hit_comActive() || hit_Rank == 0 ) hit_warnInt( var, "environment variable is not defined, using default value:", default_value );
 		return default_value;
 	}
 	int value;
 	int ok = sscanf( env_var, "%d", &value );
 	if ( ok != 1 ) {
-		if ( hit_Rank == 0 ) hit_warnInt( var, "environment variable has a non-integer value, using default value:", default_value );
+		if ( !hit_comActive() || hit_Rank == 0 ) hit_warnInt( var, "environment variable has a non-integer value, using default value:", default_value );
 		return default_value;
 	}
 	return value;

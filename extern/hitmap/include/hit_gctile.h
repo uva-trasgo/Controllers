@@ -109,7 +109,7 @@ void hit_gcTileAllocInternal(void *newVarP, const char *name, const char *file, 
  * @param vertex The vertex coordinate.
  * @return The index element.
  */
-int hit_gcTileGraphVertexAtIndex(void * varP, int vertex);
+HitInd hit_gcTileGraphVertexAtIndex(void * varP, HitInd vertex);
 
 /**
  * Gets the index of a sparse element in local coordinates.
@@ -119,15 +119,15 @@ int hit_gcTileGraphVertexAtIndex(void * varP, int vertex);
  * @param local2 The second coordinate.
  * @return The index element.
  */
-static inline int hit_gcTileEdgeAtIndex(void * varP, int local1, int local2){
+static inline HitInd hit_gcTileEdgeAtIndex(void * varP, HitInd local1, HitInd local2){
 
 	/* 1. Get the shape of the tile */
 	HitTile *var = (HitTile *)varP;
 	HitShape shape = hit_tileShape(*var);
 
-	int edge;
+	HitInd edge;
 	hit_cShapeEdgeIterator(edge,shape,local1){
-		int dst = hit_cShapeEdgeTarget(shape,edge);
+		HitInd dst = hit_cShapeEdgeTarget(shape,edge);
 		if(dst == local2) return edge;
 	}
 
@@ -142,7 +142,7 @@ static inline int hit_gcTileEdgeAtIndex(void * varP, int local1, int local2){
  * @param pos2 The second coordinate.
  * @return The index element.
  */
-int hit_gcTileGraphEdgeAtIndex(void * varP, int pos1, int pos2);
+HitInd hit_gcTileGraphEdgeAtIndex(void * varP, HitInd pos1, HitInd pos2);
 
 
 
@@ -210,7 +210,7 @@ void hit_gcTileCopyVerticesInternal(void * dstTileP, void * srcTileP, int clear)
 
 /**
  * Access function to an edge element using a shape iterator.
- * @fn hit_gcTileEdgeIteratorAt(HitGBTile var, int vertex, int edge_index);
+ * @fn hit_gcTileEdgeIteratorAt(HitGBTile var, HitInd vertex, HitInd edge_index);
  * @memberof HitGCTile
  * @param var The tile.
  * @param vertex The vertex.

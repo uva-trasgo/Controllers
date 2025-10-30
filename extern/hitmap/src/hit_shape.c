@@ -108,14 +108,14 @@ void hit_shapeFree(HitShape shape){
 
 /* 7. Hit SHAPE: COMPARISON OPERATOR */
 int hit_shapeCmp(HitShape sh1, HitShape sh2) {
-
 	// Only works for Signature Shape.
-	if(	hit_shapeType(sh1) == HIT_CSR_SHAPE ||
-		hit_shapeType(sh2) == HIT_CSR_SHAPE	) return 0;
+	if(	hit_shapeType(sh1) != HIT_SIG_SHAPE ||
+		hit_shapeType(sh2) != HIT_SIG_SHAPE	) return 0;
 
-	if (hit_shapeDims(sh1) != hit_shapeDims(sh2) ) return 0;
+	if (hit_sshapeDims(sh1) != hit_sshapeDims(sh2) ) return 0;
+
 	int i;
-	for (i=0; i<hit_shapeDims(sh1); i++)
+	for (i=0; i<hit_sshapeDims(sh1); i++)
 		if ( ! hit_sigCmp( hit_shapeSig(sh1,i), hit_shapeSig(sh2,i) ) ) return 0;
 	return 1;
 }
@@ -220,7 +220,7 @@ HitShape hit_shapeArrayToTile(HitShape sh1, HitShape sh2) {
 	HitShape res = HIT_SHAPE_NULL;
 	//int minDims = ( hit_shapeDims(sh1) < hit_shapeDims(sh2) ) ? hit_shapeDims(sh1) : hit_shapeDims(sh2);
 	int minDims = hit_shapeDims(sh1);
-	int i, minStride, maxStride;
+	HitInd i, minStride, maxStride;
 	for (i=0; i<minDims; i++) {
 		if (hit_shapeSig(sh1,i).stride > hit_shapeSig(sh2,i).stride){
 			minStride = hit_shapeSig(sh2,i).stride;
@@ -250,7 +250,7 @@ HitShape hit_shapeArrayToTile(HitShape sh1, HitShape sh2) {
 }
 
 /* 9.1 Hit SHAPE EXPAND MANY DIMS IN EQUAL OFFSET */
-HitShape hit_shapeExpand(HitShape shape,int dims,int offset){
+HitShape hit_shapeExpand(HitShape shape,int dims,HitInd offset){
 
 	// Only works for Signature Shape.
 	if(	hit_shapeType(shape) != HIT_SIG_SHAPE ) return HIT_SHAPE_NULL;
@@ -266,7 +266,7 @@ HitShape hit_shapeExpand(HitShape shape,int dims,int offset){
 }
 
 /* 9.2 Hit SHAPE EXPAND A DIM IN A GIVEN DIRECTION */
-HitShape hit_shapeDimExpand(HitShape shape,int dim, int position, int offset ){
+HitShape hit_shapeDimExpand(HitShape shape,int dim, int position, HitInd offset ){
 
 	// Only works for Signature Shape.
 	if(	hit_shapeType(shape) != HIT_SIG_SHAPE ) return HIT_SHAPE_NULL;
@@ -281,12 +281,14 @@ HitShape hit_shapeDimExpand(HitShape shape,int dim, int position, int offset ){
 
 
 /* 9.3 Hit SHAPE GET BORDER */
-HitShape hit_shapeBorder(HitShape shape, int dim, int position, int offset){
+HitShape hit_shapeBorder(HitShape shape, int dim, int position, HitInd offset){
 
 	// Only works for Signature Shape.
-	if(	hit_shapeType(shape) == HIT_CSR_SHAPE ) return HIT_SHAPE_NULL;
+	if(	hit_shapeType(shape) != HIT_SIG_SHAPE ) return HIT_SHAPE_NULL;
 
 	HitShape res = shape;
+	
+	if(dim < 0 || dim >= hit_sshapeDims(shape) ) return shape;
 
 	if(position == HIT_SHAPE_BEGIN){
 		hit_shapeSig(res,dim).begin -= offset;
@@ -295,12 +297,13 @@ HitShape hit_shapeBorder(HitShape shape, int dim, int position, int offset){
 		hit_shapeSig(res,dim).end += offset;
 		hit_shapeSig(res,dim).begin = hit_shapeSig(res,dim).end;
 	}
+
 	return res;
 }
 
 // @arturo Oct, 31st 2018
 /* 9.4 Hit SHAPE TRANSFORM (MOVE,EXPAND,CUT,ETC...) */
-HitShape hit_shapeTransform( HitShape shape, int dim, int action, int offset ){
+HitShape hit_shapeTransform( HitShape shape, int dim, int action, HitInd offset ){
 
 	// Only works for Signature Shape.
 	if( hit_shapeType(shape) == HIT_CSR_SHAPE ) return HIT_SHAPE_NULL;
@@ -325,7 +328,7 @@ HitShape hit_shapeTransform( HitShape shape, int dim, int action, int offset ){
 	int index;
 	for( index=dimStart; index<=dimEnd; index++ ){
 		// Offset in saw vs. strided coordinates for this dimension
-		int dimOffset = offset;
+		HitInd dimOffset = offset;
 		if ( strideFlag ) dimOffset *= hit_shapeSig(res,index).stride;
 
 		// Apply action
@@ -361,7 +364,7 @@ HitShape hit_shapeTransform( HitShape shape, int dim, int action, int offset ){
 
 
 /* 12 */
-int hit_nameListName2Index(HitNameList list, int name){
+HitInd hit_nameListName2Index(HitNameList list, HitInd name){
 
 	// A. There is a inv array.
 	if( list.flagNames == HIT_SHAPE_NAMES_ARRAY ){
@@ -400,18 +403,17 @@ void hit_nameListFree(HitNameList list){
 }
 
 
-void hit_nameListCreate(HitNameList * list, int nelems){
+void hit_nameListCreate(HitNameList * list, HitInd nelems){
 
 	*list = HIT_NAMELIST_NULL;
 
 	list->nNames = nelems;
 	// @arturo Ago 2015: New allocP interface
 	// hit_malloc(list->names,(size_t) nelems * sizeof(int),int*);
-	hit_malloc(list->names, int, nelems );
+	hit_malloc(list->names, HitInd, nelems );
 
 	// Fill the global names array
-	int i;
-	for(i=0;i<nelems;i++){
+	for(HitInd i=0;i<nelems;i++){
 		list->names[i] = i;
 	}
 	list->flagNames = HIT_SHAPE_NAMES_ORDERED;
@@ -424,9 +426,9 @@ void hit_nameListClone(HitNameList * dst, HitNameList * src){
 	dst->nNames = src->nNames;
 	// @arturo Ago 2015: New allocP interface
 	// hit_malloc(dst->names,(size_t) dst->nNames * sizeof(int),int*);
-	hit_malloc(dst->names, int, dst->nNames );
+	hit_malloc(dst->names, HitInd, dst->nNames );
 
-	memcpy(dst->names, src->names, (size_t) dst->nNames * sizeof(int) );
+	memcpy(dst->names, src->names, (size_t) dst->nNames * sizeof(HitInd) );
 
 	dst->flagNames = HIT_SHAPE_NAMES_ORDERED;
 
@@ -436,23 +438,23 @@ void hit_nameListClone(HitNameList * dst, HitNameList * src){
 
 
 
-void hit_nameListAdd(HitNameList * list, int x){
+void hit_nameListAdd(HitNameList * list, HitInd name){
 
 	if(list->nNames == 0){
 
 		list->nNames = 1;
 		// @arturo Ago 2015: New allocP interface
 		// hit_malloc(list->names,sizeof(int),int*);
-		hit_malloc(list->names, int, 1);
-		list->names[0] = x;
+		hit_malloc(list->names, HitInd, 1);
+		list->names[0] = name;
 
 	} else {
 
 		list->nNames++;
 		// @arturo Ago 2015: New allocP interface
 		// hit_realloc(list->names,(size_t) list->nNames * sizeof(int),int*);
-		hit_realloc(list->names, int, list->nNames );
-		list->names[list->nNames-1] = x;
+		hit_realloc(list->names, HitInd, list->nNames );
+		list->names[list->nNames-1] = name;
 
 	}
 
@@ -466,9 +468,8 @@ void hit_nameListCreateInvNames(HitNameList * list){
 	list->flagNames = HIT_SHAPE_NAMES_ARRAY;
 
 	// 2. Get the maximum name that will determine the size of the array.
-	int name_max = 0;
-	int i;
-	for(i=0; i<list->nNames; i++){
+	HitInd name_max = 0;
+	for(HitInd i=0; i<list->nNames; i++){
 		name_max = hit_max(name_max,list->names[i]);
 	}
 	name_max++;
@@ -477,13 +478,13 @@ void hit_nameListCreateInvNames(HitNameList * list){
 	// 3. Allocate the array.
 	// @arturo Ago 2015: New allocP interface
 	// hit_malloc(list->invNames, (size_t) (name_max+1) * sizeof(int),int*);
-	hit_malloc(list->invNames, int, name_max+1 );
+	hit_malloc(list->invNames, HitInd, name_max+1 );
 
 	// 4. Set the array values.
-	for(i=0; i<name_max; i++){
+	for(HitInd i=0; i<name_max; i++){
 		list->invNames[i] = -1;
 	}
-	for(i=0; i<list->nNames; i++){
+	for(HitInd i=0; i<list->nNames; i++){
 		list->invNames[ list->names[i] ] = i;
 	}
 }
@@ -494,13 +495,13 @@ dumpShape (HitShape sh)
 {
 
   int i;
-  printf ("[%d:%d:%d", hit_shapeSig (sh, 0).begin, hit_shapeSig (sh, 0).end,
+  printf ("[%ld:%ld:%ld", hit_shapeSig (sh, 0).begin, hit_shapeSig (sh, 0).end,
           hit_shapeSig (sh, 0).stride);
   for (i = 1; i < hit_shapeDims (sh); i++)
-    printf (",%d:%d:%d", hit_shapeSig (sh, i).begin, hit_shapeSig (sh, i).end,
+    printf (",%ld:%ld:%ld", hit_shapeSig (sh, i).begin, hit_shapeSig (sh, i).end,
             hit_shapeSig (sh, i).stride);
-  printf ("] \t cards: [%d", hit_sigCard (hit_shapeSig (sh, 0)));
+  printf ("] \t cards: [%ld", hit_sigCard (hit_shapeSig (sh, 0)));
   for (i = 1; i < hit_shapeDims (sh); i++)
-    printf (",%d", hit_sigCard (hit_shapeSig (sh, i)));
+    printf (",%ld", hit_sigCard (hit_shapeSig (sh, i)));
   printf ("]\n");
 }

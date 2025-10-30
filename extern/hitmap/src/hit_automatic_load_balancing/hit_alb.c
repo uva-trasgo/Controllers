@@ -214,7 +214,7 @@ void hit_albWeightedRedistributeFixedInterval(HitTile * ttile[], int numTiles, H
     #endif
 
 	hit_avgInsertData(avg, time);
-	double average = hit_avgGetAvg(*avg);
+	HitIndF average = hit_avgGetAvg(*avg);
 
 	if(average != -1){
 		if (avg->first == 0 && avg->pointer == 0){	// first time that the data array is full
@@ -222,7 +222,7 @@ void hit_albWeightedRedistributeFixedInterval(HitTile * ttile[], int numTiles, H
 			hit_tileDomainAlloc(&times, double, 1, hit_NProcs);
 			hit_tileDomainAlloc(&allTimes, double, 1, hit_NProcs);
 			hit_tileFill(&allTimes, &zero);
-			double timePerRow;
+			HitIndF timePerRow;
 			if (! hit_layImActive(*lay)) timePerRow = 0.0;
 			else timePerRow = average / hit_tileDimCard((*(HitTile *)ttile[0]), 0);
 			hit_tileFill(&times, &timePerRow);
@@ -371,7 +371,7 @@ void hit_albWeightedRedistributeIncrInterval(HitTile * ttile[], int numTiles, Hi
 
 	if (! hit_layImActive(*lay)) time = 0.0;
 	hit_avgInsertData(avg, time);
-	double average = hit_avgGetAvg(*avg);
+	HitIndF average = hit_avgGetAvg(*avg);
 
 	if(average != -1){
 		valuesToRedis++;
@@ -382,7 +382,7 @@ void hit_albWeightedRedistributeIncrInterval(HitTile * ttile[], int numTiles, Hi
 			hit_tileDomainAlloc(&allTimes, double, 1, hit_NProcs);
 			hit_tileFill(&allTimes, &zero);
 
-			double timePerRow;
+			HitIndF timePerRow;
 			if (! hit_layImActive(*lay)) timePerRow = 0.0;
 			else timePerRow = average / hit_tileDimCard((*(HitTile *)ttile[0]), 0);
 			hit_tileFill(&times, &timePerRow);
@@ -539,7 +539,7 @@ void hit_albWeightedRedistributeIncrIntervalBloq(HitTile * ttile[], int numTiles
     #endif
 
 	hit_avgInsertData(avg, time);
-	double average = hit_avgGetAvg(*avg);
+	HitIndF average = hit_avgGetAvg(*avg);
 
 	if(average != -1){
 		valuesToRedis++;
@@ -550,7 +550,7 @@ void hit_albWeightedRedistributeIncrIntervalBloq(HitTile * ttile[], int numTiles
 			hit_tileDomainAlloc(&allTimes, double, 1, hit_NProcs);
 			hit_tileFill(&allTimes, &zero);
 
-			double timePerRow;
+			HitIndF timePerRow;
 			if (! hit_layImActive(*lay)) timePerRow = 0.0;
 			else timePerRow = average / hit_tileDimCard((*(HitTile *)ttile[0]), 0);
 			hit_tileFill(&times, &timePerRow);

@@ -72,7 +72,7 @@
  */
 typedef int	(*HitLayoutSignatureFunction)(	int procId, 
 											int procsCard, 
-											int blocksCard, 
+											HitInd blocksCard, 
 											float* extraParam,
 											HitSig input, 
 											HitSig *res );
@@ -88,10 +88,10 @@ typedef int	(*HitLayoutSignatureFunction)(	int procId,
  */
 typedef int	(*HitLayoutSignatureInvFunction)(	int procId, 
 											int procsCard, 
-											int blocksCard, 
+											HitInd blocksCard, 
 											float* extraParam,
 											HitSig input, 
-											int ind );
+											HitInd ind );
 
 /** @name Constants to specify the direction of the transformation of ranks
  * @see hit_layToActiveRanks, hit_layToTopoRanks
@@ -120,7 +120,7 @@ typedef int	(*HitLayoutSignatureInvFunction)(	int procId,
 typedef int	(*HitLayoutRanksFunction)(		char topoActiveMode,
 											int procId,
 											int procsCard,
-											int blocksCard,
+											HitInd blocksCard,
 											float* extraParam );
 
 /**
@@ -130,8 +130,8 @@ typedef int	(*HitLayoutRanksFunction)(		char topoActiveMode,
  * @param blocksCard Blocks cardinality
  * @return The maximum cardinality
  */
-typedef int	(*HitLayoutSignatureMaxCardFunction)(	int procsCard, 
-													int blocksCard,
+typedef HitInd	(*HitLayoutSignatureMaxCardFunction)(	int procsCard, 
+													HitInd blocksCard,
 	   												float* extraParameter );
 
 /**
@@ -141,8 +141,8 @@ typedef int	(*HitLayoutSignatureMaxCardFunction)(	int procsCard,
  * @param blocksCard Blocks cardinality
  * @return The maximum cardinality
  */
-typedef int	(*HitLayoutSignatureMinCardFunction)(	int procsCard, 
-													int blocksCard,
+typedef HitInd	(*HitLayoutSignatureMinCardFunction)(	int procsCard, 
+													HitInd blocksCard,
 	   												float* extraParameter );
 
 /**
@@ -153,7 +153,7 @@ typedef int	(*HitLayoutSignatureMinCardFunction)(	int procsCard,
  * @return The number of active processors
  */
 typedef int	(*HitLayoutSignatureNumActivesFunction)(	int procsCard, 
-														int blocksCard,
+														HitInd blocksCard,
 	   													float* extraParameter );
 
 
@@ -246,11 +246,11 @@ extern HitGroup HIT_GROUP_NULL;
 typedef struct {
 	int numGroups;			/**< The number of groups created. */
 	HitGroup *groups;		/**< The list of groups of processors. */
-	int numElementsTotal;	/**< The total number of nodes/elements. */
+	HitInd numElementsTotal;	/**< The total number of nodes/elements. */
 	int *assignedGroups;	/**< The list of assigned group to each node/element. */
-	int cardOwnElements;	/**< Local cardinality. */
-	int cardPredElements;	/**< Cardinality of the predecessor. */
-	int cardSuccElements;	/**< Cardinality of the successor. */
+	HitInd cardOwnElements;	/**< Local cardinality. */
+	HitInd cardPredElements;	/**< Cardinality of the predecessor. */
+	HitInd cardSuccElements;	/**< Cardinality of the successor. */
 } HitLayoutList;
 
 /* 2.4. LAYOUT LIST NULL VALUE */
@@ -283,8 +283,8 @@ typedef struct HitLayout {
 	int	numActives[HIT_MAXDIMS];	/**< Number of active processors at each dimension. */
 
 	/* DATA FOR THIS VIRTUAL PROCESSOR */
-	int maxSize[HIT_MAXDIMS];		/**< Dimensional size of the biggest part across all processors in the given axis. */
-	int minSize[HIT_MAXDIMS];		/**< Dimensional size of the smallest part across all processors in the given axis. */
+	HitInd maxSize[HIT_MAXDIMS];		/**< Dimensional size of the biggest part across all processors in the given axis. */
+	HitInd minSize[HIT_MAXDIMS];		/**< Dimensional size of the smallest part across all processors in the given axis. */
 
 	int	active;		/**< Is the current processor active? */
 
@@ -547,7 +547,7 @@ HitLayout	hit_layout_plug_layDimBlocks(int freeTopo, HitTopology topo, HitShape 
  * @param minElems The minimum number of elements on each partition.
  * @return HitLayout A HitLayout MinBlocks.
  */
-HitLayout	hit_layout_plug_layMinBlocks(int freeTopo, HitTopology topo, HitShape shape, int minElems );
+HitLayout	hit_layout_plug_layMinBlocks(int freeTopo, HitTopology topo, HitShape shape, HitInd minElems );
 
 /* 4.1.2 BLOCKS X  */
 /**
@@ -1285,7 +1285,7 @@ void hit_layUnwrapNeighborsDim(HitLayout *lay, int dim);
  * Extern array used by the hit_lsig_vfor function.
  * @see hit_lsig_vfor.
  */
-extern int hit_lsig_vfor_index[HIT_MAXDIMS];
+extern HitInd hit_lsig_vfor_index[HIT_MAXDIMS];
 /**
  * Loop across virtual process.
  * 
@@ -1633,7 +1633,7 @@ HitRanks hit_layActiveIdRanks(HitLayout lay, int id);
  * @param ind Shape index.
  * @return \e int Active rank of the owner.
  */
-int hit_layDimOwner( HitLayout lay, int dim, int ind );
+int hit_layDimOwner( HitLayout lay, int dim, HitInd ind );
 
 #ifdef __cplusplus
 }

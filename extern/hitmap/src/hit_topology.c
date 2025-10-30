@@ -50,6 +50,7 @@
 
 #include <hit_topology.h>
 #include <hit_allocP.h>
+#include <hit_error.h>
 
 /* INTEGER POWER OF 2 MACRO*/
 #define pow2(x) ( 1<<(x) )
@@ -557,7 +558,7 @@ int hit_topDimNeighbor( HitTopology topo, int dim, int shift ) {
 		else newRank = newRank + topo.self.rank[i] * acumCard;
 
 		/* UPDATE ACUMULATED CARDINALITY */
-		acumCard = acumCard * topo.card[i];
+		acumCard *= topo.card[i];
 	}
 
 	/* 5. RETURN NEW RANK */	
@@ -578,7 +579,7 @@ int hit_topRankInternal( HitTopology topo, HitRanks ranks ) {
 	for(dim=topo.numDims-1; dim>=0; dim--) {
 		if (ranks.rank[dim] == HIT_RANK_NULL) return HIT_RANK_NULL;
 		linear = linear + acumCard * ranks.rank[dim];
-		acumCard = acumCard * topo.card[dim];
+		acumCard *= topo.card[dim];
 	}
 
 	// @arturo 2015/01/07 Skip inactive processors out of the geometry

@@ -67,15 +67,6 @@
 #undef hit_Rank
 #define	hit_Rank		(HIT_TOPOLOGY_INFO->selfRank)
 
-/* Hit MPI ERROR TEST */
-/** This macro checks if the MPI operation was successful. */
-#define	hit_mpiTestError(ok,cad)	\
-    if ( ok != MPI_SUCCESS ) {		\
-        fprintf(stderr,"Hit MPI RunTime-Error, Rank %d: %s - %d\n", hit_Rank, cad, ok);	fflush(stderr); \
-        exit(-1);					\
-    }
-
-
 /* 1. PHYSICAL TOPOLOGY */
 /* CURRENTLY, ONLY HOMOGENEOUS SYSTEM SUPPORT */
 

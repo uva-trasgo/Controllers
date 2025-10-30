@@ -149,7 +149,7 @@ HitTile_FileHeaderInfo hit_tileFileStreamReadHeader( FILE *fichSh, const char *f
 		fscanf( fichSh, "%1d", &num_dims );
 		for (int dim=0; dim<num_dims; dim++ ) {
 			info.cards[dim] = 0;
-			ok = fscanf( fichSh, " %20d", &info.cards[dim] );
+			ok = fscanf( fichSh, " %20ld", &info.cards[dim] );
 			if ( ok != 1 )
 				hit_err( "Reading array cardinalities in file", fileName, "" );
 		}
@@ -176,9 +176,9 @@ HitTile_FileHeaderInfo hit_tileFileStreamReadHeader( FILE *fichSh, const char *f
 		}
 		else {
 			for (int dim=0; dim<num_dims; dim++ ) {
-				fscanf( fichSh, " %20d", &(hit_shapeSig(sh_read,dim).begin) );
-				fscanf( fichSh, " %20d", &(hit_shapeSig(sh_read,dim).end) );
-				fscanf( fichSh, " %20d", &(hit_shapeSig(sh_read,dim).stride) );
+				fscanf( fichSh, " %20ld", &(hit_shapeSig(sh_read,dim).begin) );
+				fscanf( fichSh, " %20ld", &(hit_shapeSig(sh_read,dim).end) );
+				fscanf( fichSh, " %20ld", &(hit_shapeSig(sh_read,dim).stride) );
 			}
 			fscanf( fichSh, "\n" );
 			header_size += (size_t)( 1 + 63 * (size_t)num_dims );
@@ -247,7 +247,7 @@ size_t hit_tileFileStreamWriteHeader( FILE *fichSh, HitTile_FileHeaderInfo info 
 	else {
 		fprintf( fichSh, "%1d", info.num_dims );
 		for (int dim=0; dim<info.num_dims; dim++ )
-			fprintf( fichSh, " %20d", info.cards[dim] );
+			fprintf( fichSh, " %20ld", info.cards[dim] );
 		fprintf( fichSh, "\n" );
 		header_size += (size_t)(2 + 21 * info.num_dims );
 	}
@@ -268,9 +268,9 @@ size_t hit_tileFileStreamWriteHeader( FILE *fichSh, HitTile_FileHeaderInfo info 
 		}
 		else {
 			for (int dim=0; dim<info.num_dims; dim++ ) {
-				fprintf( fichSh, " %20d", hit_shapeSig(info.tileShape,dim).begin );
-				fprintf( fichSh, " %20d", hit_shapeSig(info.tileShape,dim).end );
-				fprintf( fichSh, " %20d", hit_shapeSig(info.tileShape,dim).stride );
+				fprintf( fichSh, " %20ld", hit_shapeSig(info.tileShape,dim).begin );
+				fprintf( fichSh, " %20ld", hit_shapeSig(info.tileShape,dim).end );
+				fprintf( fichSh, " %20ld", hit_shapeSig(info.tileShape,dim).stride );
 			}
 			fprintf( fichSh, "\n" );
 			header_size += (size_t)( 1 + 63 * (size_t)info.num_dims );
@@ -376,7 +376,7 @@ int hit_tileFileInternal(
 	if ( fileMode == HIT_FILE_WRITE && tileMode == HIT_FILE_TILE_SELECT )
 		hit_errInternal(__FUNCTION__, "Tile select mode is only defined for read operations", "", debugCodeFile, debugCodeLine); 
 
-	if ( formatSize1 < formatSize2+1 ) {
+	if ( fileFormat != HIT_FILE_BINARY && formatSize1 < formatSize2+1 ) {
 		char formatOptionsStr[50];
 		sprintf( formatOptionsStr, "(Txt size: %d, Decimals: %d)", formatSize1, formatSize2 );
 		hit_errInternal(__FUNCTION__, "Text format sizes, too many decimals for the field size", formatOptionsStr, debugCodeFile, debugCodeLine); 
@@ -445,9 +445,9 @@ int hit_tileFileInternal(
 	if ( var->memStatus == HIT_MS_NULL || var->memStatus == HIT_MS_NOMEM ) return 1;
 
 	/* 3. DECLARE VARIABLES */
-	int ind[HIT_MAXDIMS],i,j,indsh[HIT_MAXDIMS];
+	HitInd ind[HIT_MAXDIMS],indsh[HIT_MAXDIMS];
 	size_t offset;
-	long file_offset = 0;
+	HitInd file_offset = 0;
 	void *ptr = NULL;
 	char patternRead[32];
 	char patternWrite[32];
@@ -548,7 +548,7 @@ int hit_tileFileInternal(
 	/* END Patch for Padded tiles */
 
 
-	int *rootAcumCard = rootTile->origAcumCard;
+	HitInd *rootAcumCard = rootTile->origAcumCard;
 
 	/* 7.1. READ/WRITE HEADER */
 	size_t header_size = 0;
@@ -651,20 +651,20 @@ int hit_tileFileInternal(
 	/* 8. INITIALIZATION OF FILE AND MEMORY LOCATION POINTERS/INDECES */
 	/* 8.1. ARRAY MODE: INITIALISE indsh WITH THE SIGNATURE-BEGIN OF EACH DIMENSION */
 	if ( tileMode == HIT_FILE_ARRAY ) {
-		for( i=0; i<hit_shapeDims(var->shape); i++ ) 
+		for( int i=0; i<hit_shapeDims(var->shape); i++ ) 
 			indsh[i] = hit_shapeSig(var->shape,i).begin;
 	}
 	/* 8.2. REAL OWNER VARIABLE: INITIALIZE POINTER AT BEGINNING OF DATA REGION */
 	if ( var->memStatus == HIT_MS_OWNER ) ptr = var->data;
 	/* 8.3. SELECTION VARIABLES: INITIALIZE INDECES TO LOCATE DATA IN MEMORY */
-	else for( i=0; i<hit_shapeDims(var->shape); i++ ) ind[i] = 0;
+	else for( int i=0; i<hit_shapeDims(var->shape); i++ ) ind[i] = 0;
 
 	/* 9. FOR ALL ELEMENTS IN THE TILE */
-	for( i=0; i<var->acumCard; i++ ) {
+	for( HitInd i=0; i<var->acumCard; i++ ) {
 		/* 9.1. SELECTION VARIABLE: LOCATE NEXT ELEMENT IN MEMORY */
 		if ( var->memStatus == HIT_MS_NOT_OWNER ) {
 			offset = 0;
-			for( j=0; j<hit_shapeDims(var->shape); j++) {
+			for( int j=0; j<hit_shapeDims(var->shape); j++) {
 				offset += (size_t)ind[j] * (size_t)var->qstride[j] * (size_t)var->origAcumCard[j+1];
 			}
 			ptr = (char *)var->data + offset * (size_t)var->baseExtent;
@@ -674,7 +674,7 @@ int hit_tileFileInternal(
 			/* 9.2. ARRAY MODE: COMPUTE OFFSET IN THE FILE AND RELOCATE FILE POINTER */
 			if ( tileMode == HIT_FILE_ARRAY ) {
 				file_offset = 0;
-				for( j=0; j<hit_shapeDims(var->shape); j++) {
+				for( int j=0; j<hit_shapeDims(var->shape); j++) {
 					// @arturo Aug 2023: Relative to root begin
 					//file_offset += indsh[j] * rootAcumCard[j+1];
 					file_offset += ( indsh[j] - hit_shapeSig(rootTile->shape,j).begin ) * rootAcumCard[j+1];
@@ -773,7 +773,7 @@ int hit_tileFileInternal(
 			/* 9.2. ARRAY MODE: COMPUTE OFFSET IN THE FILE */
 			if ( tileMode == HIT_FILE_ARRAY ) {
 				file_offset = 0;
-				for( j=0; j<hit_shapeDims(var->shape); j++) {
+				for( int j=0; j<hit_shapeDims(var->shape); j++) {
 					// @arturo Aug 2023: Relative to root begin
 					//file_offset += indsh[j] * rootAcumCard[j+1];
 					file_offset += ( indsh[j] - hit_shapeSig(rootTile->shape,j).begin ) * rootAcumCard[j+1];
@@ -851,8 +851,8 @@ int hit_tileFileInternal(
 						}
 						if ( tileMode == HIT_FILE_ARRAY )
 							result = MPI_File_write_at( fich, (long)header_size + file_offset * (formatSize1 + 1), buff, formatSize1+1, MPI_CHAR, &stat );
-						else
-							result = MPI_File_write( fich, buff, formatSize1+1, MPI_CHAR, &stat );
+						else{
+							result = MPI_File_write( fich, buff, formatSize1+1, MPI_CHAR, &stat );}
 						break;
 				}
 			}
@@ -876,7 +876,7 @@ int hit_tileFileInternal(
 
 		/* 9.6. SELECTION VARIABLES: ADVANCE TILE COORDINATES */
 		if ( var->memStatus == HIT_MS_NOT_OWNER ) {
-			j = hit_shapeDims(var->shape)-1;
+			int j = hit_shapeDims(var->shape)-1;
 			do {
 				ind[j] = (ind[j]+1) % (var->card[j]);					
 
@@ -887,7 +887,7 @@ int hit_tileFileInternal(
 
 		/* 9.7. ARRAY MODE: ADVANCE ARRAY COORDINATES */
 		if ( tileMode == HIT_FILE_ARRAY ) {
-			j = hit_shapeDims(var->shape)-1;
+			int j = hit_shapeDims(var->shape)-1;
 			do {
 				if ( indsh[j] == hit_shapeSig(var->shape,j).end ) {
 					indsh[j] = hit_shapeSig(var->shape,j).begin;

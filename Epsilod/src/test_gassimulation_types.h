@@ -63,7 +63,7 @@ typedef struct {
 } vec3f;
 
 typedef struct {
-	int x, y, z;
-} vec3i;
+	long x, y, z;
+} vec3l;
 
 #endif // _GASSIMULATION_TYPES_H_

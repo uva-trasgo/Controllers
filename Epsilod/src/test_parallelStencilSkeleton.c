@@ -257,6 +257,10 @@ void outputData(HitTile_float io_tile, Epsilod_ext *ext_params) {
 /* D. Declarations of optimized stencil kernels:
  * see test_parallelStencilSkeleton_kernels.c
  */
+REGISTER_INIT(initCell_1D, GENERIC, DEFAULT);
+REGISTER_INIT(initCell_2D, GENERIC, DEFAULT);
+REGISTER_INIT(initCell_3D, GENERIC, DEFAULT);
+REGISTER_INIT(initCell_4D, GENERIC, DEFAULT);
 REGISTER_STENCIL(updateCell_1dNC4, GENERIC, DEFAULT);
 REGISTER_STENCIL(updateCell_1dC2, GENERIC, DEFAULT);
 REGISTER_STENCIL(updateCell_2d4, GENERIC, DEFAULT);
@@ -367,9 +371,9 @@ int main(int argc, char *argv[]) {
 	char *stencilType = argv[1][0] == '_' ? &argv[1][1] : argv[1];
 
 	// Arguments for each dimension size
-	int sizes[4] = {0};
+	HitInd sizes[4] = {0};
 	for (int d = 0; d < dims; d++)
-		sizes[d] = atoi(argv[2 + d]);
+		sizes[d] = atol(argv[2 + d]);
 
 	// Argument for iterations
 	int numIter = atoi(argv[2 + dims]);
@@ -378,10 +382,18 @@ int main(int argc, char *argv[]) {
 	char *device_selection_file = argv[3 + dims];
 
 	// Stencil selection
-	HitShape              shpStencil;
-	float                *stencilData;
-	float                 factor = 0;
-	stencilDeviceFunction f_stencil;
+	HitShape               shpStencil;
+	float                 *stencilData;
+	float                  factor = 0;
+	initDataDeviceFunction f_init = NULL;
+	stencilDeviceFunction  f_stencil;
+
+	switch (dims) {
+		case 1: f_init = initCell_1D; break;
+		case 2: f_init = initCell_2D; break;
+		case 3: f_init = initCell_3D; break;
+		case 4: f_init = initCell_4D; break;
+	}
 
 	if (!strcmp(stencilType, "1dnc4")) {
 		shpStencil  = shpSt_1dNC;
@@ -440,7 +452,7 @@ int main(int argc, char *argv[]) {
 	io_write_input           = hit_envOptions("TEST_EPSILOD_WRITE_INPUT", io_options);
 
 	// Launch stencil computation
-	stencilComputation(sizes, shpStencil, stencilData, factor, numIter, initData, NULL, NULL, f_stencil, outputData, NULL, device_selection_file);
+	stencilComputation(sizes, shpStencil, stencilData, factor, numIter, NULL, f_init, NULL, f_stencil, outputData, NULL, device_selection_file);
 
 	Ctrl_Finalize();
 	return 0;

@@ -55,7 +55,7 @@
  * @param lay The list layout.
  * @param numElementsTotal The number of elements.
  */
-void hit_layout_list_initGroups(HitLayout * lay, int numElementsTotal);
+void hit_layout_list_initGroups(HitLayout * lay, HitInd numElementsTotal);
 
 /**
  * Adds a new group in a list layout.

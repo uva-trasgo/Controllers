@@ -399,7 +399,7 @@ typedef struct {
 	int rank;
 	int nprocs;
 	int num_dims;
-	int cards[ HIT_MAXDIMS ];
+	HitInd cards[ HIT_MAXDIMS ];
 	HitShape tileShape;
 } HitTile_FileHeaderInfo;
 

@@ -11,6 +11,90 @@
 
 Ctrl_NewType(float);
 
+CTRL_KERNEL(initCell_1D, GENERIC, DEFAULT, KHitTile_float matrix, EpsilodCoords global_coords, Epsilod_ext ext_params, {
+	const HitInd i_g = thr_i + global_coords.offset[0];
+
+	if (i_g < global_coords.borders.low[0])
+		hit(matrix, thr_i, thr_j) = 1.;
+	else if (i_g >= global_coords.size[0] - global_coords.borders.high[0])
+		hit(matrix, thr_i, thr_j) = 2.;
+	else
+		hit(matrix, thr_i, thr_j) = 0.;
+});
+
+CTRL_KERNEL(initCell_2D, GENERIC, DEFAULT, KHitTile_float matrix, EpsilodCoords global_coords, Epsilod_ext ext_params, {
+	const HitInd i_g = thr_i + global_coords.offset[0];
+	const HitInd j_g = thr_j + global_coords.offset[1];
+
+	if (i_g < global_coords.borders.low[0])
+		hit(matrix, thr_i, thr_j) = 1.;
+	else if (i_g >= global_coords.size[0] - global_coords.borders.high[0])
+		hit(matrix, thr_i, thr_j) = 2.;
+	else if (j_g < global_coords.borders.low[1])
+		hit(matrix, thr_i, thr_j) = 3.;
+	else if (j_g >= global_coords.size[1] - global_coords.borders.high[1])
+		hit(matrix, thr_i, thr_j) = 4.;
+	else
+		hit(matrix, thr_i, thr_j) = 0.;
+});
+
+CTRL_KERNEL(initCell_3D, GENERIC, DEFAULT, KHitTile_float matrix, EpsilodCoords global_coords, Epsilod_ext ext_params, {
+	const HitInd i_g = thr_i + global_coords.offset[0];
+	const HitInd j_g = thr_j + global_coords.offset[1];
+	const HitInd k_g = thr_k + global_coords.offset[2];
+
+	if (i_g < global_coords.borders.low[0])
+		hit(matrix, thr_i, thr_j, thr_k) = 1.;
+	else if (i_g >= global_coords.size[0] - global_coords.borders.high[0])
+		hit(matrix, thr_i, thr_j, thr_k) = 2.;
+	else if (j_g < global_coords.borders.low[1])
+		hit(matrix, thr_i, thr_j, thr_k) = 3.;
+	else if (j_g >= global_coords.size[1] - global_coords.borders.high[1])
+		hit(matrix, thr_i, thr_j, thr_k) = 4.;
+	else if (k_g < global_coords.borders.low[2])
+		hit(matrix, thr_i, thr_j, thr_k) = 5.;
+	else if (k_g >= global_coords.size[2] - global_coords.borders.high[2])
+		hit(matrix, thr_i, thr_j, thr_k) = 6.;
+	else
+		hit(matrix, thr_i, thr_j, thr_k) = 0.;
+});
+
+CTRL_KERNEL(initCell_4D, GENERIC, DEFAULT, KHitTile_float matrix, EpsilodCoords global_coords, Epsilod_ext ext_params, {
+	const HitInd i_g = thr_i + global_coords.offset[0];
+	const HitInd j_g = thr_j + global_coords.offset[1];
+	const HitInd k_g = thr_k + global_coords.offset[2];
+
+	if (i_g < global_coords.borders.low[0])
+		for (int l = 0; l < hit_tileDimCard(matrix, 3); l++)
+			hit(matrix, thr_i, thr_j, thr_k, l) = 1.;
+	else if (i_g >= global_coords.size[0] - global_coords.borders.high[0])
+		for (int l = 0; l < hit_tileDimCard(matrix, 3); l++)
+			hit(matrix, thr_i, thr_j, thr_k, l) = 2.;
+	else if (j_g < global_coords.borders.low[1])
+		for (int l = 0; l < hit_tileDimCard(matrix, 3); l++)
+			hit(matrix, thr_i, thr_j, thr_k, l) = 3.;
+	else if (j_g >= global_coords.size[1] - global_coords.borders.high[1])
+		for (int l = 0; l < hit_tileDimCard(matrix, 3); l++)
+			hit(matrix, thr_i, thr_j, thr_k, l) = 4.;
+	else if (k_g < global_coords.borders.low[2])
+		for (int l = 0; l < hit_tileDimCard(matrix, 3); l++)
+			hit(matrix, thr_i, thr_j, thr_k, l) = 5.;
+	else if (k_g >= global_coords.size[2] - global_coords.borders.high[2])
+		for (int l = 0; l < hit_tileDimCard(matrix, 3); l++)
+			hit(matrix, thr_i, thr_j, thr_k, l) = 6.;
+	else {
+		for (int l = 0; l < hit_tileDimCard(matrix, 3); l++) {
+			const HitInd l_g = l + global_coords.offset[3];
+			if (l_g < global_coords.borders.low[3])
+				hit(matrix, thr_i, thr_j, thr_k, l) = 7.;
+			else if (l_g >= global_coords.size[3] - global_coords.borders.high[3])
+				hit(matrix, thr_i, thr_j, thr_k, l) = 8.;
+			else
+				hit(matrix, thr_i, thr_j, thr_k, l) = 0.;
+		}
+	}
+});
+
 // 1D non-compact radius 2
 CTRL_KERNEL(updateCell_1dNC4, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
 	hit(matrix, thr_i) = (0.5 * (hit(matrixCopy, thr_i - 2) + hit(matrixCopy, thr_i + 2)) +
@@ -25,6 +109,9 @@ CTRL_KERNEL(updateCell_1dC2, GENERIC, DEFAULT, KHitTile_float matrix, const KHit
 
 // 2D compact, radius 1: 4-point star, no corners
 CTRL_KERNEL(updateCell_2d4, GENERIC, DEFAULT, KHitTile_float matrix, const KHitTile_float matrixCopy, const EpsilodCoords global_coords, const KHitTile_float stencil, const float factor, const Epsilod_ext ext_params, {
+	if (!(thr_i >= 1 && thr_i < matrix.card[0] - 1 &&
+		  thr_j >= 1 && thr_j < matrix.card[1] - 1))
+		return;
 	hit(matrix, thr_i, thr_j) = (hit(matrixCopy, thr_i - 1, thr_j) +
 								 hit(matrixCopy, thr_i + 1, thr_j) +
 								 hit(matrixCopy, thr_i, thr_j - 1) +

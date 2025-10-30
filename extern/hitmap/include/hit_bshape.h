@@ -90,8 +90,7 @@ static inline const char * hit_bitmap_tostring(HIT_BITMAP_TYPE element){
 	buffer[HIT_BITMAP_SIZE] = '\0';
 
 	HIT_BITMAP_TYPE mask = HIT_BITMAP_1;
-	HIT_BITMAP_TYPE i;
-	for(i=0;i<HIT_BITMAP_SIZE;i++){
+	for(HIT_BITMAP_TYPE i=0;i<HIT_BITMAP_SIZE;i++){
 
 		if( (mask & element) == 0 ){
 			buffer[i] = '0';
@@ -112,7 +111,7 @@ static inline const char * hit_bitmap_tostring(HIT_BITMAP_TYPE element){
  * @param nvertices Number of vertices.
  * @return The new bitmap sparser shape.
  */
-HitShape hit_bitmapShape(int nvertices);
+HitShape hit_bitmapShape(HitInd nvertices);
 
 /**
  * Sparse Bitmap matrix shape constructor.
@@ -121,7 +120,7 @@ HitShape hit_bitmapShape(int nvertices);
  * @param m Number of columns
  * @return the new bitmap sparse Shape.
  */
-HitShape hit_bitmapShapeMatrix(int n, int m);
+HitShape hit_bitmapShapeMatrix(HitInd n, HitInd m);
 
 /**
  * Hit Bitmap Shape destructor.
@@ -206,7 +205,7 @@ void hit_bShapeFree(HitShape shape);
 /**
  * Returns the target vertex of an edge.
  * @memberof HitBShape
- * @fn int hit_bShapeEdgeTarget(HitShape s, int edge)
+ * @fn int hit_bShapeEdgeTarget(HitShape s, HitInd edge)
  * @param s A HitBShape.
  * @param edge An edge.
  * @return A vertex.
@@ -216,7 +215,7 @@ void hit_bShapeFree(HitShape shape);
 /**
  * Returns the target vertex of an edge, it work when using the Skip iterator.
  * @memberof HitBShape
- * @fn int hit_bShapeEdgeTargetSkip(HitShape s, int edge)
+ * @fn int hit_bShapeEdgeTargetSkip(HitShape s, HitInd edge)
  * @param s A HitBShape.
  * @param edge An edge.
  * @return A vertex.
@@ -328,7 +327,7 @@ void hit_bShapeFree(HitShape shape);
 /**
  * Sets the value of a bitmap element and its symmetric to 1 in global coordinates.
  * @memberof HitBShape
- * @fn void hit_bShapeSetGlobal2(HitShape bitshape, int i, int j)
+ * @fn void hit_bShapeSetGlobal2(HitShape bitshape, HitInd i, HitInd j)
  * @param bitshape A BitmapShape.
  * @param i First coordinate.
  * @param j Second coordinate.
@@ -338,7 +337,7 @@ void hit_bShapeFree(HitShape shape);
 /**
  * Translates a vertex in the local domain (start at 0) to
  * the global domain of vertices.
- * @fn int hit_bShapeVertexToGlobal(HitShape s, int vertex)
+ * @fn int hit_bShapeVertexToGlobal(HitShape s, HitInd vertex)
  * @memberof HitBShape
  * @param s The BShape.
  * @param vertex The local vertex.
@@ -370,7 +369,7 @@ void hit_bShapeFree(HitShape shape);
  * @param x The name of the row or vertex.
  * @param mode The mode matrix or graph.
  */
-void hit_bShapeAddEmptyRow_or_Vertex(HitShape * shape, int x, int mode);
+void hit_bShapeAddEmptyRow_or_Vertex(HitShape * shape, HitInd x, int mode);
 
 
 
@@ -382,7 +381,7 @@ void hit_bShapeAddEmptyRow_or_Vertex(HitShape * shape, int x, int mode);
  * @param vertices The list of vertices.
  * @return The selection.
  */
-HitShape hit_bShapeSelect(HitShape shape, int nvertices, int * vertices);
+HitShape hit_bShapeSelect(HitShape shape, HitInd nvertices, HitInd * vertices);
 
 /**
  * Expand a Bitmap Sparse Shape adding new vertices of the original graph.
@@ -526,7 +525,7 @@ for(var=0;var<hit_bShapeCard(shape,1);var++)
  * @return The next variable value.
  */
 // @todo @javfres Possible improvement: Speedup this function comparing the whole byte.
-static inline int hit_bShapeEdgeIteratorNextInternal(HitShape shape, int var, int vertex){
+static inline HitInd hit_bShapeEdgeIteratorNextInternal(HitShape shape, HitInd var, HitInd vertex){
 	//printf("--- row(%d) looking for next column (%d) \n",vertex,var);
 	do{
 		var++;
@@ -542,9 +541,7 @@ static inline int hit_bShapeEdgeIteratorNextInternal(HitShape shape, int var, in
 
 
 // This works different form the other iterator, this uses the bitmap index as var
-static inline int hit_bShapeEdgeIteratorNextInternalSkip(HitShape shape, int var){
-
-	size_t i;
+static inline HitInd hit_bShapeEdgeIteratorNextInternalSkip(HitShape shape, HitInd var){
 
 	// 1. Get the current index of the element and the offset of the bit in the element
 	size_t xind = hit_bitmapShapeIndex(var);
@@ -556,7 +553,7 @@ static inline int hit_bShapeEdgeIteratorNextInternalSkip(HitShape shape, int var
 	HIT_BITMAP_TYPE element = hit_bShapeData(shape)[xind];
 	//printf("Element %s\n",hit_bitmap_tostring(element));
 	HIT_BITMAP_TYPE mask = HIT_BITMAP_1 >> xoff;
-	for(i=0;i<HIT_BITMAP_SIZE-xoff;i++){
+	for(size_t i=0;i<HIT_BITMAP_SIZE-xoff;i++){
 		if( (mask & element) != 0 ){
 			return var + (int) i; //@todo maybe this should return size_t types.
 		}
@@ -572,7 +569,7 @@ static inline int hit_bShapeEdgeIteratorNextInternalSkip(HitShape shape, int var
 	// 4. We do the same as 2. to get the bit location
 	element = hit_bShapeData(shape)[xind];
 	mask = HIT_BITMAP_1;
-	for(i=0;i<HIT_BITMAP_SIZE;i++){
+	for(size_t i=0;i<HIT_BITMAP_SIZE;i++){
 		if( (mask & element) != 0 ){
 			return (int) (xind * HIT_BITMAP_SIZE + i);
 		}
@@ -620,7 +617,7 @@ void hit_bShapeAddElem_or_Edge(HitShape * shape, int x, int y, int mode);
  * @param names The list with the names of the rows.
  * @return A new bitmap shape.
  */
-HitShape hit_bShapeSelectRows(HitShape shape, int nNames, int * names);
+HitShape hit_bShapeSelectRows(HitShape shape, HitInd nNames, HitInd * names);
 
 
 /**
@@ -629,7 +626,7 @@ HitShape hit_bShapeSelectRows(HitShape shape, int nNames, int * names);
  * @param row The index of the row.
  * @return The number of non-zero elements.
  */
-int hit_bShapeNColsRow(HitShape shape, int row);
+HitInd hit_bShapeNColsRow(HitShape shape, HitInd row);
 
 
 /**

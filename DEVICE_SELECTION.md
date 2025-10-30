@@ -78,10 +78,10 @@ A Controller is created to manage an NVIDIA GPU with the given CUDA identifier. 
 
 * AMD GPUs using HIP
 ```
-hip <platform_id> <device_id> [ <num_streams> ]
+hip <device_id> [ <num_streams> ]
 ```
 
-A Controller is created to manage using HIP the selected device in the chosen platform. Use the command rocm-smi to obtain information about the platforms and devices available in a machine.
+A Controller is created to manage the selected device using HIP. Use the command rocm-smi to obtain information about the devices available in a machine.
 
 * GPU devices using OpenCL
 ```

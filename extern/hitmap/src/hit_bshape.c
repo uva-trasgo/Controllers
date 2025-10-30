@@ -44,7 +44,7 @@
 #include <hit_funcop.h>
 
 
-HitShape hit_bitmapShape(int nvertices){
+HitShape hit_bitmapShape(HitInd nvertices){
 
 	// 1. Init the Bitmap struct
 	HitShape s = HIT_BITMAP_SHAPE_NULL;
@@ -52,7 +52,7 @@ HitShape hit_bitmapShape(int nvertices){
 	hit_bShapeCard(s,1) = nvertices;
 	
 	// 2. Allocate the square adyacency matrix
-	int nbits = nvertices*nvertices;
+	HitInd nbits = nvertices*nvertices;
 	size_t ndata = (size_t) (hit_bitmapShapeIndex(nbits) + (hit_bitmapShapeOffset(nbits)==0 ? 0 : 1));
 	// @arturo Ago 2015: New allocP interface
 	// hit_calloc(hit_bShapeData(s),sizeof(HIT_BITMAP_TYPE),HIT_BITMAP_TYPE*);
@@ -67,7 +67,7 @@ HitShape hit_bitmapShape(int nvertices){
 }
 
 
-HitShape hit_bitmapShapeMatrix(int n, int m){
+HitShape hit_bitmapShapeMatrix(HitInd n, HitInd m){
 
 	HitShape s = HIT_BITMAP_SHAPE_NULL;
 
@@ -76,7 +76,7 @@ HitShape hit_bitmapShapeMatrix(int n, int m){
 	hit_bShapeCard(s,1) = m;
 
 	// Allocate the arrays.
-	int nbits = n * m;
+	HitInd nbits = n * m;
 	size_t ndata = (size_t) (hit_bitmapShapeIndex(nbits) + (hit_bitmapShapeOffset(nbits)==0 ? 0 : 1));
 	// @arturo Ago 2015: New allocP interface
 	// hit_calloc(hit_bShapeData(s),ndata+1,sizeof(HIT_BITMAP_TYPE),HIT_BITMAP_TYPE*);
@@ -111,14 +111,12 @@ void hit_bShapeFree(HitShape shape){
  */
 void hit_bShapeCopyElementsInternal(HitShape dst, HitShape src){
 
-	int i,j;
-
-	for(i=0; i < hit_bShapeCard(dst,0); i++){
-		for(j=0; j < hit_bShapeCard(dst,1); j++){
+	for(HitInd i=0; i < hit_bShapeCard(dst,0); i++){
+		for(HitInd j=0; j < hit_bShapeCard(dst,1); j++){
 
 			// For each element of the bitmap we get the global names
-			int g_i = hit_nameListIndex2Name( hit_bShapeNameList(dst,0), i);
-			int g_j = hit_nameListIndex2Name( hit_bShapeNameList(dst,1), j);
+			HitInd g_i = hit_nameListIndex2Name( hit_bShapeNameList(dst,0), i);
+			HitInd g_j = hit_nameListIndex2Name( hit_bShapeNameList(dst,1), j);
 
 			// Check if the source shape has those elements.
 			if(hit_bShapeGetGlobal(src,g_i,g_j)){
@@ -132,7 +130,7 @@ void hit_bShapeCopyElementsInternal(HitShape dst, HitShape src){
 
 
 
-HitShape hit_bShapeSelect(HitShape shape, int nvertices, int * vertices){
+HitShape hit_bShapeSelect(HitShape shape, HitInd nvertices, HitInd * vertices){
 
 	if(nvertices < 1) return HIT_BITMAP_SHAPE_NULL;
 	
@@ -145,7 +143,7 @@ HitShape hit_bShapeSelect(HitShape shape, int nvertices, int * vertices){
 	HitShape res = hit_bitmapShape(nvertices);
 	
 	// 3. Duplicate vertices array as globalNames.
-	memcpy(hit_bShapeNameList(res,0).names, vertices, sizeof(int) * (size_t) nvertices );
+	memcpy(hit_bShapeNameList(res,0).names, vertices, sizeof(HitInd) * (size_t) nvertices );
 	hit_bShapeNameList(res,0).nNames = nvertices;
 	hit_bShapeNameList(res,0).flagNames = HIT_SHAPE_NAMES_NOARRAY;
 	hit_bShapeNameList(res,1) = hit_bShapeNameList(res,0);
@@ -160,11 +158,10 @@ HitShape hit_bShapeSelect(HitShape shape, int nvertices, int * vertices){
 
 
 
-HitShape hit_bShapeSelectRows(HitShape shape, int nNames, int * names){
+HitShape hit_bShapeSelectRows(HitShape shape, HitInd n, HitInd * names){
 
 	// Select cardinalities: matrix of n x m
-	int n = nNames;
-	int m = hit_bShapeCard(shape,1);
+	HitInd m = hit_bShapeCard(shape,1);
 
 	// Create the matrix
 	HitShape res = hit_bitmapShapeMatrix(n,m);
@@ -196,37 +193,35 @@ HitShape hit_bShapeExpand(HitShape shape, HitShape original, int amount){
 	if( hit_bShapeNvertices(shape) < 1) return HIT_BITMAP_SHAPE_NULL;
 
 	// 1. Create a vertex list
-	int orig_nvertices = hit_bShapeNvertices(original);
-	int * vertices;
+	HitInd orig_nvertices = hit_bShapeNvertices(original);
+	HitInd * vertices;
 	// @arturo Ago 2015: New allocP interface
 	// hit_calloc(vertices, (size_t)orig_nvertices, sizeof(int),int*);
-	hit_calloc(vertices, int, orig_nvertices);
+	hit_calloc(vertices, HitInd, orig_nvertices);
 	
 #define VLOCAL	1 // (....0001)
 #define VEXPAND	2 // (....0010)
 
 	// 2. Set the local vertices in the vector.
-	int vertex;
-	
-	hit_bShapeVertexIterator(vertex,shape){
-	
-		int global_vertex = hit_bShapeVertexToGlobal(shape,vertex);
-		int local_orig_vertex = hit_bShapeVertexToLocal(original,global_vertex);
+	{
+		HitInd vertex;
+		hit_bShapeVertexIterator(vertex,shape){
 		
-		vertices[local_orig_vertex] = VLOCAL;
+			HitInd global_vertex = hit_bShapeVertexToGlobal(shape,vertex);
+			HitInd local_orig_vertex = hit_bShapeVertexToLocal(original,global_vertex);
+			
+			vertices[local_orig_vertex] = VLOCAL;
+		}
 	}
 	
 	// 3. Expand the list.
-	int new_vertices = 0;
-	int a;
-	for(a=0; a<amount; a++){
-	
-		int vertex_i, vertex_j;
+	HitInd new_vertices = 0;
+	for(int a=0; a<amount; a++){
 		
 		// Complete the local vertices and the number of vertices.
-		for(vertex_i=0; vertex_i<orig_nvertices; vertex_i++){
+		for(HitInd vertex_i=0; vertex_i<orig_nvertices; vertex_i++){
 			
-			for(vertex_j=0; vertex_j<orig_nvertices; vertex_j++){
+			for(HitInd vertex_j=0; vertex_j<orig_nvertices; vertex_j++){
 				
 				if(hit_bShapeGet(original,vertex_i,vertex_j) == 0) continue;
 				
@@ -246,7 +241,7 @@ HitShape hit_bShapeExpand(HitShape shape, HitShape original, int amount){
 		
 		// Set the expanded vertices as local for the next loop.
 		if(a<amount-1){
-			for(vertex=0; vertex<orig_nvertices; vertex++){
+			for(HitInd vertex=0; vertex<orig_nvertices; vertex++){
 				if(vertices[vertex] == VEXPAND) vertices[vertex] |= VLOCAL;
 			}
 		}
@@ -254,18 +249,18 @@ HitShape hit_bShapeExpand(HitShape shape, HitShape original, int amount){
 	}
 	
 	// 3. Create selection list
-	int * vlist;
-	int nvlist = new_vertices + hit_bShapeNvertices(shape);
+	HitInd * vlist;
+	HitInd nvlist = new_vertices + hit_bShapeNvertices(shape);
 	// @arturo Ago 2015: New allocP interface
 	// hit_malloc(vlist,sizeof(int) * (size_t) nvlist,int*);
-	hit_malloc(vlist, int, nvlist);
+	hit_malloc(vlist, HitInd, nvlist);
 	
 	// 4. The first vertices of the old and new shape are the same.
-	memcpy(vlist,hit_bShapeNameList(shape,0).names, sizeof(int) * (size_t) hit_bShapeNvertices(shape));
+	memcpy(vlist,hit_bShapeNameList(shape,0).names, sizeof(HitInd) * (size_t) hit_bShapeNvertices(shape));
 	
 	// 5. Complete the selection list.
-	int vertex_index = hit_bShapeNvertices(shape);
-	for(vertex=0; vertex<orig_nvertices; vertex++){
+	HitInd vertex_index = hit_bShapeNvertices(shape);
+	for(HitInd vertex=0; vertex<orig_nvertices; vertex++){
 	
 		if(vertices[vertex] > VLOCAL){
 			vlist[vertex_index] = hit_bShapeVertexToGlobal(original,vertex);
@@ -291,11 +286,11 @@ HitShape hit_bShapeExpand(HitShape shape, HitShape original, int amount){
 
 
 
-void hit_bShapeAddEmptyRow_or_Vertex(HitShape * shape, int x, int mode){
+void hit_bShapeAddEmptyRow_or_Vertex(HitShape * shape, HitInd x, int mode){
 
 #define s (*shape)
 
-	int local_x;
+	HitInd local_x;
 
 	local_x = hit_bShapeCoordToLocal(s,0,x);
 
@@ -318,8 +313,8 @@ void hit_bShapeAddEmptyRow_or_Vertex(HitShape * shape, int x, int mode){
 	} else {
 
 		// B.1 Create new bitmap shape.
-		int nelems_x = hit_bShapeCard(s,0) + 1;
-		int nelems_y = hit_bShapeCard(s,1);
+		HitInd nelems_x = hit_bShapeCard(s,0) + 1;
+		HitInd nelems_y = hit_bShapeCard(s,1);
 		HitShape newShp;
 
 		if (mode == HIT_BSHAPE_GRAPH){
@@ -329,9 +324,8 @@ void hit_bShapeAddEmptyRow_or_Vertex(HitShape * shape, int x, int mode){
 		}
 
 		// B.2 Copy the data
-		int i,j;
-		for(i=0; i<(nelems_x-1); i++){
-			for(j=0; j<(nelems_y); j++){
+		for(HitInd i=0; i<(nelems_x-1); i++){
+			for(HitInd j=0; j<(nelems_y); j++){
 				if(hit_bShapeGet(s,i,j)){
 					hit_bShapeSet(newShp,i,j);
 				}
@@ -367,7 +361,7 @@ void hit_bShapeAddEmptyRow_or_Vertex(HitShape * shape, int x, int mode){
 
 
 
-void hit_bShapeAddColumn(HitShape * shape, int y){
+void hit_bShapeAddColumn(HitShape * shape, HitInd y){
 
 #define s (*shape)
 
@@ -375,14 +369,13 @@ void hit_bShapeAddColumn(HitShape * shape, int y){
 	if(hit_nameListName2Index(hit_bShapeNameList(s,1),y) == -1){
 
 		// 1 Create new bitmap shape.
-		int nelems_x = hit_bShapeCard(s,0);
-		int nelems_y = hit_bShapeCard(s,1) + 1;
+		HitInd nelems_x = hit_bShapeCard(s,0);
+		HitInd nelems_y = hit_bShapeCard(s,1) + 1;
 		HitShape newShp = hit_bitmapShapeMatrix(nelems_x,nelems_y);
 
 		// 2 Copy the data
-		int i,j;
-		for(i=0; i<(nelems_x); i++){
-			for(j=0; j<(nelems_y-1); j++){
+		for(HitInd i=0; i<(nelems_x); i++){
+			for(HitInd j=0; j<(nelems_y-1); j++){
 				if(hit_bShapeGet(s,i,j)){
 					hit_bShapeSet(newShp,i,j);
 				}
@@ -432,10 +425,10 @@ void hit_bShapeAddElem_or_Edge(HitShape * shape, int x, int y, int mode){
 
 
 
-int hit_bShapeNColsRow(HitShape shape, int row){
+HitInd hit_bShapeNColsRow(HitShape shape, HitInd row){
 
-	int ncols = 0;
-	int j;
+	HitInd ncols = 0;
+	HitInd j;
 
 	hit_bShapeColumnIterator(j,shape,row){
 		ncols++;

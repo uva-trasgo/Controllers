@@ -97,18 +97,18 @@ void hit_gcTileAllocInternal(void *newVarP, const char *name, const char *file, 
 
 
 
-int hit_gcTileGraphEdgeAtIndex(void * varP, int pos1, int pos2){
+HitInd hit_gcTileGraphEdgeAtIndex(void * varP, HitInd pos1, HitInd pos2){
 
 	/* 1. Get the shape of the tile */
 	HitTile *var = (HitTile *)varP;
 	HitShape shape = hit_tileShape(*var);
 
-	int local1 = hit_cShapeVertexToLocal(shape,pos1);
-	int local2 = hit_cShapeVertexToLocal(shape,pos2);
+	HitInd local1 = hit_cShapeVertexToLocal(shape,pos1);
+	HitInd local2 = hit_cShapeVertexToLocal(shape,pos2);
 
-	int edge;
+	HitInd edge;
 	hit_cShapeEdgeIterator(edge,shape,local1){
-		int dst = hit_cShapeEdgeTarget(shape,edge);
+		HitInd dst = hit_cShapeEdgeTarget(shape,edge);
 		if(dst == local2) return edge;
 	}
 	
@@ -116,7 +116,7 @@ int hit_gcTileGraphEdgeAtIndex(void * varP, int pos1, int pos2){
 }
 
 
-int hit_gcTileGraphVertexAtIndex(void * varP, int vertex){
+HitInd hit_gcTileGraphVertexAtIndex(void * varP, HitInd vertex){
 
 	/* 1. Get the shape of the tile */
 	HitTile *var = (HitTile *)varP;
@@ -134,7 +134,7 @@ void hit_gcTileClearVertices(void * varP){
 	/* 1. Get the shape of the tile */
 	HitTile *var = (HitTile *)varP;
 	HitShape shape = hit_tileShape(*var);
-	int nvertices = hit_cShapeNvertices(shape);
+	HitInd nvertices = hit_cShapeNvertices(shape);
 	
 	bzero(var->dataVertices, var->baseExtent  * (size_t) nvertices);
 }
@@ -150,7 +150,7 @@ void hit_gcTileCopyVertices(void * destP, void * srcP){
 	
 	HitShape shape = hit_tileShape(*src);
 	
-	int nvertices = hit_cShapeNvertices(shape);
+	HitInd nvertices = hit_cShapeNvertices(shape);
 	
 	memcpy(dest->dataVertices,src->dataVertices,src->baseExtent  * (size_t) nvertices);
 

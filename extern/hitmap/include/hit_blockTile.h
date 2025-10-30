@@ -88,10 +88,10 @@ typedef HitTile_HitTile HitBlockTile;
  * 
  * @param[out] container   Pointer to the new array of blocks tile.
  * @param[in]  originalVar Reference tile to get a domain and a base type for the elements.
- * @param[in]  blockSizes  Array of integers with the block sizes. As many elements as the 
+ * @param[in]  blockSizes  Array of HitInds with the block sizes. As many elements as the 
  * 							dimensions of the originalVar should exist and should be initialized.
  */
-void hit_blockTileNew( HitBlockTile *container, void *originalVar, int blockSizes[ HIT_MAXDIMS ] );
+void hit_blockTileNew( HitBlockTile *container, void *originalVar, HitInd blockSizes[ HIT_MAXDIMS ] );
 
 /**
  * Allocate an array of blocks.

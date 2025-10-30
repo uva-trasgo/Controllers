@@ -109,6 +109,18 @@
 
 
 
+/* Hit MPI ERROR TEST */
+/** Macro to check if an MPI operation was successful. */
+#define	hit_mpiTestError(ok,cad)                                  \
+    if ( ok != MPI_SUCCESS ) {                                    \
+	int message_length; char message[ MPI_MAX_ERROR_STRING ]; \
+	MPI_Error_string(ok, message, &message_length);           \
+        fprintf(stderr,"Hit MPI RunTime-Error, Rank %d: %s - (%d) %s\n", hit_Rank, cad, ok, message); \
+	fflush(stderr); \
+	MPI_Abort( MPI_COMM_WORLD, EXIT_FAILURE );                \
+    }
+
+
 /**
  * This is a function that return the gdb trace of the current process.
  * It is a usefull function for debugging but it only works in gcc.

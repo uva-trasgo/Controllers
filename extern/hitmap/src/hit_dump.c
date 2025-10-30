@@ -64,21 +64,21 @@ void hit_dumpTileInternal(const void *var, const char* name, FILE *file) {
 	fprintf(file,"\tmemStatus: %d\n", v->memStatus);
 	fprintf(file,"\tnumDims:   %d\n", hit_shapeDims(v->shape));
 	fprintf(file,"\tbaseExtent:   %d\n", (unsigned int) v->baseExtent);
-	for (i=0; i<hit_shapeDims(v->shape); i++) fprintf(file,"\tcard[%d]: %d\n", i, v->card[i]);
-	fprintf(file,"\tacumCard:     %d\n", v->acumCard);
-	for (i=0; i<hit_shapeDims(v->shape)+1; i++) fprintf(file,"\torigAcumCard[%d]: %d\n", i, v->origAcumCard[i]);
+	for (i=0; i<hit_shapeDims(v->shape); i++) fprintf(file,"\tcard[%d]: %ld\n", i, v->card[i]);
+	fprintf(file,"\tacumCard:     %ld\n", v->acumCard);
+	for (i=0; i<hit_shapeDims(v->shape)+1; i++) fprintf(file,"\torigAcumCard[%d]: %ld\n", i, v->origAcumCard[i]);
 	for (i=0; i<hit_shapeDims(v->shape); i++) {
-		fprintf(file,"\tqstride[%d]: %d\n", i, v->qstride[i]);
+		fprintf(file,"\tqstride[%d]: %ld\n", i, v->qstride[i]);
 	}
 	for (i=0; i<hit_shapeDims(v->shape); i++) {
-		fprintf(file,"\tSig[%d]: %d, %d, %d\n", i, hit_shapeSig(v->shape,i).begin, hit_shapeSig(v->shape,i).end, hit_shapeSig(v->shape,i).stride);
+		fprintf(file,"\tSig[%d]: %ld, %ld, %ld\n", i, hit_shapeSig(v->shape,i).begin, hit_shapeSig(v->shape,i).end, hit_shapeSig(v->shape,i).stride);
 	}
 	fprintf(file,"\thierDepth:   %d\n", v->hierDepth);
 	fprintf(file,"\tchildBegin: { ");
-	for (i=0; i<HIT_MAXDIMS; i++) fprintf(file,"%d ", v->childBegin[i]);
+	for (i=0; i<HIT_MAXDIMS; i++) fprintf(file,"%ld ", v->childBegin[i]);
 	fprintf(file,"}\n");
 	fprintf(file,"\tchildSize: { ");
-	for (i=0; i<HIT_MAXDIMS; i++) fprintf(file,"%d ", v->childSize[i]);
+	for (i=0; i<HIT_MAXDIMS; i++) fprintf(file,"%ld ", v->childSize[i]);
 	fprintf(file,"}\n");
 	fprintf(file,"\tdata: %p\n", v->data);
 	fprintf(file,"\tmemPtr: %p\n", v->memPtr);

@@ -109,7 +109,7 @@ void hit_mcTileAllocInternal(void *newVarP, const char *name, const char *file, 
  * @param local2 The second coordinate.
  * @return The index element.
  */
-int hit_mcTileElemAtIndex(void * varP, int local1, int local2);
+HitInd hit_mcTileElemAtIndex(void * varP, HitInd local1, HitInd local2);
 
 /**
  * Gets the index of a sparse element in graph (global) coordinates.
@@ -119,7 +119,7 @@ int hit_mcTileElemAtIndex(void * varP, int local1, int local2);
  * @param local2 The second coordinate.
  * @return The index element.
  */
-int hit_mcTileGraphElemAtIndex(void * varP, int pos1, int pos2);
+HitInd hit_mcTileGraphElemAtIndex(void * varP, HitInd pos1, HitInd pos2);
 
 
 /* 3. ELEMENT ACCESS FUNCTIONS */
@@ -149,7 +149,7 @@ int hit_mcTileGraphElemAtIndex(void * varP, int pos1, int pos2);
 
 /**
  * Access function to an edge element using a shape iterator.
- * @fn hit_mcTileEdgeIteratorAt(HitGBTile var, int vertex, int edge_index);
+ * @fn hit_mcTileEdgeIteratorAt(HitGBTile var, HitInd vertex, HitInd edge_index);
  * @memberof HitMCTile
  * @param var The tile.
  * @param vertex The vertex.

@@ -88,7 +88,7 @@ int hit_envOptions( const char *var, const char **options );
  * 
  * @param var \e const char *, string with the name of the environment variable
  * @param default_value \e int, default value to return in case that var is not defined or it is not an integer value
- * @return \e int, value of the variable, or default value in case or errors.
+ * @return \e int, value of the variable, or default value in case of error.
  * @see hit_envYesNo(), hit_envOptions()
  */
 int hit_envInteger( const char *var, int default_value );

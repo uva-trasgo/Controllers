@@ -12,6 +12,10 @@
  * @author Carlos de Blas Carton
  * @author Yuri Torres de la Sierra
  * @date Mar 2013
+ *
+ * @version 1.7
+ * @author Arturo Gonzalez-Escribano
+ * @date Oct 2025
  */
 
 /*
@@ -237,7 +241,7 @@ extern HitTile			HIT_TILE_NULL;
 /**
  * Initializer: Initialize the sizes and base type of a new multidimensional array tile.
  *
- * The sizes of the array are a list of integers. The elements are numbered from 0 to n-1
+ * The sizes of the array are a list of HitInd integers. The elements are numbered from 0 to n-1
  * on each dimension.
  *
  * This function initializes the tile variable but does not allocate memory for the elements.
@@ -247,7 +251,7 @@ extern HitTile			HIT_TILE_NULL;
  * @param[out] newVarP	\e HitTile_\<baseType\> A pointer to a HitTile derived type variable to be initialized.
  * @param[in] baseType	\e __typeName	The name of the type of the elements in the new array tile.
  * @param[in] numDims 	\e int Number of dimensions of the array. Limited by HIT_MAXDIMS.
- * @param[in] "..." 	\e int_list A list of numDims integer positive numbers defining the cardinalities on each dimension.
+ * @param[in] "..." 	\e HitInd_list A list of numDims HitInd integer positive numbers defining the cardinalities on each dimension.
  *
  * @see hit_tileAlloc(), hit_tileDomainAlloc()
  */
@@ -257,7 +261,7 @@ extern HitTile			HIT_TILE_NULL;
  * Initializer: Initialize the shape and base type of a new multidimensional array tile.
  *
  * This initializer based on a shape object allows to specify arrays with indexes starting 
- * and ending at any integer number (positive or negative).
+ * and ending at any HitInd integer number (positive or negative).
  *
  * This function initializes the tile variable but does not allocate memory for the elements.
  *
@@ -273,6 +277,11 @@ extern HitTile			HIT_TILE_NULL;
 
 
 /* 4.c. INITIALIZING VARIABLES: ARRAY */
+/** Memory alignment policies */
+#define	HIT_MEM_ALIGN_NONE		0
+#define	HIT_MEM_ALIGN_BSIZE		1
+#define	HIT_MEM_ALIGN_BSIZE_RUNTIME	2
+
 /**
  * Allocate memory for the elements of an array tile.
  *
@@ -284,12 +293,42 @@ extern HitTile			HIT_TILE_NULL;
  *
  * @param[in,out] var	\e HitTile* A pointer to a HitTile derived type variable.
  */
-#define hit_tileAlloc( var )	hit_tileAllocInternal( var, #var, __FILE__, __LINE__);
+#define hit_tileAlloc( var )	hit_tileAllocInternal( var, #var, __FILE__, __LINE__)
+
+/**
+ * Allocate aligned memory for the elements of an array tile.
+ *
+ * The parameter variable should have been previously initialized with
+ * hit_tileDomain() or hit_tileDomainShape(). This function cannot be used
+ * on a previously allocated variable before using hit_tileFree().
+ *
+ * @hideinitializer
+ *
+ * @param[in,out] var	\e HitTile* A pointer to a HitTile derived type variable.
+ * @param[in] policy	\e int A constant indicating the selected policy
+ * @param[in] block_size	\e int Value (or default value) for the block size
+ */
+#define hit_tileAllocAlign( var, policy, block_size )	hit_tileAllocAlignInternal( var, policy, block_size, #var, __FILE__, __LINE__)
+
+/**
+ * Size of a variable (in elements) if it would be aligned.
+ * For variables with already allocated memory it returns the current size
+ *
+ * The parameter variable should have been previously initialized with
+ * hit_tileDomain() or hit_tileDomainShape(). 
+ *
+ * @hideinitializer
+ *
+ * @param[in,out] var	\e HitTile* A pointer to a HitTile derived type variable.
+ * @param[in] policy	\e int A constant indicating the selected policy
+ * @param[in] block_size	\e int Value (or default value) for the block size
+ */
+#define hit_tileAlignSize( var, policy, block_size )	hit_tileAlignSizeInternal( var, policy, block_size, #var, __FILE__, __LINE__)
 
 /**
  * Initializer: Initialize and allocate memory for a new multidimensional array tile.
  *
- * The sizes of the array are a list of integers. The elements are numbered from 0 to n-1
+ * The sizes of the array are a list of HitInd integers. The elements are numbered from 0 to n-1
  * on each dimension.
  *
  * @hideinitializer
@@ -297,7 +336,7 @@ extern HitTile			HIT_TILE_NULL;
  * @param[out] newVarP	\e HitTile_\<baseType\> A pointer to a HitTile derived type variable to be initialized.
  * @param[in] baseType	\e __typeName	The name of the type of the elements in the new array tile.
  * @param[in] numDims 	\e int Number of dimensions of the array. Limited by HIT_MAXDIMS.
- * @param[in] "..." 	\e int_list A list of numDims integer positive numbers defining the cardinalities on each dimension.
+ * @param[in] "..." 	\e HitInd_list A list of numDims HitInd integer positive numbers defining the cardinalities on each dimension.
  *
  * @see hit_tileAlloc(), hit_tileDomain(), hit_tileDomainShape(), hit_tileDomainShapeAlloc()
  */
@@ -309,7 +348,7 @@ extern HitTile			HIT_TILE_NULL;
  * Initializer: Initialize and allocate memory for a new multidimensional array tile.
  *
  * This initializer based on a shape object allows to specify arrays with indexes starting 
- * and ending at any integer number (positive or negative).
+ * and ending at any HitInd number (positive or negative).
  *
  * @hideinitializer
  *
@@ -482,7 +521,7 @@ extern HitTile			HIT_TILE_NULL;
  *
  * @param[in] var	\e HitTile	A HitTile derived type variable.
  * @param[in] ndims	\e int		Number of dimensions of the array. It must be known at compilation time. Limited to HIT_MAXDIMS.
- * @param[in] "..."	\e int_list	List of ndims integer indexes.
+ * @param[in] "..."	\e int_list	List of ndims HitInd indexes.
  */
 #define hit_tileElemAt(var,ndims,...)	hit_tileElemAt##ndims(var,__VA_ARGS__)
 
@@ -497,7 +536,7 @@ extern HitTile			HIT_TILE_NULL;
  *
  * @param[in] var	\e HitTile	A HitTile derived type variable.
  * @param[in] ndims	\e int		Number of dimensions of the array. It must be known at compilation time. Limited to HIT_MAXDIMS.
- * @param[in] "..."	\e int_list	List of ndims integer indexes.
+ * @param[in] "..."	\e int_list	List of ndims HitInd indexes.
  */
 #define hit_tileElemAtArrayCoords(var,ndims,...)	hit_tileElemAtArrayCoords##ndims(var,__VA_ARGS__)
 
@@ -519,7 +558,7 @@ extern HitTile			HIT_TILE_NULL;
  *
  * @param[in] var	\e HitTile	A HitTile derived type variable.
  * @param[in] ndims	\e int		Number of dimensions of the array. It must be known at compilation time. Limited to HIT_MAXDIMS.
- * @param[in] "..."	\e int_list	List of ndims integer indexes.
+ * @param[in] "..."	\e int_list	List of ndims HitIndeger indexes.
  *
  * \sa hit_tileElemAt()
  */
@@ -541,7 +580,7 @@ extern HitTile			HIT_TILE_NULL;
  * 
  * @param[in] tile	\e HitTile	A HitTile derived type variable.
  * @param[in] dim	\e int		Number of the dimension.
- * @param[out] index	\e int Variable index to be used as counter in the loop.
+ * @param[out] index	\e HitInd Variable index to be used as counter in the loop.
  */
 #define	hit_tileForDimDomainArray(tile, dim, index)	for( index=hit_tileDimBegin(tile, dim);	\
 												index<=hit_tileDimEnd(tile,dim);	\
@@ -554,7 +593,7 @@ extern HitTile			HIT_TILE_NULL;
  * 
  * @param[in] tile	\e HitTile	A HitTile derived type variable.
  * @param[in] dim	\e int		Number of the dimension.
- * @param[out] index	\e int Variable index to be used as counter in the loop.
+ * @param[out] index	\e HitInd Variable index to be used as counter in the loop.
  */
 #define	hit_tileForDimDomain(tile, dim, index)	for( index=0;	\
 												index<hit_tileDimCard(tile,dim);	\
@@ -730,7 +769,7 @@ HitShape hit_tileShapeLocal( const void *inTile );
  *
  * @param[in] var	\e HitTile	A HitTile derived type variable.
  * @param[in] dim	\e int	Number of the dimension.
- * @retval	int 		Cardinality in the specified dimension of the HitTile variable.
+ * @retval	HitInd 		Cardinality in the specified dimension of the HitTile variable.
  */
 #define	hit_tileDimCard(var,dim)	((var).card[dim])
 
@@ -743,7 +782,7 @@ HitShape hit_tileShapeLocal( const void *inTile );
  * @hideinitializer
  *
  * @param[in]	 var	\e HitTile	A HitTile derived type variable.
- * @retval int 		Cardinality of the HitTile variable.
+ * @retval HitInd 		Cardinality of the HitTile variable.
  */
 #define	hit_tileCard(var)	((var).acumCard)
 
@@ -766,7 +805,7 @@ HitShape hit_tileShapeLocal( const void *inTile );
  *
  * @param[in] var	\e HitTile	A HitTile derived type variable.
  * @param[in] dim	\e int		Number of the dimension.
- * @retval	int 		Begin index of the signature in the specified dimension of the HitTile variable.
+ * @retval	HitInd 		Begin index of the signature in the specified dimension of the HitTile variable.
  */
 #define	hit_tileDimBegin(var,dim)		(hit_tileDimSig(var,dim).begin)
 /**
@@ -776,7 +815,7 @@ HitShape hit_tileShapeLocal( const void *inTile );
  *
  * @param[in] var	\e HitTile	A HitTile derived type variable.
  * @param[in] dim	\e int		Number of the dimension.
- * @retval	int 		End index of the signature in the specified dimension of the HitTile variable.
+ * @retval	HitInd 		End index of the signature in the specified dimension of the HitTile variable.
  */
 #define	hit_tileDimEnd(var,dim)		(hit_tileDimSig(var,dim).end)
 /**
@@ -786,7 +825,7 @@ HitShape hit_tileShapeLocal( const void *inTile );
  *
  * @param[in] var	\e HitTile	A HitTile derived type variable.
  * @param[in] dim	\e int		Number of the dimension.
- * @retval	int 		Stride of the signature in the specified dimension of the HitTile variable.
+ * @retval	HitInd 		Stride of the signature in the specified dimension of the HitTile variable.
  */
 #define	hit_tileDimStride(var,dim)		(hit_tileDimSig(var,dim).stride)
 /**
@@ -815,7 +854,7 @@ HitShape hit_tileShapeLocal( const void *inTile );
  *
  * @param[in] var	\e HitTile	A HitTile derived type variable.
  * @param[in] dim	\e int		Selected dimension.
- * @param[in] pos	\e int		Index to check.
+ * @param[in] pos	\e HitInd		Index to check.
  * @retval	int	True if the index is in the dimensional domain space. False otherwise.
  */
 #define hit_tileDimHasArrayCoord(var, dim, pos)	\
@@ -829,7 +868,7 @@ HitShape hit_tileShapeLocal( const void *inTile );
  *
  * @param[in] var	\e HitTile	A HitTile derived type variable.
  * @param[in] ndims	\e int		Number of dimensions of the array.
- * @param[in] "..."	\e int_list	List of ndims integer indexes.
+ * @param[in] "..."	\e HitInd_list	List of ndims integer indexes.
  * @retval	int	True if the multi-dimensonal index is in the domain space. False otherwise.
  */
 #define hit_tileHasArrayCoords(var, ndims, ...)	hit_tileHasArrayCoords##ndims(var, __VA_ARGS__)
@@ -843,8 +882,8 @@ HitShape hit_tileShapeLocal( const void *inTile );
  *
  * @param[in] var	\e HitTile	A HitTile derived type variable.
  * @param[in] dim	\e int		Number of the dimension of the array.
- * @param[in] pos	\e int		Index to trasnform.
- * @retval	int	Transformed index.
+ * @param[in] pos	\e HitInd		Index to trasnform.
+ * @retval	HitInd	Transformed index.
  */
 #define hit_tileTile2Array(var, dim, pos)	((pos)*hit_tileDimStride(var,dim) + hit_tileDimBegin(var,dim))
 /** 
@@ -854,8 +893,8 @@ HitShape hit_tileShapeLocal( const void *inTile );
  *
  * @param[in] var	\e HitTile	A HitTile derived type variable.
  * @param[in] dim	\e int		Number of the dimension of the array.
- * @param[in] pos	\e int		Index to trasnform.
- * @retval	int	Transformed index.
+ * @param[in] pos	\e HitInd		Index to trasnform.
+ * @retval	HitInd	Transformed index.
  */
 #define hit_tileArray2Tile(var, dim, pos)	(((pos)-hit_tileDimBegin(var,dim))/ hit_tileDimStride(var,dim))
 

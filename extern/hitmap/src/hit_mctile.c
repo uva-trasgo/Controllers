@@ -87,15 +87,15 @@ void hit_mcTileAllocInternal(void *newVarP, const char *name, const char *file, 
 
 
 
-int hit_mcTileElemAtIndex(void * varP, int row, int column){
+HitInd hit_mcTileElemAtIndex(void * varP, HitInd row, HitInd column){
 	
 	/* 1. Get the shape of the tile */
 	HitTile *var = (HitTile *)varP;
 	HitShape shape = hit_tileShape(*var);
 
-	int column_i;
+	HitInd column_i;
 	hit_cShapeColumnIterator(column_i,shape,row){
-		int dst = hit_cShapeEdgeTarget(shape,column_i);
+		HitInd dst = hit_cShapeEdgeTarget(shape,column_i);
 		if(dst == column) return column_i;
 	}
 
@@ -103,19 +103,19 @@ int hit_mcTileElemAtIndex(void * varP, int row, int column){
 }
 
 
-int hit_mcTileGraphElemAtIndex(void * varP, int pos1, int pos2){
+HitInd hit_mcTileGraphElemAtIndex(void * varP, HitInd pos1, HitInd pos2){
 
 	/* 1. Get the shape of the tile */
 	HitTile *var = (HitTile *)varP;
 	HitShape shape = hit_tileShape(*var);
 
-	int row = hit_cShapeCoordToLocal(shape,0,pos1);
-	int column = hit_cShapeCoordToLocal(shape,1,pos2);
+	HitInd row = hit_cShapeCoordToLocal(shape,0,pos1);
+	HitInd column = hit_cShapeCoordToLocal(shape,1,pos2);
 
-	int column_i;
+	HitInd column_i;
 	hit_cShapeColumnIterator(column_i,shape,row){
 
-		int dst = hit_cShapeEdgeTarget(shape,column_i);
+		HitInd dst = hit_cShapeEdgeTarget(shape,column_i);
 		if(dst == column){
 			return column_i;
 		}
@@ -131,7 +131,7 @@ void hit_mcTileClear(void * tileP){
 	/* 1. Get the shape of the tile */
 	HitTile *tile = (HitTile *)tileP;
 	HitShape shape = hit_tileShape(*tile);
-	int nz = hit_cShapeNZElems(shape);
+	HitInd nz = hit_cShapeNZElems(shape);
 
 	bzero(tile->data, tile->baseExtent  * (size_t) nz);
 

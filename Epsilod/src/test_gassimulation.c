@@ -112,82 +112,7 @@ float feq(size_t i, float p, const vec3f *v) {
 
 char *input_file_name;
 char *output_file_name;
-vec3i size;
-
-// void initCell(int x, int y, int z, vec3i size, cell_t *c) {
-
-// 	for (int i = 0; i < Q; i++) {
-// 		float wi     = wis[i];
-// 		float cw     = cellwidth;
-// 		vec3f v      = {.1f, 0, 0};
-// 		vec3f scaled = vec3Scale(offsets[i], cw);
-// 		float dot    = vec3Dot(&scaled, &v);
-// 		c->data[i]   = wi * 1.f * (1 + (1 / (cw * cw)) * (3 * dot + (9 / (2 * cw * cw)) * dot * dot - (3.f / 2) * vec3Dot(&v, &v)));
-// 		// c->data[i]   = i % 10 + (float)x / 100 + (float)y / 10000 + (float)z / 1000000;
-// 	}
-// 	// return;
-
-// 	// if (x == 40 && y == 39 && z == 6) {
-// 	// int   base_x = x - 50;
-// 	// int   base_y = y - 50;
-// 	// int   base_z = z - 8;
-// 	// float pow_x  = POW(x - 50, 2);
-// 	// float pow_y  = POW(y - 50, 2);
-// 	// float pow_z  = POW(z - 8, 2);
-// 	// float power  = POW(x - 50, 2) + POW(y - 50, 2) + POW(z - 8, 2);
-// 	// printf("**** bases %d %d %d | %.6f %.6f %.6f Power: %.6f\n", base_x, base_y, base_z, pow_x, pow_y, pow_z, power);
-// 	//}
-
-// 	// 40 39 6 -> 100 + 121 + 4 = 225
-// 	// 40 39 7 -> 100 + 121 + 1 = 222
-// 	// 40 39 8 -> 100 + 121 + 0 = 221
-// 	// 40 39 9 -> 100 + 121 + 1 = 222
-// 	// 40 39 10 -> 100 + 121 + 4 = 225
-// 	// This condition emulates an unexpected behaviour in muesli's example
-// 	// When executed on gpu, power funcion receiving a negative base returns NaN, despite the exponent being an integer
-// 	// This causes the power part of the condition to be false under those circumstances
-// 	bool bases_positive = x - 50 >= 0 && y - 50 >= 0 && z - 8 >= 0;
-// 	if (x <= 1 || y <= 1 || z <= 1 || x >= size.x - 2 || y >= size.y - 2 || z >= size.z - 2 || (bases_positive && POW(x - 50, 2) + POW(y - 50, 2) + POW(z - 8, 2) <= 225)) {
-
-// 		floatparts *parts = (floatparts *)&c->data[0];
-// 		parts->sign       = 0;
-// 		parts->exponent   = 255;
-// 		if (x <= 1 || x >= size.x - 1 || y <= 1 || y >= size.y - 1 || z <= 1 || z >= size.z - 1) {
-// 			parts->mantissa = 1 << 22 | FLAG_KEEP_VELOCITY;
-// 		} else {
-// 			parts->mantissa = 1 << 22 | FLAG_OBSTACLE;
-// 		}
-// 	}
-// 	// return c;
-// }
-
-// /* A. INITIALIZE ARRAY: GENERATE */
-// void initData(HitTile_cell_t tileMat, EpsilodCoords global, Epsilod_ext ext_params) {
-// 	int radius = 1;
-
-// 	cell_t c = {{0.f}};
-// 	for (int i = 0; i < tileMat.acumCard; i++)
-// 		hit(tileMat, i) = c;
-
-// 	for (int i = 0; i < size.x; i++) {
-// 		for (int j = 0; j < size.y; j++) {
-// 			for (int k = 0; k < size.z; k++) {
-// 				if (
-// 					hit_sigIn(hit_tileDimSig(tileMat, 0), i + radius) &&
-// 					hit_sigIn(hit_tileDimSig(tileMat, 1), j + radius) &&
-// 					hit_sigIn(hit_tileDimSig(tileMat, 2), k + radius)) {
-// 					cell_t *cell = &hit(
-// 						tileMat,
-// 						i + radius - hit_tileDimBegin(tileMat, 0),
-// 						j + radius - hit_tileDimBegin(tileMat, 1),
-// 						k + radius - hit_tileDimBegin(tileMat, 2));
-// 					// Switch j and i to mimic muesli
-// 					initCell(j, i, k, size, cell);
-// 				}
-// 			}
-// 		}
-// 	}
-// }
+vec3l size;
 
 /* B. WRITE RESULTS */
 void outputData(HitTile_cell_t io_tile, Epsilod_ext *ext_params) {
@@ -222,14 +147,8 @@ void outputData(HitTile_cell_t io_tile, Epsilod_ext *ext_params) {
 	hit_tileSelectArrayCoords(&data, &io_tile, shp_local_data);
 
 	/* Write distributed file */
-	// var, file, coord, datatype, s1, s2
-	// hit_tileTextFileWrite(&data, output_file_name, HIT_FILE_ARRAY, HIT_FILE_CELL_T, 6, 4);
 	// var, fileNamePrefix, fileNameSuffix, fileRank, format, coord, header, datatype, formatSize1, formatSize2
-	// ARTURO: Cambio de HIT_FILE_CELL_T a TEXT para que compile sin quejarse. Necesito nueva
-	// versión de hitmap
 	hit_tileFileWriteOptions(&data, output_file_name, NULL, HIT_FILE_RUNTIME, HIT_FILE_BINARY, HIT_FILE_ARRAY, HIT_FILE_NO_HEADER, HIT_FILE_TYPE_UNKNOWN, 1, 0);
-	// hit_tileFileWriteOptions(&data, output_file_name, NULL, HIT_FILE_RUNTIME, HIT_FILE_TEXT, HIT_FILE_TILE, HIT_FILE_NO_HEADER, HIT_FILE_CELL_T, 8, 6);
-	// hit_tileFileWriteOptions(&data, output_file_name, NULL, HIT_FILE_RUNTIME, HIT_FILE_TEXT, HIT_FILE_TILE, HIT_FILE_NO_HEADER, HIT_FILE_TEXT, 8, 6);
 }
 
 /* D. DECLARATIONS OF OPTIMIZED STENCIL KERNEL
@@ -258,9 +177,9 @@ int main(int argc, char *argv[]) {
 	}
 
 	/* READ ARGUMENTS */
-	size.x                      = atoi(argv[1]);
-	size.y                      = atoi(argv[2]);
-	size.z                      = atoi(argv[3]);
+	size.x                      = atol(argv[1]);
+	size.y                      = atol(argv[2]);
+	size.z                      = atol(argv[3]);
 	int iterations              = atoi(argv[4]);
 	output_file_name            = argv[5];
 	char *device_selection_file = argv[6];
@@ -271,12 +190,6 @@ int main(int argc, char *argv[]) {
 	HitShape shp_stencil_gassimulation = hitShape((-radius, radius), (-radius, radius), (-radius, radius));
 
 	/* WEIGHTS: SPECIALIZED KERNEL, VALUES ARE USED ONLY TO COMPUTE BORDERS */
-	// int    stencilDataSize = (2 * radius + 1) * (2 * radius + 1) * (2 * radius + 1);
-	// cell_t stencilData_gassimulation[stencilDataSize];
-	/*for (int i = 0; i < stencilDataSize; i++)
-		for (int j = 0; j < Q; j++)
-			stencilData_gassimulation[i].data[j] = 1; // Non-Zero arbitrary value
-	*/
 	float stencilData_gassimulation[] = {
 		// x = 0, z -->
 		0, 1, 0,
@@ -295,13 +208,10 @@ int main(int argc, char *argv[]) {
 	stencilDeviceFunction  f_stencil = updateCell_gassimulation;
 	initDataDeviceFunction f_init    = initCell_gassimulation;
 
-	int sizes[3] = {size.x + (radius * 2), size.y + (radius * 2), size.z + (radius * 2)};
+	HitInd sizes[3] = {size.x + (radius * 2), size.y + (radius * 2), size.z + (radius * 2)};
 
 	/* LAUNCH STENCIL COMPUTATION */
 	Epsilod_ext ext_params = {
-		//.offsets   = offsets,
-		//					  .opposite  = opposite,
-		//					  .wis       = wis,
 		.cellwidth = cellwidth,
 		.deltaT    = deltaT,
 		.tau       = tau};
@@ -309,8 +219,6 @@ int main(int argc, char *argv[]) {
 	memcpy(ext_params.opposite, opposite, Q * sizeof(unsigned char));
 	memcpy(ext_params.wis, wis, Q * sizeof(GASSIMULATION_CELL_TYPE));
 	stencilComputation(sizes, shp_stencil_gassimulation, stencilData_gassimulation, 1.0f, iterations, NULL, f_init, NULL, f_stencil, outputData, &ext_params, device_selection_file);
-	// stencilComputation(sizes, shp_stencil_gassimulation, stencilData_gassimulation, 1.0f, iterations, initData, NULL, f_stencil, outputData, &ext_params, device_selection_file);
-	// stencilComputation(sizes, shp_stencil_gassimulation, stencilData_gassimulation, 1.0f, iterations, initData, f_init, f_stencil, outputData, &ext_params, device_selection_file);
 
 	/* END */
 	Ctrl_Finalize();

@@ -54,14 +54,14 @@ HitSig	HIT_SIG_WHOLE	= HIT_SIG_WHOLE_STATIC;
  * 			COMPUTE THE G.C.D. OF TWO INTEGERS WITH THE EXTENDED EUCLIDEAN METHOD
  * 			RETURNS THE GCD AND THE TWO REMAINDERS
  */
-void hit_utilExtendedEuclideanGCD( int a, int b, int *gcd, int *pLastx, int *pLasty ) {
-	int x=0, lastx=1;
-	int y=1, lasty=0;
+void hit_utilExtendedEuclideanGCD( HitInd a, HitInd b, HitInd *gcd, HitInd *pLastx, HitInd *pLasty ) {
+	HitInd x=0, lastx=1;
+	HitInd y=1, lasty=0;
 
 	while ( b != 0 ) {
-		int quotient = a / b;
+		HitInd quotient = a / b;
 
-		int temp=b;
+		HitInd temp=b;
 		b = a % b;
 		a = temp;
 
@@ -106,7 +106,7 @@ HitSig hit_sigIntersect(HitSig s1, HitSig s2) {
 		/* 2.2. BEGIN */
 		if ( noStridedSig.begin <= stridedSig.begin ) res.begin = stridedSig.begin;
 		else {
-			int displacement = (noStridedSig.begin - stridedSig.begin) % stridedSig.stride;
+			HitInd displacement = (noStridedSig.begin - stridedSig.begin) % stridedSig.stride;
 			if ( displacement == 0 ) res.begin = noStridedSig.begin;
 			else res.begin = noStridedSig.begin - displacement + stridedSig.stride;
 		}
@@ -130,23 +130,23 @@ HitSig hit_sigIntersect(HitSig s1, HitSig s2) {
 		else { low = s2; high = s1; }
 
 		/* 3.3. DISPLACE SIGNATURES: HIGH STRIDED SIGNATURE WILL BEGIN AT 0 */
-		int displacement = high.begin;
+		HitInd displacement = high.begin;
 		high.begin = 0;
 		high.end = high.end - displacement;
 		low.begin = low.begin - displacement;
 		low.end = low.end - displacement;
 
-		int lowerEnd = ( low.end < high.end ) ? low.end : high.end;
-		int higherBegin = ( low.begin > high.begin ) ? low.begin : high.begin;
+		HitInd lowerEnd = ( low.end < high.end ) ? low.end : high.end;
+		HitInd higherBegin = ( low.begin > high.begin ) ? low.begin : high.begin;
 
 		/* 3.4. OBTAIN THE SMALLER POSITIVE POINT OF THE LOW STRIDED SIGNATURE: norm */
-		int norm = low.begin % low.stride;
+		HitInd norm = low.begin % low.stride;
 		if ( norm < 0 ) norm = norm + low.stride;
 
 		/* 3.5. COMPUTE G.C.D. AND L.C.M. OF STRIDES */
-		int gcd, lastx, lasty;
+		HitInd gcd, lastx, lasty;
 		hit_utilExtendedEuclideanGCD( high.stride, low.stride, &gcd, &lastx, &lasty );
-		int lcm = high.stride / gcd * low.stride;
+		HitInd lcm = high.stride / gcd * low.stride;
 
 		/* 3.6. PARTICULAR CASE: norm == 0, TRIVIAL COINCIDENCE */
 		if ( norm == 0 ) {
@@ -161,19 +161,19 @@ HitSig hit_sigIntersect(HitSig s1, HitSig s2) {
 			if ( norm % gcd != 0 ) return HIT_SIG_NULL;
 
 			/* 3.7.2. OBTAIN FIRST COINCIDENCE */
-			int multLowStride;
-			int jumps = norm / gcd;
-			int cycle = high.stride / gcd;
+			HitInd multLowStride;
+			HitInd jumps = norm / gcd;
+			HitInd cycle = high.stride / gcd;
 
 			if ( lasty < 0 ) multLowStride = jumps * -lasty % cycle;
 			else multLowStride = cycle - ( jumps * lasty % cycle );
 
-			int coincidence = norm + multLowStride * low.stride;
+			HitInd coincidence = norm + multLowStride * low.stride;
 
 			/* 3.7.3. COMPUTE RESULT BEGIN */
 			if ( coincidence >= higherBegin ) res.begin = coincidence;
 			else {
-				int adjust = ( higherBegin - coincidence ) % lcm;
+				HitInd adjust = ( higherBegin - coincidence ) % lcm;
 				if ( adjust == 0 ) res.begin = higherBegin;
 				else res.begin = higherBegin + lcm - adjust;
 			}

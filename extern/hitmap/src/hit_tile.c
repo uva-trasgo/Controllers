@@ -10,6 +10,10 @@
  * @author Javier Fresno Bausela
  * @author Carlos de Blas Carton
  * @date Nov 2012
+ *
+ * @version 1.1.2
+ * @author Arturo Gonzalez-Escribano
+ * @date Oct 2025
  */
 
 /*
@@ -48,12 +52,15 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <math.h>
 #include <hit_allocP.h>
 #include <hit_sshape.h>
 #include <hit_cshape.h>
 #include <hit_bshape.h>
 #include <hit_tile.h>
+#include <hit_env.h>
+
 
 /* Hit NULL VARIABLE */
 /*
@@ -103,7 +110,7 @@ HitPTile HIT_TILE_NULL_POINTER = &HIT_TILE_NULL;
 static inline void hit_tileUpdateAcumCards(void *newVarP) {
 	HitTile *newVar = (HitTile *)newVarP;
 	int i;
-	int cardinality;
+	HitInd cardinality;
 
 	newVar->origAcumCard[hit_shapeDims(newVar->shape)] = 1;
 	cardinality=1;
@@ -182,7 +189,7 @@ fprintf(stderr,"CTRL DomainInternal, baseExtent: %d, hierDepth: %d, numDims: %d\
 	/* 2. PROCESS PARAMETERS AS CARDINALITIES */
 	va_start(ap, numDims);
 	for(i=0; i<numDims; i++) {
-		newVar->card[i] = va_arg(ap, int);
+		newVar->card[i] = va_arg(ap, HitInd);
 		// @arturo Oct 2016: RETURN NULL FOR INVALID SHAPES
 		if ( newVar->card[i] < 1 ) { *newVar = HIT_TILE_NULL; return; }
 		hit_shapeSig(newVar->shape,i).begin = 0;
@@ -233,37 +240,129 @@ fprintf(stderr,"CTRL DomainShapeInternal, baseExtent: %d, hierDepth: %d\n", (uns
 }
 
 
+// @arturo Oct 2025
+HitInd hit_tileAlignSizeInternal( void *newVarP, int policy, int block_size, const char *name, const char *file, int numLine) {
+	HitPTile newVar = (HitPTile)newVarP;
 
+	// 0.1. block_size should be higher than 0
+	if ( policy != HIT_MEM_ALIGN_NONE && block_size < 1 ) 
+		hit_errInternal( __FUNCTION__, "Block size should be >= 1:",name,file,numLine);
 
+	// 0.2. Tiles with memory, return the size
+	if ( newVar->memStatus == HIT_MS_OWNER ) return newVar->origAcumCard[0];
 
+	// 1. Select block size according to policy
+	int align_bsize = 1;
+	if ( policy == HIT_MEM_ALIGN_BSIZE_RUNTIME ) 
+		align_bsize = hit_envInteger( "HIT_MEM_ALIGN_BSIZE", block_size );
+	else if ( policy == HIT_MEM_ALIGN_BSIZE ) 
+		align_bsize = block_size;
 
+	// 2. Calculate the aligned cardinality of the last dimension (equal to original if bsize is 1)
+	int numDims = hit_shapeDims(newVar->shape);
+	HitInd align_real_card = newVar->card[ numDims - 1 ];
+	HitInd align_new_card = align_real_card;
+	if ( align_bsize > 1 ) 
+		align_new_card = (align_new_card + align_bsize-1) / (HitInd)align_bsize * (HitInd)align_bsize;
 
+	// 3. Calculate size with changed card
+	if ( align_new_card != align_real_card ) {
+		HitTile tmp = *newVar;
+		tmp.card[ numDims - 1 ] = align_new_card;
+		hit_tileUpdateAcumCards(&tmp);
+		return tmp.origAcumCard[0];
+	}
+	return newVar->origAcumCard[0];
+}
 
+// @arturo Oct 2025
+void hit_tileAlignUpdateAcumCards( void *newVarP, int policy, int block_size ) {
+	HitPTile newVar = (HitPTile)newVarP;
+
+	// 0.1. Only tiles without their own memory
+	if ( newVar->memStatus == HIT_MS_OWNER ) return;
+
+	// 0.2. block_size should be higher than 0
+	if ( policy == HIT_MEM_ALIGN_NONE || block_size < 1 ) return;
+
+	// 1. Select block size according to policy
+	int align_bsize = 1;
+	if ( policy == HIT_MEM_ALIGN_BSIZE_RUNTIME ) 
+		align_bsize = hit_envInteger( "HIT_MEM_ALIGN_BSIZE", block_size );
+	else if ( policy == HIT_MEM_ALIGN_BSIZE ) 
+		align_bsize = block_size;
+
+	// 2. Calculate the aligned cardinality of the last dimension (equal to original if bsize is 1)
+	int numDims = hit_shapeDims(newVar->shape);
+	HitInd align_real_card = newVar->card[ numDims - 1 ];
+	HitInd align_new_card = align_real_card;
+	if ( align_bsize > 1 ) 
+		align_new_card = (align_new_card + align_bsize-1) / (HitInd)align_bsize * (HitInd)align_bsize;
+
+	// 3. To align, allocate with the changed card
+	if ( align_new_card != align_real_card ) {
+		newVar->card[ numDims - 1 ] = align_new_card;
+		hit_tileUpdateAcumCards( newVar );
+		// Recover the original shape cardinality
+		newVar->card[ numDims - 1 ] = align_real_card;
+	}
+}
+
+// @arturo Oct 2025
+void hit_tileAllocAlignInternal( void *newVarP, int policy, int block_size, const char *name, const char *file, int numLine) {
+	HitPTile newVar = (HitPTile)newVarP;
+
+	// 0.1. Only tiles without their own memory
+	if ( newVar->memStatus == HIT_MS_OWNER )
+		hit_errInternal(__FUNCTION__,"Trying to reallocate a Tile: ",name,file,numLine);
+
+	// 0.2. block_size should be higher than 0
+	if ( policy != HIT_MEM_ALIGN_NONE && block_size < 1 ) 
+		hit_errInternal( __FUNCTION__, "Block size should be >= 1:",name,file,numLine);
+
+	// 1. Select block size according to policy
+	int align_bsize = 1;
+	if ( policy == HIT_MEM_ALIGN_BSIZE_RUNTIME ) 
+		align_bsize = hit_envInteger( "HIT_MEM_ALIGN_BSIZE", block_size );
+	else if ( policy == HIT_MEM_ALIGN_BSIZE ) 
+		align_bsize = block_size;
+
+	// 2. Calculate the aligned cardinality of the last dimension (equal to original if bsize is 1)
+	int numDims = hit_shapeDims(newVar->shape);
+	HitInd align_real_card = newVar->card[ numDims - 1 ];
+	HitInd align_new_card = align_real_card;
+	if ( align_bsize > 1 ) 
+		align_new_card = (align_new_card + align_bsize-1) / (HitInd)align_bsize * (HitInd)align_bsize;
+
+	// 3. To align, allocate with the changed card
+	if ( align_new_card != align_real_card ) {
+		newVar->card[ numDims - 1 ] = align_new_card;
+		hit_tileAllocInternal(newVarP, name, file, numLine);
+		// Recover the original shape cardinality
+		newVar->card[ numDims - 1 ] = align_real_card;
+	}
+}
 
 /* Hit VARIABLE DECLARATION AND INITIALIZATION: ARRAY */
 void hit_tileAllocInternal(void *newVarP, const char *name, const char *file, int numLine) {
 	HitPTile newVar = (HitPTile)newVarP;
 
-
-	/* 0. SKIP ALLOC WHEN NULL OR WHEN CARDINALITY=0 */
-	if ( newVar->memStatus == HIT_MS_NULL || newVar->acumCard==0  ) return;
-	
+	/* 0. SKIP ALLOC WHEN NULL OR WHEN CARDINALITY<=0 */
+	if ( newVar->memStatus == HIT_MS_NULL || newVar->acumCard<=0  ) return;
 	
 	/* 1. CHECK VARIABLE TYPE, CANNOT ALREADY HAVE ITS OWN MEMORY */
 	if ( newVar->memStatus == HIT_MS_OWNER ){
 		hit_errInternal(__FUNCTION__,"Trying to reallocate a Tile: ",name,file,numLine);
 	}
 
-	/* 2. (v0.9.2 Change) MEMORY FOR THE DATA */
-#ifdef DEBUG
-fprintf(stderr,"CTRL Alloc Internal: Mem size: %d x %d = %d\n", newVar->acumCard, 
-																(unsigned int)newVar->baseExtent,
-		(unsigned int)newVar->acumCard * (unsigned int)newVar->baseExtent);
-#endif
-
+	/* 2. ALLOCATE MEMORY */
+	// Calculate memory size with the new origAcumCard
+	hit_tileUpdateAcumCards(newVar);
+	size_t mem_size = (size_t)newVar->origAcumCard[0] * newVar->baseExtent;
 	// @arturo Ago 2015: New allocP interface
 	// hit_malloc(newVar->memPtr,(size_t)newVar->acumCard * newVar->baseExtent,void*);
-	hit_vmalloc(newVar->memPtr, (size_t)newVar->acumCard * newVar->baseExtent);
+	//hit_vmalloc(newVar->memPtr, (size_t)newVar->acumCard * newVar->baseExtent);
+	hit_vmalloc(newVar->memPtr, mem_size);
 	newVar->data = newVar->memPtr;
 
 	/* 3. UPDATES FOR SHADOW COPIES, OR ALLOCATION OF SELECTIONS OF NO-MEMORY VARIABLES */
@@ -274,7 +373,8 @@ fprintf(stderr,"CTRL Alloc Internal: Mem size: %d x %d = %d\n", newVar->acumCard
 		for (i=0; i<hit_shapeDims(newVar->shape); i++) newVar->qstride[i] = 1;
 
 		/* 3.2. UPDATE ORIGINAL ACUMULATED CARDINALITIES, NOW IT HAS ITS OWN MEMORY */
-		hit_tileUpdateAcumCards(newVar);
+		// NOTA: Moved upwards
+		// hit_tileUpdateAcumCards(newVar);
 	}
 
 	/* 4. CHANGE MEMORY STATUS */
@@ -286,11 +386,11 @@ fprintf(stderr,"CTRL Alloc Internal: Mem size: %d x %d = %d\n", newVar->acumCard
 
 
 /* Hit SIGNATURE HELPER: ONLY USED IN THE hit_tileFill FUNCTIONALITY */
-static inline int hit_sigBlockSizeInternal( HitSig a ) {
+static inline HitInd hit_sigBlockSizeInternal( HitSig a ) {
 	/* 1. TRIVIAL CASE: STRIDE = 1 */
 	if ( a.stride == 1 ) return (a.end - a.begin + 1);
 	/* 2. NORMALIZE THE END COMPONENT */
-	int jumps = (a.end - a.begin) / a.stride;
+	HitInd jumps = (a.end - a.begin) / a.stride;
 	a.end = a.begin + jumps * a.stride;
 	/* 3. COMPUTE SIZE OF THE BLOCK */
 	return (a.end - a.begin + a.stride);
@@ -298,9 +398,9 @@ static inline int hit_sigBlockSizeInternal( HitSig a ) {
 
 
 /* Hit FILL UTILITY: RECURSIVELY UPDATE THE ARRAY COORDINATES OF A REGULAR MULTILEVEL HIERARCHY */
-void hit_tileFillUpdateArrayCoordinatesRec( HitTile *root, int coords[HIT_MAXDIMS] ) {
+void hit_tileFillUpdateArrayCoordinatesRec( HitTile *root, HitInd coords[HIT_MAXDIMS] ) {
 	int dim;
-	int displacement[HIT_MAXDIMS] = { 0, 0, 0, 0 };
+	HitInd displacement[HIT_MAXDIMS] = { 0, 0, 0, 0 };
 
 	/* 1. COMPUTE DISPLACEMENTS AND UPDATE ARRAY COORDINATES */
 	for(dim=0; dim < hit_tileDims(*root); dim++) {
@@ -314,14 +414,13 @@ void hit_tileFillUpdateArrayCoordinatesRec( HitTile *root, int coords[HIT_MAXDIM
 	if ( root->hierDepth == HIT_NONHIERARCHICAL ) return;
 
 	/* 3. TRAVERSE ALL POSITIONS OF ROOT TILE TO RECURSIVELY UPDATE THEIR COORDINATES */
-	int ind[HIT_MAXDIMS];
-	memset(ind, 0, (size_t)hit_tileDims(*root)*sizeof(int));
+	HitInd ind[HIT_MAXDIMS];
+	memset(ind, 0, (size_t)hit_tileDims(*root)*sizeof(HitInd));
 
-	int i,j;
-	for(i=0; i < root->acumCard; i++) {
+	for(HitInd i=0; i < root->acumCard; i++) {
 		/* 3.1. COMPUTE THE offset IN PARENT MEMORY AND GET CHILD POINTER */
 		size_t offset=0;
-		for(j=0; j < hit_tileDims(*root); j++) 
+		for(int j=0; j < hit_tileDims(*root); j++) 
 			offset += (size_t)ind[j] * (size_t)root->qstride[j] * (size_t)root->origAcumCard[j+1];
 		HitTile *child = (HitTile *)( (char *)root->data + offset * root->baseExtent );
 
@@ -329,7 +428,7 @@ void hit_tileFillUpdateArrayCoordinatesRec( HitTile *root, int coords[HIT_MAXDIM
 		hit_tileFillUpdateArrayCoordinatesRec( child, displacement );
 
 		/* 3.3. NEXT COORDINATES */
-		j = hit_shapeDims( root->shape )-1;
+		int j = hit_shapeDims( root->shape )-1;
 		do{
 			ind[j] = (ind[j]+1) % (root->card[j]);					
 			if ( ind[j] != 0 ) break;
@@ -342,8 +441,7 @@ void hit_tileFillUpdateArrayCoordinatesRec( HitTile *root, int coords[HIT_MAXDIM
 /* Hit FILL: FILL A TILE WITH A GIVEN VALUE */
 void hit_tileFillInternal(void * varP, void * value, const char *name, const char *file, int numLine) {
 	HitTile *var = (HitTile *)varP;
-	int i;
-	int ind[HIT_MAXDIMS], j;
+	HitInd ind[HIT_MAXDIMS];
 	size_t offset;
 	char *ptr;
 	HitTile reducedDomainVar[2];
@@ -380,7 +478,7 @@ void hit_tileFillInternal(void * varP, void * value, const char *name, const cha
 			/* 1.1. REAL OWNER VARIABLE, SET ALL THE CONTIGUOS DATA */
 			case HIT_MS_OWNER: 
 				ptr=(char *)var->data;
-				for(i=0; i<var->acumCard; i++) {
+				for(HitInd i=0; i<var->acumCard; i++) {
 					memcpy(ptr, value, var->baseExtent);
 					ptr += var->baseExtent;
 				}
@@ -389,19 +487,19 @@ void hit_tileFillInternal(void * varP, void * value, const char *name, const cha
 			/* 1.2. SELECTION, COPY DATA LIKE AN UPDATE, LOCATING EACH POSITION ON PARENT */
 			case HIT_MS_NOT_OWNER:
 				/* 1.2.1. INITIALISE ind WITH 0 */
-				memset(ind,0, (size_t)hit_shapeDims(var->shape)*sizeof(int));
+				memset(ind,0, (size_t)hit_shapeDims(var->shape)*sizeof(HitInd));
 				/* 1.2.2. TRAVERSE ALL POSITIONS */
-				for(i=0;i<var->acumCard;i++) {
+				for(HitInd i=0;i<var->acumCard;i++) {
 					/* 1.2.2.1. COMPUTE THE offset IN PARENT MEMORY */
 					offset=0;
-					for(j=0;j<hit_shapeDims(var->shape);j++) {
+					for(int j=0;j<hit_shapeDims(var->shape);j++) {
 						offset += (size_t)ind[j] * (size_t)var->qstride[j] * (size_t)var->origAcumCard[j+1];
 					}
 					/* 1.2.2.2. COPY DATA ON THE POSITION */
 					memcpy( (char *)var->data+offset*var->baseExtent, value, var->baseExtent );
 
 					/* 1.2.2.3. NEXT POSITION */
-					j=hit_shapeDims(var->shape)-1;
+					int j=hit_shapeDims(var->shape)-1;
 					do{
 						ind[j]=(ind[j]+1)% (var->card[j]);					
 						if (ind[j]!=0) break;
@@ -423,7 +521,7 @@ void hit_tileFillInternal(void * varP, void * value, const char *name, const cha
 		var->hierDepth = (char)((int)(child -> hierDepth) + 1);
 
 		/* 2.2. UPDATE THE childSize/childBegin FIELDS WITH CHILDREN INFORMATION */
-		for ( i=0; i < hit_tileDims(*child); i++ ) {
+		for ( int i=0; i < hit_tileDims(*child); i++ ) {
 			/* 2.3.1. GET THE SIZE OF THE NORMALIZED SIGNATURE */
 			var->childSize[i] = hit_sigBlockSizeInternal( hit_tileDimSig( *child, i ) ); 
 
@@ -456,12 +554,12 @@ void hit_tileFillInternal(void * varP, void * value, const char *name, const cha
 			/* 2.3.2. SELECTION, COPY DATA LIKE AN UPDATE, LOCATING EACH POSITION ON PARENT */
 			case HIT_MS_NOT_OWNER:
 				/* 2.3.2.1. INITIALISE ind WITH 0 */
-				memset(ind,0, (size_t)hit_shapeDims(var->shape)*sizeof(int));
+				memset(ind,0, (size_t)hit_shapeDims(var->shape)*sizeof(HitInd));
 				/* 2.3.2.2. TRAVERSE ALL POSITIONS */
-				for(i=0;i<var->acumCard;i++) {
+				for(HitInd i=0;i<var->acumCard;i++) {
 					/* 2.3.2.2.1. COMPUTE THE offset IN PARENT MEMORY */
 					offset=0;
-					for(j=0;j<hit_shapeDims(var->shape);j++) {
+					for(int j=0;j<hit_shapeDims(var->shape);j++) {
 						offset += (size_t)ind[j] * (size_t)var->qstride[j] * (size_t)var->origAcumCard[j+1];
 					}
 					/* 2.3.2.2.2. CLONE THE INPUT SUB-TILE ON THE POSITION */
@@ -475,13 +573,13 @@ void hit_tileFillInternal(void * varP, void * value, const char *name, const cha
 					pos->ref=NULL;
 
 					/* 2.3.2.2.3. RECURSIVELY UPDATE THE ARRAY COORDINATES */
-					int arrayCoords[HIT_MAXDIMS] = { 0, 0, 0, 0 };
-					for(j=0;j<hit_shapeDims(var->shape);j++) 
+					HitInd arrayCoords[HIT_MAXDIMS] = { 0, 0, 0, 0 };
+					for(int j=0;j<hit_shapeDims(var->shape);j++) 
 						arrayCoords[j] = ind[j] * hit_tileDimStride(*var,j) + hit_tileDimBegin(*var,j);
 					hit_tileFillUpdateArrayCoordinatesRec( pos, arrayCoords );
 
 					/* 2.3.2.2.4. NEXT POSITION */
-					j=hit_shapeDims(var->shape)-1;
+					int j=hit_shapeDims(var->shape)-1;
 					do{
 						ind[j]=(ind[j]+1)% (var->card[j]);					
 						if (ind[j]!=0) break;
@@ -502,8 +600,8 @@ void hit_tileFillInternal(void * varP, void * value, const char *name, const cha
 
 
 /* Hit MULTILEVEL TILES: LOCATE BLOCK WHICH CONTAINS THE GIVEN ARRAY COORDINATES  */
-void *hit_mtileBlockArrayCoord( HitTile *root, int coords[HIT_MAXDIMS] ) {
-	int thisLevelTileCoords[HIT_MAXDIMS];
+void *hit_mtileBlockArrayCoord( HitTile *root, HitInd coords[HIT_MAXDIMS] ) {
+	HitInd thisLevelTileCoords[HIT_MAXDIMS];
 
 	/* 0. CHECK: SHOULD NOT BE NULL AND MEMORY SHOULD BE INITIALIZED */
 	if ( root->memStatus == HIT_MS_NULL || root->memStatus == HIT_MS_NOMEM ) return NULL;
@@ -512,11 +610,11 @@ void *hit_mtileBlockArrayCoord( HitTile *root, int coords[HIT_MAXDIMS] ) {
 	int dim;
 	for ( dim=0; dim < hit_tileDims(*root); dim++ ) {
 		/* 1.1. TRANSFORM TO LOCAL BLOCK COORDINATES */
-		int arrayCoord = (int)floor(( coords[dim] - root->childBegin[dim] ) / (double)root->childSize[dim]);
+		HitInd arrayCoord = hit_indFloor(( coords[dim] - root->childBegin[dim] ) / (HitIndF)root->childSize[dim]);
 		/* 1.2. CHECK IF THE BLOCK IS IN THE ROOT TILE DOMAIN */
 		if ( ! hit_sigIn( hit_tileDimSig(*root,dim), arrayCoord ) ) return NULL;
 		/* 1.3. STORE THE TILE COORDINATE */
-		thisLevelTileCoords[dim] = (int)floor(( arrayCoord - hit_tileDimBegin(*root,dim) ) / (double)hit_tileDimStride(*root,dim) );
+		thisLevelTileCoords[dim] = hit_indFloor(( arrayCoord - hit_tileDimBegin(*root,dim) ) / (HitIndF)hit_tileDimStride(*root,dim) );
 	}
 
 	/* 2. IF IT IS A LEAF, RETURN THE TILE */
@@ -534,8 +632,8 @@ void *hit_mtileBlockArrayCoord( HitTile *root, int coords[HIT_MAXDIMS] ) {
 }
 
 /* Hit MULTILEVEL TILES: LOCATE THE ELEMENT WITH THE GIVEN ARRAY COORDINATES  */
-void *hit_mtileElemAtArrayCoord( HitTile *root, int coords[HIT_MAXDIMS] ) {
-	int thisLevelTileCoords[HIT_MAXDIMS];
+void *hit_mtileElemAtArrayCoord( HitTile *root, HitInd coords[HIT_MAXDIMS] ) {
+	HitInd thisLevelTileCoords[HIT_MAXDIMS];
 
 	/* 0. CHECK: SHOULD NOT BE NULL AND MEMORY SHOULD BE INITIALIZED */
 	if ( root->memStatus == HIT_MS_NULL || root->memStatus == HIT_MS_NOMEM ) return NULL;
@@ -544,11 +642,11 @@ void *hit_mtileElemAtArrayCoord( HitTile *root, int coords[HIT_MAXDIMS] ) {
 	int dim;
 	for ( dim=0; dim < hit_tileDims(*root); dim++ ) {
 		/* 1.1. TRANSFORM TO LOCAL BLOCK COORDINATES */
-		int arrayCoord = (int)floor(( coords[dim] - root->childBegin[dim] ) / (double)root->childSize[dim]);
+		HitInd arrayCoord = hit_indFloor(( coords[dim] - root->childBegin[dim] ) / (HitIndF)root->childSize[dim]);
 		/* 1.2. CHECK IF THE BLOCK IS IN THE ROOT TILE DOMAIN */
 		if ( ! hit_sigIn( hit_tileDimSig(*root,dim), arrayCoord ) ) return NULL;
 		/* 1.3. STORE THE TILE COORDINATE */
-		thisLevelTileCoords[dim] = (int)floor(( arrayCoord - hit_tileDimBegin(*root,dim) ) / (double)hit_tileDimStride(*root,dim) );
+		thisLevelTileCoords[dim] = hit_indFloor(( arrayCoord - hit_tileDimBegin(*root,dim) ) / (HitIndF)hit_tileDimStride(*root,dim) );
 	}
 
 	/* 2. LOCATE THE TILE ELEMENT */
@@ -571,7 +669,7 @@ void *hit_mtileElemAtArrayCoord( HitTile *root, int coords[HIT_MAXDIMS] ) {
 void hit_tileCloneInternal(void *newVarP, const void *oldVarP, const char *name, const char *file, int numLine) {
 	HitTile *newVar = (HitTile *)newVarP;
 	const HitTile *oldVar = (const HitTile *)oldVarP;
-	int i;
+	HitInd i;
 
 	/* 1. DUPLICATE HANDLER */
 	*newVar = *oldVar;
@@ -598,11 +696,8 @@ void hit_tileCloneInternal(void *newVarP, const void *oldVarP, const char *name,
 	if(oldVar->memStatus==HIT_MS_NOMEM) return;
 
 	/* PARENT TILE IS THE ORIGINAL TILE: CLONE IS LIKE A SELECTION + ALLOCATION + UPDATE */
-#ifdef __cplusplus
-	newVar->ref = const_cast<HitTile*>(oldVar);
-#else
-	newVar->ref = oldVar;
-#endif
+	// Cast away const qualifier without a warning
+	newVar->ref = (HitTile*)(intptr_t) oldVar;
 
 	/* HIERARCHICAL STRUCTURE: PROCESS CHILDREN */
 	if( oldVar->hierDepth > 0 ) {
@@ -672,11 +767,8 @@ void hit_tileSelectRefPointer( HitTile *newVar, const HitTile *oldVar ){
 				/* IF PARENT HAS NO MEMORY, COPY ITS REFERENCE TO ALLOW UPDATES IF IT IS
 				 * 	ALLOCATED IN THE FUTURE */
 		case HIT_MS_OWNER:
-#ifdef __cplusplus
-			newVar->ref = const_cast<HitTile*>(oldVar);
-#else
-			newVar->ref = oldVar;
-#endif
+			// Cast away const qualifier without a warning
+			newVar->ref = (HitTile*)(intptr_t) oldVar;
 			break;
 
 		case HIT_MS_NOT_OWNER:
@@ -701,7 +793,6 @@ int hit_tileSelectInternal(void *newVarP, const void *oldVarP, HitShape sh, int 
 
 	int numDims;
 	*newVar = HIT_TILE_NULL;
-
 	/* 0.1. OPTIMIZE WHEN SELECTING A NULL SHAPE */
 	if ( hit_shapeDims(sh) == -1 ) return 1;
 
@@ -721,8 +812,8 @@ int hit_tileSelectInternal(void *newVarP, const void *oldVarP, HitShape sh, int 
 
 	/* 0.4. COPY HIERARCHICAL DEPTH PROPERTIES */
 	newVar->hierDepth=oldVar->hierDepth;
-	memcpy(newVar->childSize, oldVar->childSize, HIT_MAXDIMS*sizeof(int));
-	memcpy(newVar->childBegin, oldVar->childBegin, HIT_MAXDIMS*sizeof(int));
+	memcpy(newVar->childSize, oldVar->childSize, HIT_MAXDIMS*sizeof(HitInd));
+	memcpy(newVar->childBegin, oldVar->childBegin, HIT_MAXDIMS*sizeof(HitInd));
 
 	/* COMPUTE SIGNATURES, DETECT AND STOP OUT-OF-BOUNDS SELECTIONS */
 	/* 1. GET NUMBER OF DIMENSIONS */
@@ -755,7 +846,8 @@ fprintf(stderr,"CTRL tileSelect: Out of bounds in signature %d: (%d,%d,%d) -> (%
 		/* COMPUTE OFFSET */
 		// @arturo Mar 13, BUG CORRECTED: Selection of several levels of depth with stride
 		//offset = offset + (size_t)(newSig.begin) * (size_t)(oldVar->origAcumCard[i+1]); 
-		offset = offset + (size_t)(newSig.begin * oldVar->qstride[i]) * (size_t)(oldVar->origAcumCard[i+1]); 
+		offset += (size_t)((newSig.begin * oldVar->qstride[i]) * (oldVar->origAcumCard[i+1])); 
+
 
 		/* ALIGN END TO STRIDE */
 		newSig.end = newSig.end - (newSig.end - newSig.begin) % newSig.stride;
@@ -786,7 +878,7 @@ fprintf(stderr,"CTRL tileSelect: Out of bounds in signature %d: (%d,%d,%d) -> (%
 	/* 4. COPY ORIGINAL ACUMMULATED CARDS */
 	memcpy(newVar->origAcumCard, 
 			oldVar->origAcumCard, 
-			(size_t)(hit_shapeDims(newVar->shape)+1)*sizeof(int)
+			(size_t)(hit_shapeDims(newVar->shape)+1)*sizeof(HitInd)
 			);
 
 	/* 5. SET THE DATA POINTER */
@@ -926,8 +1018,8 @@ int hit_tileSelectArrayCoordsInternal(void *newVarP, const void *oldVarP, HitSha
 
 	/* 0.5. COPY THE HIERARCHICAL DEPTH PROPERTIES */
 	newVar->hierDepth=oldVar->hierDepth;
-	memcpy(newVar->childSize, oldVar->childSize, HIT_MAXDIMS*sizeof(int));
-	memcpy(newVar->childBegin, oldVar->childBegin, HIT_MAXDIMS*sizeof(int));
+	memcpy(newVar->childSize, oldVar->childSize, HIT_MAXDIMS*sizeof(HitInd));
+	memcpy(newVar->childBegin, oldVar->childBegin, HIT_MAXDIMS*sizeof(HitInd));
 
 	/* 1. COMPUTE SIGNATURES, DETECT AND STOP OUT-OF-BOUNDS SELECTIONS */
 	/* 1.1. GET NUMBER OF DIMENSIONS */
@@ -1011,7 +1103,7 @@ int hit_tileSelectArrayCoordsInternal(void *newVarP, const void *oldVarP, HitSha
 	/* 4. COPY ORIGINAL ACUMMULATED CARDS */
 	memcpy(newVar->origAcumCard, 
 			oldVar->origAcumCard, 
-			(size_t)(hit_shapeDims(newVar->shape)+1)*sizeof(int)
+			(size_t)(hit_shapeDims(newVar->shape)+1)*sizeof(HitInd)
 			);
 
 	/*		START AT OLD DATA POINTER
@@ -1121,13 +1213,14 @@ int hit_tileFlattenDims(void *varP) {
 	if ( hit_shapeType( var->shape ) != HIT_SIG_SHAPE ) return 2;
 
 	/* 2. DIMENSIONS TO FLATTEN SHOULD NOT BE SUBSELECTIONS */
-	int acumCard = 1;
+	HitInd acumCard = 1;
 	for (i = hit_shapeDims(var->shape)-1; i>0; i--) {
 		acumCard *= hit_sigCard( hit_shapeSig( var->shape, i ) );
 		if ( var->origAcumCard[i] != acumCard ) break;
 	}
 	// NO DIMENSIONS TO BE FLATTENED
 	if ( i == hit_shapeDims(var->shape)-1 ) return 1;
+
 
 	/* 3. FLATTEN CARDINALITIES AND SHAPE */
 	int lastDim = i;
@@ -1167,8 +1260,7 @@ void hit_tileUpdateFromToAncestorInternal( void *sh, int fromTo,
 	HitPTile shadow = (HitPTile)sh;
 	HitPTile shadowOrig = shadow->ref;
 	HitTile reducedDomainShadow;
-	int	ind[ hit_tileDims( *shadow ) ];
-	int i,j,dim;
+	HitInd	ind[ hit_tileDims( *shadow ) ];
 	size_t k;
 	size_t chunkSize;
 
@@ -1216,6 +1308,7 @@ fprintf(stderr,"CTRL UPDATE %s ANCESTOR: Intersection detects an expanded tile, 
 	 * 		IN ONE OR BOTH VARIABLES
 	 * 		DIMENSIONS' RANGE: (dim in [-1,numDims-1]), -1 INDICATES WHOLE CONTIGUOUS VARIABLES */
 	chunkSize = (size_t)1;
+	int dim;
 	for ( dim = hit_tileDims( *shadow )-1
 		;
 		dim >= 0 
@@ -1226,7 +1319,7 @@ fprintf(stderr,"CTRL UPDATE %s ANCESTOR: Intersection detects an expanded tile, 
 		// THE SAME MEMORY SPACE IN BOTH VARIABLES TO ALLOW FURTHER DIMENSIONS TO BE CONTIGUOUS.
 		&& shadow->origAcumCard[dim+1] == shadowOrig->origAcumCard[dim+1]
 		// WITH THE SAME NUMBER OF ELEMENTS AS IN MEMORY SPACE (NO EXTRA BEGINNING/ENDING ELEMENTS)
-		&& shadow->origAcumCard[dim] == (int)chunkSize * shadow->card[dim]
+		&& shadow->origAcumCard[dim] == (HitInd)chunkSize * shadow->card[dim]
 		;
 		dim-- ) 
 		chunkSize = chunkSize * (size_t)shadow->card[ dim ];
@@ -1247,11 +1340,11 @@ fprintf(stderr,"CTRL UPDATE %s ANCESTOR: Contiguous after dimension %d\n", strFr
 	size_t chunkMemSize  = shadow->baseExtent * chunkSize;
 
 #ifdef DEBUG
-fprintf(stderr,"CTRL dim=%d, chunkSize=%d, Shadow: OrigAcumCard=%d\n", dim, (unsigned int)chunkSize, shadow->origAcumCard[0]);
+fprintf(stderr,"CTRL dim=%d, chunkSize=%d, Shadow: OrigAcumCard=%ld\n", dim, (unsigned int)chunkSize, shadow->origAcumCard[0]);
 #endif
 
 	/* 4. INIT INDICES */
-	for(i=0; i< dim+1; i++) ind[i] = 0;
+	for(int i=0; i< dim+1; i++) ind[i] = 0;
 
 	/* 5. COPY DATA (AS MANY CHUNKS AS NEEDED) */
 	/* 5.1. OPTIMIZATION: AVOID FROM/TO CONDITIONALS INSIDE THE LOOP */
@@ -1259,13 +1352,13 @@ fprintf(stderr,"CTRL dim=%d, chunkSize=%d, Shadow: OrigAcumCard=%d\n", dim, (uns
 	/* @arturo Mar 2014, BUG CORRECTED: 
 	 * 		COMPUTE DATA START POSITION IN THE ORIGINAL VAR 
 	 * 		AND RELATIVE STRIDES FOR THE SHADOW SUBSELECTION */
-	int sourceStart, targetStart;
-	int relativeBegin = 0;
-	int	relativeStride[ hit_tileDims( *shadow ) ];
-	int	relativeNoStride[ hit_tileDims( *shadow ) ];
-	int *relativeStrideSource, *relativeStrideTarget;
+	HitInd sourceStart, targetStart;
+	HitInd relativeBegin = 0;
+	HitInd	relativeStride[ hit_tileDims( *shadow ) ];
+	HitInd	relativeNoStride[ hit_tileDims( *shadow ) ];
+	HitInd *relativeStrideSource, *relativeStrideTarget;
 
-	for (i=0; i<hit_tileDims( *shadow ); i++) {
+	for (int i=0; i<hit_tileDims( *shadow ); i++) {
 		relativeBegin = relativeBegin + 
 			( hit_tileDimBegin( *shadow, i ) - hit_tileDimBegin( *shadowOrig, i ) )
 				* shadowOrig->origAcumCard[i+1]
@@ -1308,15 +1401,15 @@ fprintf(stderr,"CTRL dim=%d, chunkSize=%d, Shadow: OrigAcumCard=%d\n", dim, (uns
 		else {
 		/* @arturo Apr 2014: OPTIMIZATION, INNER LOOP */
 		//for(i=0; i< (int)((size_t)shadow->acumCard/chunkSize); i++) 
-			for(i=0; i< (int)((size_t)shadow->acumCard/(size_t)shadow->card[dim]/chunkSize); i++) {
+			for(size_t i=0; i< (size_t)shadow->acumCard/(size_t)shadow->card[dim]/chunkSize; i++) {
 				/* @arturo Mar 2014, BUG CORRECTED: POSITIONS FOR SUBSECLECTIONS AND STRIDES */
-				int sourcePos = sourceStart;
-				int targetPos = targetStart;
+				HitInd sourcePos = sourceStart;
+				HitInd targetPos = targetStart;
 
 			/* 5.2.1. COMPUTE NEXT POSITIONS IN THE shadow AND ORIGINAL VARIABLES */
 			/* @arturo Apr 2014: OPTIMIZATION, INNER LOOP */
 			//for(j=0; j< dim+1; j++) 
-				for(j=0; j< dim; j++) {
+				for(int j=0; j< dim; j++) {
 				/* @arturo Mar 2014, BUG CORRECTED: qstride[dim] SHOULD BE qstride[j] */
 				//sourcePos = sourcePos + ind[j] * sourceTile->qstride[j] * sourceTile->origAcumCard[j+1];
 				//targetPos = targetPos + ind[j] * targetTile->qstride[j] * targetTile->origAcumCard[j+1];
@@ -1325,8 +1418,8 @@ fprintf(stderr,"CTRL dim=%d, chunkSize=%d, Shadow: OrigAcumCard=%d\n", dim, (uns
 					targetPos = targetPos + ind[j] * relativeStrideTarget[j] * targetTile->origAcumCard[j+1];
 				}
 #ifdef DEBUG
-fprintf(stderr,"CTRL UPDATE-%s sourcePos=%d\n", strFromTo[ fromTo ], sourcePos);
-fprintf(stderr,"CTRL UPDATE-%s targetPos=%d\n", strFromTo[ fromTo ], targetPos);
+fprintf(stderr,"CTRL UPDATE-%s sourcePos=%ld\n", strFromTo[ fromTo ], sourcePos);
+fprintf(stderr,"CTRL UPDATE-%s targetPos=%ld\n", strFromTo[ fromTo ], targetPos);
 #endif
 
 				char *sourcePointer = (char *)(sourceTile->data) 
@@ -1339,7 +1432,7 @@ fprintf(stderr,"CTRL UPDATE-%s targetPos=%d\n", strFromTo[ fromTo ], targetPos);
 
 				/* 5.2.2. COPY DATA AT THE NEXT POSITION */
 				/* @arturo Apr 2014: OPTIMIZATION, INNER LOOP */
-				int innerLoopIdx;
+				HitInd innerLoopIdx;
 				for ( innerLoopIdx = 0; innerLoopIdx < shadow->card[dim]; 
 						innerLoopIdx++, 
 						sourcePointer += loopJumpSource,
@@ -1350,7 +1443,7 @@ fprintf(stderr,"CTRL UPDATE-%s targetPos=%d\n", strFromTo[ fromTo ], targetPos);
 				/* 5.2.3. ADVANCE INDECES */
 				/* @arturo Apr 2014: OPTIMIZATION, INNER LOOP */
 				//for(j=dim; j>=0; j--) 
-				for(j=dim-1; j>=0; j--) {
+				for(int j=dim-1; j>=0; j--) {
 					ind[j]++;
 					if (ind[j]==shadow->card[j]) ind[j]=0;
 					else break;
@@ -1360,18 +1453,18 @@ fprintf(stderr,"CTRL UPDATE-%s targetPos=%d\n", strFromTo[ fromTo ], targetPos);
 	}
 	/* 5.3. HIT_TILE TYPE ELEMENTS */
 	else if ( shadowOrig->hierDepth > 0 ) {
-		for(i=0; i< (int)((size_t)shadow->acumCard/chunkSize); i++) {
-			int sourcePos = 0;
-			int targetPos = 0;
+		for(size_t i=0; i< (size_t)shadow->acumCard/chunkSize; i++) {
+			HitInd sourcePos = 0;
+			HitInd targetPos = 0;
 
 			/* 5.3.1. COMPUTE NEXT POSITIONS IN THE shadow AND ORIGINAL VARIABLES */
-			for(j=0; j< dim+1; j++) {
+			for(int j=0; j< dim+1; j++) {
 				sourcePos = sourcePos + ind[j] * sourceTile->qstride[dim] * sourceTile->origAcumCard[j+1];
 				targetPos = targetPos + ind[j] * targetTile->qstride[dim] * targetTile->origAcumCard[j+1];
 			}
 #ifdef DEBUG
-fprintf(stderr,"CTRL UPDATE-%s sourcePos=%d\n", strFromTo[ fromTo ], sourcePos);
-fprintf(stderr,"CTRL UPDATE-%s targetPos=%d\n", strFromTo[ fromTo ], targetPos);
+fprintf(stderr,"CTRL UPDATE-%s sourcePos=%ld\n", strFromTo[ fromTo ], sourcePos);
+fprintf(stderr,"CTRL UPDATE-%s targetPos=%ld\n", strFromTo[ fromTo ], targetPos);
 #endif
 
 			/* 5.3.2. COPY DATA AT THE NEXT POSITION */
@@ -1383,7 +1476,7 @@ fprintf(stderr,"CTRL UPDATE-%s targetPos=%d\n", strFromTo[ fromTo ], targetPos);
 			}
 
 			/* 5.3.3. ADVANCE INDECES */
-			for(j=dim; j>=0; j--) {
+			for(int j=dim; j>=0; j--) {
 				ind[j]++;
 				if (ind[j]==shadow->card[j]) ind[j]=0;
 				else break;
@@ -1441,7 +1534,7 @@ HitShape hit_tileShapeArray2Tile(void *var, HitShape sh) {
 	HitTile *v = (HitTile *) var;
 	HitShape newShp=HIT_SHAPE_NULL_STATIC;
 	hit_shapeDimsSet(newShp,hit_shapeDims(sh));
-	int minStride, maxStride;
+	HitInd minStride, maxStride;
 	for(i=0;i<hit_shapeDims(sh);i++) {
 		if (hit_shapeSig(sh,i).stride > hit_shapeSig(v->shape,i).stride){
 			maxStride = hit_shapeSig(sh,i).stride;
@@ -1470,7 +1563,7 @@ HitShape hit_tileShapeArray2Tile(void *var, HitShape sh) {
 void hit_tileFreeRecInternal(void * varP) {
 
 	HitTile *var = (HitTile *)varP;
-	int i;
+	HitInd i;
 	//int j, ind[HIT_MAXDIMS];
 	//size_t offset;
 	void * ptr;

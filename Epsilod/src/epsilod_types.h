@@ -55,8 +55,8 @@
 	} EpsilodBorders;                            \
 	typedef struct {                             \
 		int            dims;                     \
-		int            size[EPSILOD_MAX_DIMS];   \
-		int            offset[EPSILOD_MAX_DIMS]; \
+		HitInd         size[EPSILOD_MAX_DIMS];   \
+		HitInd         offset[EPSILOD_MAX_DIMS]; \
 		EpsilodBorders borders;                  \
 	} EpsilodCoords;
 #endif

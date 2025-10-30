@@ -102,11 +102,11 @@ typedef struct {
  */
 typedef struct {
 	/** @privatesection */
-	int * names;		/**< Contains the list to translate between local and global names. */
-	int nNames;			/**< Number of names. */
-	int flagNames;		/**< Flag with information for the global to local translation. */
-	int * invNames;		/**< Array with the global to local translation of vertices. */
-	int nInvNames;		/**< Number of inv names. */
+	HitInd * names;		/**< Contains the list to translate between local and global names. */
+	HitInd nNames;			/**< Number of names. */
+	HitInd flagNames;		/**< Flag with information for the global to local translation. */
+	HitInd * invNames;		/**< Array with the global to local translation of vertices. */
+	HitInd nInvNames;		/**< Number of inv names. */
 } HitNameList;
 /** @endcond */
 
@@ -124,7 +124,7 @@ typedef struct {
  */
 typedef struct{
 	/** @privatesection */
-	int cards[HIT_SPARSE_MAXDIMS];			/**< The cardinalities. */
+	HitInd cards[HIT_SPARSE_MAXDIMS];			/**< The cardinalities. */
 	idxtype * xadj;							/**< Is an array with indices to adjncy to define the rows. */
 	idxtype * adjncy;						/**< Contains the columns of each row element. */
 	HitNameList names[HIT_SPARSE_MAXDIMS];	/**< Name list */
@@ -156,8 +156,8 @@ typedef struct{
  */
 typedef struct{
 	/** @privatesection */
-	int cards[HIT_SPARSE_MAXDIMS];			/**< The cardinalities. */
-	int nz;									/**< Number of non-zero elements or edges of the graph. */
+	HitInd cards[HIT_SPARSE_MAXDIMS];			/**< The cardinalities. */
+	HitInd nz;									/**< Number of non-zero elements or edges of the graph. */
 	HIT_BITMAP_TYPE * data;					/**< Array with the bitmap. */
 	HitNameList names[HIT_SPARSE_MAXDIMS];	/**< Name list */
 } HitBShape;
@@ -321,14 +321,14 @@ void hit_shapeFree(HitShape s);
  * @param name The name.
  * @return The index.
  */
-int hit_nameListName2Index(HitNameList list, int name);
+HitInd hit_nameListName2Index(HitNameList list, HitInd name);
 
 /**
  * Creates a new name list.
  * @param list List pointer.
  * @param nelems Number of elements.
  */
-void hit_nameListCreate(HitNameList * list, int nelems);
+void hit_nameListCreate(HitNameList * list, HitInd nelems);
 
 /**
  * Frees a name list.
@@ -339,9 +339,9 @@ void hit_nameListFree(HitNameList list);
 /**
  * Adds a new element to the list
  * @param list A name list pointer.
- * @param x The name
+ * @param name The name
  */
-void hit_nameListAdd(HitNameList * list, int x);
+void hit_nameListAdd(HitNameList * list, HitInd name);
 
 /**
  * Create the inverse list name to make the translation.

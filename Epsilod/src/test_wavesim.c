@@ -11,11 +11,12 @@
 
 #include <test_common.h>
 #include <test_wavesim_ext_type.h>
+
 #include <epsilod.h>
 
 char *output_file_name;
 
-vec2i size;
+vec2l size;
 int   iterations;
 
 void initData(HitTile(EPSILOD_BASE_TYPE) tileMat, EpsilodCoords global_coords, Epsilod_ext *p_ext_params) {
@@ -46,13 +47,11 @@ void initData(HitTile(EPSILOD_BASE_TYPE) tileMat, EpsilodCoords global_coords, E
 void outputData(HitTile_float io_tile, Epsilod_ext *ext_params) {
 
 	if (strcmp(output_file_name, "-") == 0) {
-		printf("Example not writing output.\n");
-		fflush(stdout);
 		return;
 	}
 
 	char o_f_name[1024];
-	sprintf(o_f_name, "%s_%d_%d_%d", output_file_name, size.x, size.y, iterations);
+	sprintf(o_f_name, "%s_%ld_%ld_%d", output_file_name, size.x, size.y, iterations);
 	output_file_name = o_f_name;
 
 	int radius = 1;
@@ -106,8 +105,8 @@ int main(int argc, char *argv[]) {
 	}
 
 	/* READ ARGUMENTS */
-	size.x                      = atoi(argv[1]);
-	size.y                      = atoi(argv[2]);
+	size.x                      = atol(argv[1]);
+	size.y                      = atol(argv[2]);
 	int   T                     = atoi(argv[3]);
 	float dt                    = atof(argv[4]);
 	iterations                  = T / dt;
@@ -130,7 +129,7 @@ int main(int argc, char *argv[]) {
 	stencilDeviceFunction  f_init_copy = initCellCopy_wavesim;
 	initDataDeviceFunction f_init      = initCell_wavesim;
 
-	int sizes[3] = {size.y + (radius * 2), size.x + (radius * 2), 0};
+	HitInd sizes[3] = {size.y + (radius * 2), size.x + (radius * 2), 0};
 
 	/* LAUNCH STENCIL COMPUTATION */
 	Epsilod_ext ext_params;

@@ -125,11 +125,25 @@ void updateCell_default_4D(PCtrl ctrl, Ctrl_Thread threads, Ctrl_Thread blockSiz
 }
 #endif // EPSILOD_BASE_TYPE != float
 
-CTRL_KERNEL_CHAR(epsilod_dev_copy, MANUAL, 0, 0, 0);
-CTRL_KERNEL_PROTO(epsilod_dev_copy,
+CTRL_KERNEL_CHAR(epsilod_dev_copy_1d, MANUAL, 0, 0, 0);
+CTRL_KERNEL_PROTO(epsilod_dev_copy_1d,
 				  1, GENERIC, DEFAULT, 2,
 				  IN, HitTile(EPSILOD_BASE_TYPE), matrix,
 				  OUT, HitTile(EPSILOD_BASE_TYPE), matrix_out);
+
+CTRL_KERNEL_CHAR(epsilod_dev_copy_2d, MANUAL, 0, 0, 0);
+CTRL_KERNEL_PROTO(epsilod_dev_copy_2d,
+				  1, GENERIC, DEFAULT, 2,
+				  IN, HitTile(EPSILOD_BASE_TYPE), matrix,
+				  OUT, HitTile(EPSILOD_BASE_TYPE), matrix_out);
+
+CTRL_KERNEL_CHAR(epsilod_dev_copy_3d, MANUAL, 0, 0, 0);
+CTRL_KERNEL_PROTO(epsilod_dev_copy_3d,
+				  1, GENERIC, DEFAULT, 2,
+				  IN, HitTile(EPSILOD_BASE_TYPE), matrix,
+				  OUT, HitTile(EPSILOD_BASE_TYPE), matrix_out);
+
+// TODO epsilod_dev_copy_4d
 
 /* D. False initialization of selections to avoid non-initialized warnings */
 CTRL_KERNEL_CHAR(epsilod_dev_touch, MANUAL, 0, 0, 0);
@@ -428,7 +442,7 @@ void compute(PCtrl comm, EpsilodProperties *props, EpsilodComputationArgs *compu
 
 	// Compute inner
 	if (validShape(tiles->inner_local->shape) && validShape(copy_tiles->inner_local->shape)) {
-		f_updateCell(comm, threads->inner, chars->inner, 0, *tiles->inner_local, *copy_tiles->inner_local, coords->inner, *stencil, factor, ext_params);
+		f_updateCell(comm, threads->inner, chars->inner, 0, *tiles->mat, *copy_tiles->mat, coords->inner, *stencil, factor, ext_params);
 	}
 }
 
@@ -473,7 +487,7 @@ void doStepNoComms(
 }
 
 void stencilComputation(
-	int                    sizes[],
+	HitInd                 sizes[],
 	HitShape               stencilShape,
 	float                  stencilData[],
 	float                  factor,
@@ -976,7 +990,7 @@ void stencilComputation(
 			qsort(sorted_comm_indices, numBorders, sizeof(CommCompIndex), compare_comm_tiles);
 			#endif
 			for (int j = 0, i = sorted_comm_indices[j].index; j < numBorders; i = sorted_comm_indices[++j].index) {
-				printOnce("Border comm: index=%d size=%d\n", i, tileBorderIn[i].acumCard);
+				printOnce("Border comm: index=%d size=%ld\n", i, tileBorderIn[i].acumCard);
 
 				// Keep track of active input/output comms separately
 				borderOutActive[i] = borderInActive[i];
@@ -1031,7 +1045,7 @@ void stencilComputation(
 			Ctrl_Thread *border_char = comm->type == CTRL_TYPE_CPU ? &CPU_BORDER_CHAR[char_dims - 1][0] : &BORDER_CHAR[char_dims - 1][0];
 
 			EpsilodThreads computation_threads;
-			computation_threads.inner = initCtrlThreadFromTile(dims, &tileInnerLocal);
+			computation_threads.inner = initCtrlThreadFromTile(dims, &tileMat);
 			Ctrl_Thread thr_border_out_dev[dims][2];
 			computation_threads.border_out_dev = thr_border_out_dev;
 			for (int i = 0; i < dims; i++) {
@@ -1149,10 +1163,27 @@ void stencilComputation(
 				printOnce("\tInitializing copy in device.\n");
 				fflush(stdout);
 				Ctrl_Launch(comm, epsilod_dev_touch, threads_touch, blocksize_touch, tileMat);
-				Ctrl_Thread threads_flat = {.dims = 1, .i = tileMat.acumCard, .j = 1, .k = 1};
-				// TODO: the number of threads was reduced from 512 to 256 to support OpenCL. It should be queried instead.
-				Ctrl_Thread blocksize_flat = {.dims = 1, .i = 256, .j = 1, .k = 1};
-				Ctrl_Launch(comm, epsilod_dev_copy, threads_flat, blocksize_flat, tileMat, tileCopy);
+				Ctrl_Thread threads_flat, blocksize_flat;
+				// This is limited by Controllers kernel thread id type, not by Ctrl_Thread
+				if (tileMat.acumCard <= INT_MAX) {
+					Ctrl_ThreadInit(threads_flat, tileMat.acumCard);
+					// TODO: the number of threads was reduced from 512 to 256 to support OpenCL. It should be queried instead.
+					Ctrl_ThreadInit(blocksize_flat, 256);
+					Ctrl_Launch(comm, epsilod_dev_copy_1d, threads_flat, blocksize_flat, tileMat, tileCopy);
+				} else {
+					threads_flat   = initCtrlThreadFromTile(dims, &tileMat);
+					blocksize_flat = INNER_CHAR[dims - 1];
+					switch (dims) {
+						case 1: Ctrl_Launch(comm, epsilod_dev_copy_1d, threads_flat, blocksize_flat, tileMat, tileCopy); break;
+						case 2: Ctrl_Launch(comm, epsilod_dev_copy_2d, threads_flat, blocksize_flat, tileMat, tileCopy); break;
+						case 3: Ctrl_Launch(comm, epsilod_dev_copy_3d, threads_flat, blocksize_flat, tileMat, tileCopy); break;
+						default:
+							fprintf(stderr, "\nError: Matrix copy not implemented for more than 3 dimensions when total cardinality is greater than UINT_MAX.\n\n");
+							MPI_Abort(MPI_COMM_WORLD, MPI_ERR_OTHER);
+							exit(EXIT_FAILURE);
+							break;
+					}
+				}
 				#endif // EPSILOD_INITIALIZE_COPY_IN_HOST
 			} else {
 				markTiles(comm, props, threads_touch, blocksize_touch, &tiles, &copy_tiles, &comm_args);
@@ -1187,6 +1218,9 @@ void stencilComputation(
 				doStepNoComms(comm, &props, &computation_args, &swap_structs, &swap_structs_copy);
 			}
 
+			Ctrl_Synchronize();
+			hit_clockStop(loopClock);
+
 			printOnce(" End\n");
 			fflush(stdout);
 
@@ -1196,7 +1230,6 @@ void stencilComputation(
 
 			/* 4.11. Clock results */
 			hit_clockStop(mainClock);
-			hit_clockStop(loopClock);
 
 			reduceClocks(lay);
 			printClockInfo();
