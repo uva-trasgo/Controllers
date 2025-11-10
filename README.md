@@ -1,14 +1,10 @@
-TODO - International Journal of Parallel Programming
+International Journal of Parallel Programming
 ====
-The assets related to the IJPP article will be available in this repository from 3 to 9 November. They include:
- * EPSILOD code - DONE
- * Celerity, Muesli and Nvidia reference codes - DONE
- * DSL specification - DONE
-
-EPSILOD code for the gas simulation example is at Epsilod/src/test_gassimulation*
-EPSILOD code for the gas simulation example is at Epsilod/src/test_wavesim*
-Codes for Celerity, Muesli and Nvidia are at Epsilod/comparison_codes/2025-10
-The DSL secification is at Epsilod/docs/epsilod_dsl_spec.md
+The assets related to the IJPP article include:
+ * EPSILOD code for the gas simulation example. Found in Epsilod/src/test_gassimulation*
+ * EPSILOD code for the wave simulation example. Found in Epsilod/src/test_wavesim*
+ * Celerity, Muesli and Nvidia reference codes. Found in Epsilod/comparison_codes/2025-10/
+ * DSL specification. Found in Epsilod/docs/epsilod_dsl_spec.md
  
 Controllers library
 ====
