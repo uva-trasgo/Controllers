@@ -43,6 +43,7 @@ A neighbor of the domain element x is restricted to have an index with y_i in th
 	Each number represents the weight to apply to the neighbor in the corresponding relative position of the target domain element to be computed, in the case of an averaged sum stencil application. A zero value indicates that the the relative position is not included in the neighborhood. In the case of the second type of EPSILOD applications, any non-zero number indicate that the relative position is included in the neighborhood, but the exact weight has no special meaning.
     - Dictionary that maps neighbourhood relative indexes (y) to their weight. The default weight is 0.
 
+ - weight_divisor: Optional. It specifies a divisor for the weighted mean. It defaults to the sum of weights. In the case of the second type of EPSILOD applications this is ignored.
 
  - ext_params: Optional. A list of strings. Each string is a  C-language declaration of a parameter. These parameters are included as extra information in the kernel of the stencil application. The user should provide specific values in the main code of the application.
 
