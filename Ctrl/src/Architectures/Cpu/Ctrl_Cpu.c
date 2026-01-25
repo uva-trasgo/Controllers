@@ -350,6 +350,17 @@ void Ctrl_Cpu_GetInfo(Ctrl_Cpu *p_ctrl, Ctrl_Info *p_info) {
 	}
 }
 
+double Ctrl_Cpu_TimeLastOp(Ctrl_Cpu *p_ctrl, HitTile *p_tile) {
+	Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)(p_tile->ext);
+	Ctrl_Tile_Impl *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
+	Ctrl_Cpu_Tile  *p_tile_data_cpu  = p_tile_data_impl->tile.p_cpu;
+
+	double time;
+	#pragma omp atomic read
+	time = *p_tile_data_cpu->p_last_op_duration;
+	return time;
+}
+
 void Ctrl_Cpu_CreateTex(Ctrl_Cpu *p_ctrl, HitTile *p_tile, Ctrl_TexDesc tex_desc) {
 	#ifdef _CTRL_DEBUG_
 	fprintf(stderr, "[Ctrl_Cpu_CreateTex] Warning: not implemented\n");
@@ -443,9 +454,12 @@ void Ctrl_Cpu_EvalTaskMoveToInner(Ctrl_Cpu *p_ctrl, HitTile *p_tile) {
 	// wait for previous task to finish if policy is sync
 	Ctrl_SyncWait(p_ctrl->p_moveTo_stream);
 
-	Ctrl_Task task = CTRL_TASK_NULL;
-	task.task_type = CTRL_TASK_TYPE_MOVETO;
-	task.tile      = *p_tile;
+	Ctrl_Task task     = CTRL_TASK_NULL;
+	task.task_type     = CTRL_TASK_TYPE_MOVETO;
+	task.tile          = *p_tile;
+	task.p_op_duration = (double *)malloc(sizeof(double));
+
+	p_tile_data_cpu->p_last_op_duration = task.p_op_duration;
 
 	// Push moveFrom task to moveFrom execution queue
 	Ctrl_TaskQueue_Push(p_ctrl->p_moveTo_stream, task);
@@ -485,9 +499,13 @@ void Ctrl_Cpu_EvalTaskMoveFromInner(Ctrl_Cpu *p_ctrl, HitTile *p_tile) {
 	// wait for previous task to finish if policy is sync
 	Ctrl_SyncWait(p_ctrl->p_moveFrom_stream);
 
-	Ctrl_Task task = CTRL_TASK_NULL;
-	task.task_type = CTRL_TASK_TYPE_MOVEFROM;
-	task.tile      = *p_tile;
+	Ctrl_Task task     = CTRL_TASK_NULL;
+	task.task_type     = CTRL_TASK_TYPE_MOVEFROM;
+	task.tile          = *p_tile;
+	task.p_op_duration = (double *)malloc(sizeof(double));
+
+	p_tile_data_cpu->p_last_op_duration = task.p_op_duration;
+
 	// Push moveFrom task to moveFrom execution queue
 	Ctrl_TaskQueue_Push(p_ctrl->p_moveFrom_stream, task);
 
@@ -522,10 +540,7 @@ void Ctrl_Cpu_StreamConsume(Ctrl_TaskQueue *p_stream, Ctrl_Cpu *p_ctrl) {
 			// Update task counter
 			#pragma omp atomic update
 			p_stream->last_finished++;
-			// Free task (kernel tasks must be destroyed at the end)
-			if (p_task->task_type != CTRL_TASK_TYPE_KERNEL) {
-				Ctrl_TaskQueue_FreeTask(p_task);
-			}
+			// Tasks are freed at the end because of last op timer ptr
 		}
 	}
 	Ctrl_TaskQueue_Destroy(p_stream);
@@ -561,22 +576,22 @@ void Ctrl_Cpu_ExecMemcpy(HitTile *p_tile, Ctrl_Cpu *p_ctrl, int direction) {
 			memcpy(dst, src, (size_t)flat_tile.acumCard * flat_tile.baseExtent);
 			break;
 		case 2:
-			for (int i = 0; i < flat_tile.card[0]; i++)
+			for (HitInd i = 0; i < flat_tile.card[0]; i++)
 				memcpy((void *)((char *)dst + flat_tile.baseExtent * i * flat_tile.origAcumCard[1]),
 					   (void *)((char *)src + flat_tile.baseExtent * i * flat_tile.origAcumCard[1]),
 					   (size_t)flat_tile.card[1] * flat_tile.baseExtent);
 			break;
 		case 3:
-			for (int i = 0; i < flat_tile.card[0]; i++)
-				for (int j = 0; j < flat_tile.card[1]; j++)
+			for (HitInd i = 0; i < flat_tile.card[0]; i++)
+				for (HitInd j = 0; j < flat_tile.card[1]; j++)
 					memcpy((void *)((char *)dst + flat_tile.baseExtent * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2])),
 						   (void *)((char *)src + flat_tile.baseExtent * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2])),
 						   (size_t)flat_tile.card[2] * flat_tile.baseExtent);
 			break;
 		case 4:
-			for (int i = 0; i < flat_tile.card[0]; i++)
-				for (int j = 0; j < flat_tile.card[1]; j++)
-					for (int k = 0; k < flat_tile.card[2]; k++)
+			for (HitInd i = 0; i < flat_tile.card[0]; i++)
+				for (HitInd j = 0; j < flat_tile.card[1]; j++)
+					for (HitInd k = 0; k < flat_tile.card[2]; k++)
 						memcpy((void *)((char *)dst + flat_tile.baseExtent * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2] + k * flat_tile.origAcumCard[3])),
 							   (void *)((char *)src + flat_tile.baseExtent * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2] + k * flat_tile.origAcumCard[3])),
 							   (size_t)flat_tile.card[3] * flat_tile.baseExtent);
@@ -588,15 +603,22 @@ void Ctrl_Cpu_ExecMemcpy(HitTile *p_tile, Ctrl_Cpu *p_ctrl, int direction) {
 }
 
 void Ctrl_Cpu_EvalTaskInner(Ctrl_Task *p_task, Ctrl_Cpu *p_ctrl) {
+	double time = omp_get_wtime();
 	switch (p_task->task_type) {
 		case CTRL_TASK_TYPE_KERNEL:
 			p_task->pfn_kernel_wrapper(p_task->request, p_task->device_id, CTRL_TYPE_CPU, p_task->threads, p_task->blocksize, p_task->p_arguments);
+			#pragma omp atomic write
+			*(p_task->p_op_duration) = omp_get_wtime() - time;
 			break;
 		case CTRL_TASK_TYPE_MOVETO:
 			Ctrl_Cpu_ExecMemcpy(&p_task->tile, p_ctrl, CTRL_CPU_MOVEHTD);
+			#pragma omp atomic write
+			*(p_task->p_op_duration) = omp_get_wtime() - time;
 			break;
 		case CTRL_TASK_TYPE_MOVEFROM:
 			Ctrl_Cpu_ExecMemcpy(&p_task->tile, p_ctrl, CTRL_CPU_MOVEDTH);
+			#pragma omp atomic write
+			*(p_task->p_op_duration) = omp_get_wtime() - time;
 			break;
 		case CTRL_TASK_TYPE_WAITEVENT:
 			Ctrl_GenericEvent_Wait(p_task->event);
@@ -738,7 +760,7 @@ void Ctrl_Cpu_EvalTaskKernelLaunch(Ctrl_Cpu *p_ctrl, Ctrl_Task *p_task) {
 				}
 			} else {
 				if (p_tile_data->host_status == CTRL_TILE_UNALLOC) {
-					fprintf(stderr, "[Ctrl_Cpu] Internal Error: Tile with no memory allocated as argument to kernel %d\n", i);
+					fprintf(stderr, "[Ctrl_Cpu] Internal Error: Launching kernel %s with a tile with no memory allocated as parameter %d (starting at 0)\n", p_task->p_func_name, i);
 					fflush(stderr);
 					exit(EXIT_FAILURE);
 				}
@@ -790,7 +812,7 @@ void Ctrl_Cpu_EvalTaskKernelLaunch(Ctrl_Cpu *p_ctrl, Ctrl_Task *p_task) {
 				}
 
 				if (p_tile_data->host_status == CTRL_TILE_INVALID && p_task->p_roles[i] != KERNEL_OUT) {
-					fprintf(stderr, "[Ctrl_Cpu] Warning: Tile with uninitialized data as input on kernel. Argument position %d.\n", i);
+					fprintf(stderr, "[Ctrl_Cpu] Warning: Tile with uninitialized data as input on kernel %s, parameter: %d (starting at 0)\n", p_task->p_func_name, i);
 					fflush(stderr);
 				}
 
@@ -806,7 +828,8 @@ void Ctrl_Cpu_EvalTaskKernelLaunch(Ctrl_Cpu *p_ctrl, Ctrl_Task *p_task) {
 	Ctrl_Request request;
 	request.cpu.n_cores = p_ctrl->n_cores;
 
-	p_task->request = request;
+	p_task->request       = request;
+	p_task->p_op_duration = (double *)malloc(sizeof(double));
 
 	// wait for previous task to finish if policy is sync
 	Ctrl_SyncWait(p_ctrl->p_kernel_stream);
@@ -821,6 +844,9 @@ void Ctrl_Cpu_EvalTaskKernelLaunch(Ctrl_Cpu *p_ctrl, Ctrl_Task *p_task) {
 			Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)(p_tile->ext);
 			Ctrl_Tile_Impl *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
 			Ctrl_Cpu_Tile  *p_tile_data_cpu  = p_tile_data_impl->tile.p_cpu;
+
+			// for retrieving the duration of last op
+			p_tile_data_cpu->p_last_op_duration = p_task->p_op_duration;
 
 			if (p_task->p_roles[i] != KERNEL_IN) {
 				// invalidate tile on all other devs (this one is validated later)

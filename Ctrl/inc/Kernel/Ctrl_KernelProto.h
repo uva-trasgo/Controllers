@@ -21,9 +21,9 @@ CTRL_USER_TYPES
 #include "Kernel/Ctrl_ImplType.h"
 #include "Kernel/Ctrl_KernelArgs.h"
 
-#ifndef CTRL_FPGA_KERNEL_FILE
+#ifndef _CTRL_FPGA_KERNEL_FILE_
 #include "Core/Ctrl_TaskQueue.h"
-#endif // CTRL_FPGA_KERNEL_FILE
+#endif // _CTRL_FPGA_KERNEL_FILE_
 
 #include "Core/Ctrl_Profiler_Helper.h"
 
@@ -389,9 +389,8 @@ CTRL_USER_TYPES
  * @endif
  */
 #define CTRL_KERNEL_PROTO(name, n_implementations, ...)                                                                                                                                        \
-	CTRL_KERNEL_DECLARATION_##n_implementations(name, __VA_ARGS__)                                                                                                                             \
-                                                                                                                                                                                               \
-		void Ctrl_KernelWrapper_##name(Ctrl_Request request, int device_id, Ctrl_Type ctrl_type, Ctrl_Thread threads, Ctrl_Thread blocksize, void *args_list) {                                \
+	CTRL_KERNEL_DECLARATION_##n_implementations(name, __VA_ARGS__);                                                                                                                            \
+	void Ctrl_KernelWrapper_##name(Ctrl_Request request, int device_id, Ctrl_Type ctrl_type, Ctrl_Thread threads, Ctrl_Thread blocksize, void *args_list) {                                    \
 		switch (device_id) {                                                                                                                                                                   \
 			CTRL_KERNEL_WRAP_LAUNCH_##n_implementations(name, args_list, __VA_ARGS__);                                                                                                         \
 			default:                                                                                                                                                                           \

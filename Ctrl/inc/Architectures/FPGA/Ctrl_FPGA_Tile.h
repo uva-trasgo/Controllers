@@ -34,6 +34,7 @@ typedef struct Ctrl_FPGA_Tile {
 	Ctrl_GenericEvent      dev_last_kernel_write_event;  /**< Driver event to sincronyze tasks, represents last read operation on device*/
 	Ctrl_GenericEvent      dev_last_dth_event;           /**< Driver event to sincronyze tasks, represents last DTH comunication*/
 	Ctrl_GenericEvent      dev_last_htd_event;           /**< Driver event to sincronyze tasks, represents last HTD comunication*/
+	Ctrl_GenericEvent      last_op;                      /**< Driver event representing last operation. For timing purposes. */
 	int                    streamid_last_kw;             /**< Id of the stream of the last kernel write operation on this tile. For event optimizations */
 	int                    streamid_last_kr;             /**< Id of the stream of the last kernel read operation on this tile. For event optimizations */
 } Ctrl_FPGA_Tile;

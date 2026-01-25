@@ -243,6 +243,18 @@ void Ctrl_OpenCLGpu_GetInfo(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Info *p_info);
  */
 void Ctrl_OpenCLGpu_CreateTex(Ctrl_OpenCLGpu *p_ctrl, HitTile *p_tile, Ctrl_TexDesc tex_desc);
 
+/**
+ * @brief Return the duration of the last kernel or memory transfer operation performed over \p tile.
+ *
+ * The last operation enqueued for \p tile must be completed before calling this function.
+ *
+ * @param p_ctrl Ctrl \p p_tile is associated to.
+ * @param p_tile HitTile attached to \p p_ctrl.
+ *
+ * @return Duration of the last op over \p p_tile in seconds.
+ */
+double Ctrl_OpenCLGpu_TimeLastOp(Ctrl_OpenCLGpu *p_ctrl, HitTile *p_tile);
+
 #ifdef __cplusplus
 }
 #endif

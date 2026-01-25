@@ -18,19 +18,19 @@
 
 /*
  * <license>
- * 
+ *
  * Hitmap v1.4
- * 
+ *
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
- * or use for commercial purpose, public redistribution, in source or binary forms, with or 
- * without modifications, is NOT ALLOWED without the previous authorization of the copyright 
+ * or use for commercial purpose, public redistribution, in source or binary forms, with or
+ * without modifications, is NOT ALLOWED without the previous authorization of the copyright
  * holder. The origin of this software must not be misrepresented; you must not claim that you
  * wrote the original software. If you use this software for any purpose (e.g. publication),
  * a reference to the software package and the authors must be included.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
  * THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
  * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
@@ -38,15 +38,14 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
- * Copyright (c) 2007-2024, Trasgo Group, Universidad de Valladolid.
+ *
+ * Copyright (c) 2007-2026, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
- * 
+ *
  * More information on http://trasgo.infor.uva.es/
- * 
+ *
  * </license>
-*/
-
+ */
 
 #ifndef _HitSigShape_
 #define _HitSigShape_
@@ -55,7 +54,7 @@
 #include "hit_shape.h"
 
 #ifdef __cplusplus
-	extern "C" {
+extern "C" {
 #endif
 
 /**
@@ -63,11 +62,11 @@
  * ADT for multidimensional Signature domains.
  *
  * A signature domain shape is tuple of signature triplets, one signature for each dimension.
- * These domains define a bounding box with dense or regularly strided multidimensional indexes. 
+ * These domains define a bounding box with dense or regularly strided multidimensional indexes.
  * The cardinality of a shape is the number of all possible valid indexes combinations.
  *
- * This shape allows to define the domain of dense arrays with multiple indexes in a range 
- * of positive/negative integers with an optional stride.
+ * This shape allows to define the domain of dense arrays with multiple indexes in a range
+ * of positive/negative HitInd integers with an optional stride.
  *
  * Member functions are documented in \ref hit_sshape.h.
  *
@@ -81,16 +80,30 @@
  * Null internal static value for multidimensional Signature domain shapes.
  * The number of dimensions of this value is -1.
  */
-#define	 HIT_SIG_SHAPE_INTERNAL_NULL_STATIC		{ -1, { HIT_SIG_NULL_STATIC, HIT_SIG_NULL_STATIC, HIT_SIG_NULL_STATIC, HIT_SIG_NULL_STATIC } }
+#define HIT_SIG_SHAPE_INTERNAL_NULL_STATIC                                                     \
+	{                                                                                          \
+		-1, {                                                                                  \
+			HIT_SIG_NULL_STATIC, HIT_SIG_NULL_STATIC, HIT_SIG_NULL_STATIC, HIT_SIG_NULL_STATIC \
+		}                                                                                      \
+	}
 
 /** Null internal static value for signature shapes. */
-#define HIT_SIG_SHAPE_NULL_STATIC { HIT_SIG_SHAPE, { HIT_SIG_SHAPE_INTERNAL_NULL_STATIC} }
+#define HIT_SIG_SHAPE_NULL_STATIC                             \
+	{                                                         \
+		HIT_SIG_SHAPE, { HIT_SIG_SHAPE_INTERNAL_NULL_STATIC } \
+	}
 
 /** Hit signature shape whole static constant. */
-#define	HIT_SIG_SHAPE_WHOLE_STATIC		{ 0, { HIT_SIG_NULL_STATIC, HIT_SIG_NULL_STATIC, HIT_SIG_NULL_STATIC, HIT_SIG_NULL_STATIC } }
+#define HIT_SIG_SHAPE_WHOLE_STATIC                                                                \
+	{                                                                                             \
+		0, { HIT_SIG_NULL_STATIC, HIT_SIG_NULL_STATIC, HIT_SIG_NULL_STATIC, HIT_SIG_NULL_STATIC } \
+	}
 
 /** Hit shape whole static constant.  */
-#define	HIT_SHAPE_WHOLE_STATIC		{ HIT_SIG_SHAPE, { HIT_SIG_SHAPE_WHOLE_STATIC} }
+#define HIT_SHAPE_WHOLE_STATIC                        \
+	{                                                 \
+		HIT_SIG_SHAPE, { HIT_SIG_SHAPE_WHOLE_STATIC } \
+	}
 /** @endcond */
 
 /**
@@ -98,11 +111,10 @@
  *
  * The number of dimensions of this value is -1.
  */
-extern HitShape	HIT_SIG_SHAPE_NULL;
-
+extern HitShape HIT_SIG_SHAPE_NULL;
 
 /**
- * Special value: Whole domain. 
+ * Special value: Whole domain.
  *
  * Special value to indicate in tile selections
  * that the whole collection of indexes of
@@ -112,10 +124,10 @@ extern HitShape	HIT_SIG_SHAPE_NULL;
  *
  * \sa  hit_tileSelect()
  */
-extern HitSigShape	HIT_SIG_SHAPE_WHOLE;
+extern HitSigShape HIT_SIG_SHAPE_WHOLE;
 
 /**
- * Special value: Whole domain. 
+ * Special value: Whole domain.
  *
  * Special value to indicate in tile selections
  * that the whole collection of indexes of
@@ -127,7 +139,7 @@ extern HitSigShape	HIT_SIG_SHAPE_WHOLE;
  *
  * \sa  hit_tileSelect()
  */
-extern HitShape	HIT_SHAPE_WHOLE;
+extern HitShape HIT_SHAPE_WHOLE;
 
 /** @cond INTERNAL */
 /* 2. ACCESS METHOD TO THE SIGNATURE STRUCT */
@@ -139,17 +151,16 @@ extern HitShape	HIT_SHAPE_WHOLE;
 #define hit_sShapeAccess(s) ((s).info.sig)
 /** @endcond */
 
-
 /* 3. Hit SHAPE GENERATING FUNCTIONS */
 /** @cond INTERNAL */
-/* 
+/*
  * Internal constructor, generating a shape from a internal HitSigShape structure
  *
- * @author arturo 
+ * @author arturo
  * @date Feb 2013
  */
-static inline HitShape hit_shapeFromSigShape( HitSigShape s ) {
-	HitShape a = { HIT_SIG_SHAPE, { s } };
+static inline HitShape hit_shapeFromSigShape(HitSigShape s) {
+	HitShape a = {HIT_SIG_SHAPE, {s}};
 	return a;
 }
 /** @endcond */
@@ -158,7 +169,6 @@ static inline HitShape hit_shapeFromSigShape( HitSigShape s ) {
  * @name Initializers, constructors
  */
 /**@{*/
-
 
 /* 4.1 Hit Signature Shape generating functions */
 /**
@@ -177,35 +187,35 @@ static inline HitShape hit_shapeFromSigShape( HitSigShape s ) {
  * @param[in] "..."	\e HitSig_list A list of "nd" signature values.
  * @retval	HitShape  A new shape value.
  */
-#define hit_shape(nd, ...)	hit_shape##nd(__VA_ARGS__)
+#define hit_shape(nd, ...) hit_shape##nd(__VA_ARGS__)
 
 /** @cond INTERNAL */
 /**
  * Hit Signature Shape constructor for one dimension.
  */
 static inline HitShape hit_shape1(HitSig s1) {
-	HitShape a = { HIT_SIG_SHAPE, { { 1, { s1 } }} };
+	HitShape a = {HIT_SIG_SHAPE, {{1, {s1}}}};
 	return a;
 }
 /**
  * Hit Signature Shape constructor for two dimensions.
  */
 static inline HitShape hit_shape2(HitSig s1, HitSig s2) {
-	HitShape a = { HIT_SIG_SHAPE, { { 2, { s1, s2 } }} };
+	HitShape a = {HIT_SIG_SHAPE, {{2, {s1, s2}}}};
 	return a;
 }
 /**
  * Hit Signature Shape constructor for three dimensions.
  */
 static inline HitShape hit_shape3(HitSig s1, HitSig s2, HitSig s3) {
-	HitShape a = { HIT_SIG_SHAPE, { { 3, { s1, s2, s3 } }} };
+	HitShape a = {HIT_SIG_SHAPE, {{3, {s1, s2, s3}}}};
 	return a;
 }
 /**
  * Hit Signature Shape constructor for four dimensions.
  */
 static inline HitShape hit_shape4(HitSig s1, HitSig s2, HitSig s3, HitSig s4) {
-	HitShape a = { HIT_SIG_SHAPE, { { 4, { s1, s2, s3, s4 } }} };
+	HitShape a = {HIT_SIG_SHAPE, {{4, {s1, s2, s3, s4}}}};
 	return a;
 }
 /** @endcond */
@@ -226,57 +236,44 @@ static inline HitShape hit_shape4(HitSig s1, HitSig s2, HitSig s3, HitSig s4) {
  * @hideinitializer
  *
  * @param[in] nd 	\e int Number of dimensions.
- * @param[in] "..."	\e int_list A list of "nd" integer indexes.
+ * @param[in] "..."	\e int_list A list of "nd" HitInd integer indexes.
  * @retval	HitShape  A new shape value with one multidimensional index.
  */
-#define hit_shapeIndex(nd, ...)	hit_shapeIndex##nd(__VA_ARGS__)
+#define hit_shapeIndex(nd, ...) hit_shapeIndex##nd(__VA_ARGS__)
 
 /** @cond INTERNAL */
 /**
  * Hit Signature Shape constructor for one dimension, select only one index element.
  */
-static inline HitShape hit_shapeIndex1( int idx ) {
-	HitShape a = { HIT_SIG_SHAPE, { { 1, { hit_sig( idx, idx, 1 ) } }} };
+static inline HitShape hit_shapeIndex1(HitInd idx) {
+	HitShape a = {HIT_SIG_SHAPE, {{1, {hit_sig(idx, idx, 1)}}}};
 	return a;
 }
 
 /**
  * Hit Signature Shape constructor for two dimensions, select only one index element per dimension.
  */
-static inline HitShape hit_shapeIndex2( int idx1, int idx2 ) {
-	HitShape a = { HIT_SIG_SHAPE, { { 2, {
-			hit_sig( idx1, idx1, 1 ),
-			hit_sig( idx2, idx2, 1 ) 
-			} }} };
+static inline HitShape hit_shapeIndex2(HitInd idx1, HitInd idx2) {
+	HitShape a = {HIT_SIG_SHAPE, {{2, {hit_sig(idx1, idx1, 1), hit_sig(idx2, idx2, 1)}}}};
 	return a;
 }
 
 /**
  * Hit Signature Shape constructor for three dimensions, select only one index element per dimension.
  */
-static inline HitShape hit_shapeIndex3( int idx1, int idx2, int idx3 ) {
-	HitShape a = { HIT_SIG_SHAPE, { { 3, {
-			hit_sig( idx1, idx1, 1 ),
-			hit_sig( idx2, idx2, 1 ),
-			hit_sig( idx3, idx3, 1 ) 
-			} }} };
+static inline HitShape hit_shapeIndex3(HitInd idx1, HitInd idx2, HitInd idx3) {
+	HitShape a = {HIT_SIG_SHAPE, {{3, {hit_sig(idx1, idx1, 1), hit_sig(idx2, idx2, 1), hit_sig(idx3, idx3, 1)}}}};
 	return a;
 }
 
 /**
  * Hit Signature Shape constructor for four dimensions, select only one index element per dimension.
  */
-static inline HitShape hit_shapeIndex4( int idx1, int idx2, int idx3, int idx4 ) {
-	HitShape a = { HIT_SIG_SHAPE, { { 4, {
-			hit_sig( idx1, idx1, 1 ),
-			hit_sig( idx2, idx2, 1 ),
-			hit_sig( idx3, idx3, 1 ),
-			hit_sig( idx4, idx4, 1 ) 
-			} }} };
+static inline HitShape hit_shapeIndex4(HitInd idx1, HitInd idx2, HitInd idx3, HitInd idx4) {
+	HitShape a = {HIT_SIG_SHAPE, {{4, {hit_sig(idx1, idx1, 1), hit_sig(idx2, idx2, 1), hit_sig(idx3, idx3, 1), hit_sig(idx4, idx4, 1)}}}};
 	return a;
 }
 /** @endcond */
-
 
 /**
  * Constructor (3) of Signature domain shapes, with standard C array domains.
@@ -294,54 +291,41 @@ static inline HitShape hit_shapeIndex4( int idx1, int idx2, int idx3, int idx4 )
  * @hideinitializer
  *
  * @param[in] nd 	\e int Number of dimensions.
- * @param[in] "..."	\e int_list A list of "nd" positive integer size values.
+ * @param[in] "..."	\e int_list A list of "nd" positive Hitind integer size values.
  * @retval	HitShape  A new shape value.
  */
-#define hit_shapeStd(nd, ...)	hit_shapeStd##nd(__VA_ARGS__)
-
+#define hit_shapeStd(nd, ...) hit_shapeStd##nd(__VA_ARGS__)
 
 /** @cond INTERNAL */
 /**
  * Hit Signature Shape constructor for one dimension, standard domain
  */
-static inline HitShape hit_shapeStd1( int _size ) {
-	HitShape a = { HIT_SIG_SHAPE, { { 1, { hit_sigStd( _size ) } } } };
+static inline HitShape hit_shapeStd1(HitInd _size) {
+	HitShape a = {HIT_SIG_SHAPE, {{1, {hit_sigStd(_size)}}}};
 	return a;
 }
 
 /**
  * Hit Signature Shape constructor for two dimensions, standard domain
  */
-static inline HitShape hit_shapeStd2( int size1, int size2 ) {
-	HitShape a = { HIT_SIG_SHAPE, { { 2, {
-			hit_sigStd( size1 ),
-			hit_sigStd( size2 ) 
-			} }} };
+static inline HitShape hit_shapeStd2(HitInd size1, HitInd size2) {
+	HitShape a = {HIT_SIG_SHAPE, {{2, {hit_sigStd(size1), hit_sigStd(size2)}}}};
 	return a;
 }
 
 /**
  * Hit Signature Shape constructor for three dimensions, standard domain
  */
-static inline HitShape hit_shapeStd3( int size1, int size2, int size3 ) {
-	HitShape a = { HIT_SIG_SHAPE, { { 3, {
-			hit_sigStd( size1 ),
-			hit_sigStd( size2 ),
-			hit_sigStd( size3 ) 
-			} }} };
+static inline HitShape hit_shapeStd3(HitInd size1, HitInd size2, HitInd size3) {
+	HitShape a = {HIT_SIG_SHAPE, {{3, {hit_sigStd(size1), hit_sigStd(size2), hit_sigStd(size3)}}}};
 	return a;
 }
 
 /**
  * Hit Signature Shape constructor for four dimensions, standard domain
  */
-static inline HitShape hit_shapeStd4( int size1, int size2, int size3, int size4 ) {
-	HitShape a = { HIT_SIG_SHAPE, { { 4, {
-			hit_sigStd( size1 ),
-			hit_sigStd( size2 ),
-			hit_sigStd( size3 ),
-			hit_sigStd( size4 ) 
-			} }} };
+static inline HitShape hit_shapeStd4(HitInd size1, HitInd size2, HitInd size3, HitInd size4) {
+	HitShape a = {HIT_SIG_SHAPE, {{4, {hit_sigStd(size1), hit_sigStd(size2), hit_sigStd(size3), hit_sigStd(size4)}}}};
 	return a;
 }
 /** @endcond */
@@ -366,8 +350,7 @@ static inline HitShape hit_shapeStd4( int size1, int size2, int size3, int size4
  * @param[in] shape \e HitShape A domain shape.
  * @retval	int  Number of dimensions of the shape.
  */
-#define	hit_shapeDims(shape)	(((shape).type==HIT_SIG_SHAPE)?hit_sshapeDims(shape):(1))
-
+#define hit_shapeDims(shape) (((shape).type == HIT_SIG_SHAPE) ? hit_sshapeDims(shape) : (1))
 
 /* 5.1 Hit Signature Shape access macros */
 /**
@@ -389,8 +372,7 @@ static inline HitShape hit_shapeStd4( int size1, int size2, int size3, int size4
  * @param[out] shape \e HitShape A domain shape.
  * @param[in] value The new number of dimensions.
  */
-#define hit_shapeDimsSet(shape,value) (hit_sshapeDims(shape) = (value))
-
+#define hit_shapeDimsSet(shape, value) (hit_sshapeDims(shape) = (value))
 
 /**
  * Access to one dimensional signature in a shape.
@@ -402,7 +384,7 @@ static inline HitShape hit_shapeStd4( int size1, int size2, int size3, int size4
  * @param[in] dim 	\e int A dimension,
  * @retval	HitSig  The dimensional signature of that shape.
  */
-#define	hit_shapeSig(shape,dim)	((hit_sShapeAccess((shape))).sig[(dim)])
+#define hit_shapeSig(shape, dim) ((hit_sShapeAccess((shape))).sig[(dim)])
 
 /**
  * Cardinality of a dimensional signature in a shape.
@@ -412,24 +394,24 @@ static inline HitShape hit_shapeStd4( int size1, int size2, int size3, int size4
  *
  * @param[in] shape \e HitShape A domain shape.
  * @param[in] dim 	\e int A dimension,
- * @retval int	The cardinality of the dimensional signature of that shape.
+ * @retval HitInd	The cardinality of the dimensional signature of that shape.
  */
-#define	hit_shapeSigCard(shape,dim)	hit_sigCard((hit_sShapeAccess((shape))).sig[(dim)])
+#define hit_shapeSigCard(shape, dim) hit_sigCard((hit_sShapeAccess((shape))).sig[(dim)])
 
 /**
  * Cardinality of a whole shape.
  *
- * @warning Only for HitSigShape. 
+ * @warning Only for HitSigShape.
  * @deprecated The name will be changed to use the hit_sshape prefix.
  *
  * @param[in] shape A domain shape.
  * @return The cardinality of the indexes set of that shape.
  */
-static inline int hit_shapeCard( HitShape shape ) {
-	int i;
-	int result = 1;
-	for ( i=0; i<hit_shapeDims( shape ); i++ )
-		result = result * hit_shapeSigCard( shape, i );
+static inline HitInd hit_shapeCard(HitShape shape) {
+	int    i;
+	HitInd result = 1;
+	for (i = 0; i < hit_shapeDims(shape); i++)
+		result = result * hit_shapeSigCard(shape, i);
 	return result;
 }
 
@@ -452,7 +434,6 @@ static inline int hit_shapeCard( HitShape shape ) {
  * @return Logical value. True if the two shapes are equal.
  */
 int hit_shapeCmp(HitShape sh1, HitShape sh2);
-
 
 /* 8. Hit INTERSECT SHAPES */
 /**
@@ -563,7 +544,7 @@ HitShape hit_shapeArrayToTile(HitShape sh1, HitShape sh2);
  * @hideinitializer
  * @see hit_shapeTransform(), hit_shapeBorder(), hit_shapeExpand(), hit_shapeDimExpand()
  */
-#define HIT_SHAPE_END	1
+#define HIT_SHAPE_END 1
 /**
  * Hit Shape Move flag for the shape transformation functions.
  *
@@ -572,7 +553,7 @@ HitShape hit_shapeArrayToTile(HitShape sh1, HitShape sh2);
  * @hideinitializer
  * @see hit_shapeTransform(), hit_shapeBorder(), hit_shapeExpand(), hit_shapeDimExpand()
  */
-#define HIT_SHAPE_MOVE	2
+#define HIT_SHAPE_MOVE 2
 /**
  * Hit Shape Stretch flag for the shape transformation functions.
  *
@@ -581,7 +562,7 @@ HitShape hit_shapeArrayToTile(HitShape sh1, HitShape sh2);
  * @hideinitializer
  * @see hit_shapeTransform()
  */
-#define HIT_SHAPE_STRETCH	3
+#define HIT_SHAPE_STRETCH 3
 /**
  * Hit Shape First-elements flag for the shape transformation functions.
  *
@@ -590,7 +571,7 @@ HitShape hit_shapeArrayToTile(HitShape sh1, HitShape sh2);
  * @hideinitializer
  * @see hit_shapeTransform()
  */
-#define HIT_SHAPE_FIRST	4
+#define HIT_SHAPE_FIRST 4
 /**
  * Hit Shape Last-elements flag for the shape transformation functions.
  *
@@ -599,8 +580,7 @@ HitShape hit_shapeArrayToTile(HitShape sh1, HitShape sh2);
  * @hideinitializer
  * @see hit_shapeTransform()
  */
-#define HIT_SHAPE_LAST	5
-
+#define HIT_SHAPE_LAST 5
 
 /* 9.1 Hit SHAPE EXPAND DIM */
 /**
@@ -621,7 +601,7 @@ HitShape hit_shapeArrayToTile(HitShape sh1, HitShape sh2);
  * 				A negative offser moves the border inside the shape.
  * @return The expanded shape.
  */
-HitShape hit_shapeDimExpand( HitShape shape, int dim, int position, int offset );
+HitShape hit_shapeDimExpand(HitShape shape, int dim, int position, HitInd offset);
 
 /* 9.2 Hit SHAPE EXPAND */
 /**
@@ -639,7 +619,7 @@ HitShape hit_shapeDimExpand( HitShape shape, int dim, int position, int offset )
  * 				A negative offser moves the border inside the shape.
  * @return The expanded shape.
  */
-HitShape hit_shapeExpand(HitShape shape,int dims,int offset);
+HitShape hit_shapeExpand(HitShape shape, int dims, HitInd offset);
 
 /* 9.3 Hit SHAPE GET BORDER */
 /**
@@ -653,21 +633,21 @@ HitShape hit_shapeExpand(HitShape shape,int dims,int offset);
  * @deprecated The name will be changed to use the hit_sshape prefix.
  *
  * @param shape A HitShape.
- * @param dim The dimension.
+ * @param dim The dimension, uses row-major order standard.
  * @param position Flag to select the border:
  * 						\arg \c HIT_SHAPE_BEGIN For the starting border in the dimension.
  * 						\arg \c HIT_SHAPE_END For the ending border in the dimension.
  * @param offset A positive offset moves the border outside the shape.
  * 				A negative offser moves the border inside the shape.
- * @return A shape representing the selected border.
+ * @return A shape representing the selected border. Will return shape if the dim parameter is greater or lesser than the actual number of Dimensions in the shape.
  */
-HitShape hit_shapeBorder(HitShape shape, int dim, int position, int offset);
+HitShape hit_shapeBorder(HitShape shape, int dim, int position, HitInd offset);
 
 /* 9.4 Hit SHAPE TRANSFORM */
 /**
  * Shape domain transformations (move, stretch, or cut)
  *
- * Return another shape with modified boundaries. The modification can be applied to 
+ * Return another shape with modified boundaries. The modification can be applied to
  * a specific dimension or to all dimensions at the same time.
  * This function is useful to compute halos, and other boundary related shapes.
  *
@@ -684,13 +664,13 @@ HitShape hit_shapeBorder(HitShape shape, int dim, int position, int offset);
  * 		\arg \c HIT_SHAPE_FIRST Keep the begin and change the end to have the number elements indicated by the offset.
  * 		\arg \c HIT_SHAPE_LAST Keep the end and change the begin to have the number elements indicated by the offset.
  * 		\arg \c HIT_SHAPE_RAW Do an OR operation of the action with this flag to consider the offset in raw coordinates, ignoring the shape strides.
- * @param offset A positive or negative number of elements. 
- * 		The offset is expressed by default as a number of elements, 
+ * @param offset A positive or negative number of elements.
+ * 		The offset is expressed by default as a number of elements,
  * 		taking into account the shape strides. Use the HIT_SHAPE_RAW flag in the action to
  * 		express the offset as raw coordinates, ignorig strides.
  * @return A shape representing the transformed shape.
  */
-HitShape hit_shapeTransform(HitShape shape, int dim, int action, int offset);
+HitShape hit_shapeTransform(HitShape shape, int dim, int action, HitInd offset);
 
 /**@}*/
 
@@ -707,11 +687,11 @@ HitShape hit_shapeTransform(HitShape shape, int dim, int action, int offset);
  *
  * @deprecated The name will be changed to use the hit_sshape prefix.
  *
- * @param[out] var	\e int Variable index to be used as counter in the loop.
+ * @param[out] var	\e HitInd Variable index to be used as counter in the loop.
  * @param[in] shape \e HitShape A domain shape.
  * @param[in] dim	\e int Number of the dimension.
  */
-#define hit_shapeIterator(var,shape,dim) for(var=hit_shapeSig((shape),(dim)).begin;var<=hit_shapeSig((shape),(dim)).end;var+=hit_shapeSig((shape),(dim)).stride)
+#define hit_shapeIterator(var, shape, dim) for (var = hit_shapeSig((shape), (dim)).begin; var <= hit_shapeSig((shape), (dim)).end; var += hit_shapeSig((shape), (dim)).stride)
 
 /**
  * Loop across the tile indexes of a dimension.
@@ -727,23 +707,21 @@ HitShape hit_shapeTransform(HitShape shape, int dim, int action, int offset);
  * @param[in] shape \e HitShape A domain shape.
  * @param[in] dim	\e int Number of the dimension.
  */
-#define hit_shapeIteratorTileCoord(var,shape,dim) for(var=0; var<=hit_sigCard(hit_shapeSig((shape),(dim)))-1;var++)
+#define hit_shapeIteratorTileCoord(var, shape, dim) for (var = 0; var <= hit_sigCard(hit_shapeSig((shape), (dim))) - 1; var++)
 
 /**@}*/
-
 
 /* PRINT A SHAPE*/
 /**
  * Print a HitShape
- * 
+ *
  * @param sh \e HitShape A HitShape.
- */ 
-void dumpShape (HitShape sh); 
+ */
+void dumpShape(HitShape sh);
 
 #ifdef __cplusplus
-	}
+}
 #endif
 
 /* END OF HEADER FILE _HitShape_ */
 #endif
-

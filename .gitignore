@@ -72,26 +72,23 @@ dkms.conf
 # Compiled Static libraries
 *.lai
 
-# Executables
-
 ### CMake ###
 CMakeCache.txt
 CMakeFiles
 CMakeScripts
 Testing
-# Makefile
 cmake_install.cmake
 install_manifest.txt
 compile_commands.json
 CTestTestfile.cmake
-build
+build*/
 
 ### Vim ###
 # swap
 .sw[a-p]
 .*.sw[a-p]
 # session
-Session.vim
+*.vim
 # temporary
 .netrwhist
 *~
@@ -99,22 +96,21 @@ Session.vim
 tags
 
 # Old .gitignore content
-# *.swp
 *.old
 *.data
 slurm-*.out
-# build/
 .vscode/
 .vs/
 
 workspace.code-workspace
 
 # Experimentation folder
-exp/GenericStencil/*.err
-exp/GenericStencil/profile*
+exp/test_basicStencils/*.err
+exp/test_basicStencils/profile*
 
 exp/*res*
 exp/*test*
+!exp/test_basicStencils
 Ctrl/doc/html
 Ctrl/doc/latex
 

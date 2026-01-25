@@ -383,7 +383,7 @@ void run(int argc, char *argv[]) {
 	clGetDeviceInfo(device_id, CL_DEVICE_NAME, device_name_size, device_name, NULL);
 
 	#ifdef _CTRL_EXAMPLES_EXP_MODE_
-	printf("FPGA-%s-%s, ", info.device_name, info.platform_name);
+	printf("FPGA-%s-%s, ", device_name, platform_name);
 	#else
 	printf("\n ----------------------- ARGS ----------------------- \n");
 	printf("\n SIZE (SIZE x SIZE): %d, %d, %d", grid_rows * grid_cols, grid_rows, grid_cols);

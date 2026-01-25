@@ -5,11 +5,11 @@ project(Ctrl LANGUAGES C CXX)
 # Options
 
 # Architectures
-option(SUPPORT_CPU "SUPPORT_CPU" ON) # Support for CPU Ctrl
-option(SUPPORT_CUDA "SUPPORT_CUDA" OFF) # Support for CUDA Ctrl
-option(SUPPORT_HIP "SUPPORT_HIP" OFF) # Support for HIP Ctrl
-option(SUPPORT_OPENCL "SUPPORT_OPENCL" OFF) # Support for OpenCL GPU Ctrl
-option(SUPPORT_FPGA "SUPPORT_FPGA" OFF) # Support for OpenCL FPGA Ctrl
+option(SUPPORT_CPU "Support for the CPU architecture (OpenMP backend)" ON)
+option(SUPPORT_CUDA "Support for the NVIDIA GPU architecture (CUDA backend)" OFF)
+option(SUPPORT_HIP "Support for the AMD GPU architecture (HIP backend)" OFF)
+option(SUPPORT_OPENCL "Support for the generic GPU architecture (OpenCL backend)" OFF)
+option(SUPPORT_FPGA "Support for the Intel FPGA architecture (Intel FPGA SDK for OpenCL backend)" OFF)
 
 if(SUPPORT_HIP AND SUPPORT_CUDA)
 	set(SUPPORT_HIP ON)
@@ -24,32 +24,36 @@ if(SUPPORT_HIP AND SUPPORT_CUDA)
 endif(SUPPORT_HIP AND SUPPORT_CUDA)
 
 # BLAS library support
-option(CUBLAS "CUBLAS" OFF)
-option(HIPBLAS "HIPBLAS" OFF)
-option(MKL "MKL" OFF)
-option(MAGMA "MAGMA" OFF)
+option(CUBLAS "Support for the cuBLAS library backend" OFF)
+option(HIPBLAS "Support for the hipBLAS library backend" OFF)
+option(MKL "Support for the oneAPI Math Kernel Library backend" OFF)
+option(MAGMA "Support for the MAGMA	library backend" OFF)
 
-# Paths to stuff
+# Dependencies' installation paths
 set(ROCM_PATH "/opt/rocm" CACHE PATH "Path to rocm installation")
 set(OPENCL_PATH "/usr/local/cuda" CACHE PATH "Path to OpenCL installation")
-set(MAGMA_ROOT "/opt/magma" CACHE PATH "Path to magma installation")
+set(MAGMA_ROOT "/opt/magma" CACHE PATH "Path to MAGMA installation")
 set(FPGA_BOARD_PKG "/opt/intelFPGA_pro/21.2/hld/board/de10_agilex" CACHE PATH "Path to FPGA board package")
 
 # Examples selector
-option(USE_EXPERIMENTATION_EXAMPLES "USE_EXPERIMENTATION_EXAMPLES" OFF) # Short output, easier to parse automatically
+option(
+	USE_EXPERIMENTATION_EXAMPLES
+	"Compile the examples in experimentation mode (shorter output for automatic parsing)"
+	OFF
+)
 
-# Verbose
+# Verbosity
 set(CTRL_CMAKE_VERBOSE OFF) # Debug cmake
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 
 # Use of debbuger
-option(CTRL_DEBUG "CTRL_DEBUG" OFF) # Debug mode of Ctrl for external debuggers (ex. gdb, valdgrind)
+option(CTRL_DEBUG "Compile libCtrl in debug mode for use with external debuggers (e.g., gdb, valgrind)" OFF)
 
 # Profiling
-option(PROFILING_ENABLED "enable profiling" OFF) # Enable profiling host tasks for OpenCL AMD and CUDA 
+option(PROFILING_ENABLED "Enable profiling host tasks for OpenCL, HIP, and CUDA" OFF) # TODO: Previously it was "OpenCL AMD and CUDA", verify if OpenCL NVIDIA and HIP have support for profiling.
 
 # Error checking
-option(CTRL_ERROR_CHECK "enable error checking" ON) # Enable error checking for cuda,opencl and hip operations
+option(CTRL_ERROR_CHECK "Enable error checking of CUDA, HIP, and OpenCL operations" ON)
 if(CTRL_ERROR_CHECK)
 	set(OPENCL_GPU_ERROR_CHECK ON) # Activate OpenCL error checking
 	set(CUDA_ERROR_CHECK ON) # Activate CUDA error checking
@@ -71,8 +75,8 @@ set(OPENCL_GPU_PROFILING_N_WRITE_TASKS "5000")
 set(OPENCL_GPU_PROFILING_N_KERNEL_TASKS "5000")
 
 # Extra options FPGA
-option(FPGA_PROFILING "FPGA_PROFILING" OFF)
-option(FPGA_EMULATION "FPGA_EMULATION" ON)
+option(FPGA_PROFILING "Compile FPGA kernels in profiling mode" OFF)
+option(FPGA_EMULATION "Compile FPGA kernels in emulation mode (execution on CPU)" ON)
 set(FPGA_PROFILING_VERBOSE OFF) # Generate all the info from all the events to a file
 set(FPGA_TEST_OUTPUT OFF) # Print in test mode (for script parse)
 set(FPGA_PROFILING_N_READ_TASKS "5000")
@@ -82,8 +86,8 @@ set(FPGA_PROFILING_N_KERNEL_TASKS "5000")
 # Extra options Verbose
 if(CTRL_CMAKE_VERBOSE)
 	set(CTRL_CMAKE_VERBOSE_MAIN ON) # Debug cmake Main (this)
-	set(CTRL_CMAKE_VERBOSE_CTRL ON) # Debug cmake Ctrl (this)
-	set(CTRL_CMAKE_VERBOSE_EXAMPLES ON) # Debug cmake Examples (this)
+	set(CTRL_CMAKE_VERBOSE_CTRL ON) # Debug cmake Ctrl
+	set(CTRL_CMAKE_VERBOSE_EXAMPLES ON) # Debug cmake Examples
 endif(CTRL_CMAKE_VERBOSE)
 
 # Common flags and libs
@@ -103,11 +107,12 @@ set(CTRL_LIBS ${CTRL_LIBS} -lm)
 # Hitmap
 set(HITMAP_PATH "${PROJECT_SOURCE_DIR}/extern/hitmap")
 
-find_library(HITMAPLIB hit HINTS ${HITMAP_PATH}/lib)
-if(NOT HITMAPLIB)
-	execute_process(COMMAND make -j 12 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/extern/hitmap)
-	find_library(HITMAPLIB hit HINTS ${HITMAP_PATH}/lib)
-endif(NOT HITMAPLIB)
+find_library(HITMAP_LIB hit HINTS ${HITMAP_PATH}/lib)
+if(NOT HITMAP_LIB)
+	execute_process(COMMAND nproc OUTPUT_VARIABLE N_PROC OUTPUT_STRIP_TRAILING_WHITESPACE)
+	execute_process(COMMAND make -j ${N_PROC} WORKING_DIRECTORY ${HITMAP_PATH})
+	find_library(HITMAP_LIB hit HINTS ${HITMAP_PATH}/lib)
+endif(NOT HITMAP_LIB)
 
 set(HITMAP_INCLUDE_PATHS ${HITMAP_INCLUDE_PATHS} ${HITMAP_PATH}/include)
 set(HITMAP_INCLUDE_PATHS ${HITMAP_INCLUDE_PATHS} ${HITMAP_PATH}/extern/iohb1.0)
@@ -115,9 +120,9 @@ set(HITMAP_INCLUDE_PATHS ${HITMAP_INCLUDE_PATHS} ${HITMAP_PATH}/extern/matrix_io
 set(HITMAP_INCLUDE_PATHS ${HITMAP_INCLUDE_PATHS} ${HITMAP_PATH}/extern/metis/Lib)
 
 set(CTRL_INCLUDE_DIRS ${CTRL_INCLUDE_DIRS} ${HITMAP_INCLUDE_PATHS})
-set(CTRL_LIBS ${CTRL_LIBS} ${HITMAPLIB})
+set(CTRL_LIBS ${CTRL_LIBS} ${HITMAP_LIB})
 
-# Versions
+# Version
 set(VERSION_MAJOR 3)
 set(VERSION_MINOR 0)
 set(VERSION_REVISION 1)
@@ -179,7 +184,12 @@ if(SUPPORT_HIP)
 	list(APPEND CMAKE_PREFIX_PATH ${ROCM_PATH})
 
 	# AMD arquitectures to use, check if this is alredy set in HIP_OFFLOAD_ARCH
-	set(HIP_OFFLOAD_ARCH "--offload-arch=gfx900 --offload-arch=gfx1100" CACHE STRING "HIP offload architectures")
+	set(
+		HIP_OFFLOAD_ARCH
+		"--offload-arch=gfx900 --offload-arch=gfx1100 --offload-arch=gfx90a"
+		CACHE STRING
+		"HIP offload architectures"
+	)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${HIP_OFFLOAD_ARCH}")
 
 	# FIXME @sergioalo hip functions return codes are ignored on all examples
@@ -201,9 +211,9 @@ endif(SUPPORT_HIP)
 
 if(SUPPORT_FPGA)
 	if(FPGA_EMULATION)
-		set(FPGA_AOC_FLAGS ${FPGA_AOC_FLAGS} -report -march=emulator)
+		set(FPGA_AOC_FLAGS "${FPGA_AOC_FLAGS} -report -v -g0 -march=emulator")
 	else(FPGA_EMULATION)
-		set(FPGA_AOC_FLAGS ${FPGA_AOC_FLAGS} -report -board-package=${FPGA_BOARD_PKG})
+		set(FPGA_AOC_FLAGS "${FPGA_AOC_FLAGS} -report -v -g0 -board-package=${FPGA_BOARD_PKG}")
 	endif(FPGA_EMULATION)
 
 	# Translate include directories to use on aoc
@@ -225,7 +235,6 @@ if(CTRL_CMAKE_VERBOSE_MAIN)
 	message(STATUS "C vars = ${CMAKE_C_FLAGS}")
 	message(STATUS "CUDA vars = ${CMAKE_CUDA_FLAGS}")
 	message(STATUS "CXX vars = ${CMAKE_CXX_FLAGS}")
-	message(STATUS "HEADERS = ${CTRL_HEADERS}")
 	message(STATUS "INCLUDE DIRS = ${CTRL_INCLUDE_DIRS}")
 	message(STATUS "SOURCES = ${CTRL_SOURCES}")
 	message(STATUS "LIBS = ${CTRL_LIBS}")
@@ -234,21 +243,6 @@ endif(CTRL_CMAKE_VERBOSE_MAIN)
 # Directories
 add_subdirectory(Ctrl)
 
-# Verbose
-if(CTRL_CMAKE_VERBOSE_MAIN)
-	message(STATUS "VERBOSE = ${CMAKE_VERBOSE_MAKEFILE}")
-	message(STATUS "CPU = ${SUPPORT_CPU}")
-	message(STATUS "CUDA = ${SUPPORT_CUDA}")
-	message(STATUS "HIP = ${SUPPORT_HIP}")
-	message(STATUS "OPENCL_GPU = ${SUPPORT_OPENCL}")
-	message(STATUS "C vars = ${CMAKE_C_FLAGS}")
-	message(STATUS "CXX vars = ${CMAKE_CXX_FLAGS}")
-	message(STATUS "HEADERS = ${CTRL_HEADERS}")
-	message(STATUS "INCLUDE DIRS = ${CTRL_INCLUDE_DIRS}")
-	message(STATUS "SOURCES = ${CTRL_SOURCES}")
-	message(STATUS "LIBS = ${CTRL_LIBS}")
-endif(CTRL_CMAKE_VERBOSE_MAIN)
-
 # Ctrl.h directory
 set(CTRL_HEADER_PATH ${PROJECT_SOURCE_DIR}/Ctrl/inc)
 if(USE_EXPERIMENTATION_EXAMPLES)
@@ -256,23 +250,7 @@ if(USE_EXPERIMENTATION_EXAMPLES)
 endif(USE_EXPERIMENTATION_EXAMPLES)
 
 # Examples
-add_subdirectory(examples)
-
-# Parallel stencil skeleton
-add_subdirectory(Epsilod)
-
-# Verbose
-if(CTRL_CMAKE_VERBOSE_MAIN)
-	message(STATUS "VERBOSE = ${CMAKE_VERBOSE_MAKEFILE}")
-	message(STATUS "CPU = ${SUPPORT_CPU}")
-	message(STATUS "CUDA = ${SUPPORT_CUDA}")
-	message(STATUS "HIP = ${SUPPORT_HIP}")
-	message(STATUS "OPENCL_GPU = ${SUPPORT_OPENCL}")
-	message(STATUS "OPENCL_FPGA = ${SUPPORT_FPGA}")
-	message(STATUS "C vars = ${CMAKE_C_FLAGS}")
-	message(STATUS "CXX vars = ${CMAKE_CXX_FLAGS}")
-	message(STATUS "HEADERS = ${CTRL_HEADERS}")
-	message(STATUS "INCLUDE DIRS = ${CTRL_INCLUDE_DIRS}")
-	message(STATUS "SOURCES = ${CTRL_SOURCES}")
-	message(STATUS "LIBS = ${CTRL_LIBS}")
-endif(CTRL_CMAKE_VERBOSE_MAIN)
+option(COMPILE_CTRL_EXAMPLES "COMPILE_CTRL_EXAMPLES" ON)
+if(COMPILE_CTRL_EXAMPLES)
+	add_subdirectory(examples)
+endif(COMPILE_CTRL_EXAMPLES)

@@ -22,6 +22,7 @@ typedef struct Ctrl_Cpu_Tile {
 	Ctrl_GenericEvent      last_kernel_write_event; /**< Event to sincronyze tasks, represents last read operation on device*/
 	Ctrl_GenericEvent      last_dth_event;          /**< Event to sincronyze tasks, represents last DTH comunication*/
 	Ctrl_GenericEvent      last_htd_event;          /**< Event to sincronyze tasks, represents last HTD comunication*/
+	double                *p_last_op_duration;      /**< Duration of the last task performed of this tile, must be read or written to atomically */
 } Ctrl_Cpu_Tile;
 ///@endcond
 #endif //_CTRL_CPU_TILE_H_

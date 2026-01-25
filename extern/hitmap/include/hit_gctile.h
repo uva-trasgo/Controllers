@@ -1,6 +1,6 @@
 /**
  * Tiling of sparse CSR graphs.
- * Definitions and functions to manipulate gcHitTile types. 
+ * Definitions and functions to manipulate gcHitTile types.
  *
  * @file hit_gctile.h
  * @version 1.0
@@ -10,19 +10,19 @@
 
 /*
  * <license>
- * 
+ *
  * Hitmap v1.4
- * 
+ *
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
- * or use for commercial purpose, public redistribution, in source or binary forms, with or 
- * without modifications, is NOT ALLOWED without the previous authorization of the copyright 
+ * or use for commercial purpose, public redistribution, in source or binary forms, with or
+ * without modifications, is NOT ALLOWED without the previous authorization of the copyright
  * holder. The origin of this software must not be misrepresented; you must not claim that you
  * wrote the original software. If you use this software for any purpose (e.g. publication),
  * a reference to the software package and the authors must be included.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
  * THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
  * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
@@ -30,18 +30,17 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
- * Copyright (c) 2007-2024, Trasgo Group, Universidad de Valladolid.
+ *
+ * Copyright (c) 2007-2026, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
- * 
+ *
  * More information on http://trasgo.infor.uva.es/
- * 
+ *
  * </license>
-*/
+ */
 
 #ifndef _HitGCTile_
 #define _HitGCTile_
-
 
 #include "hit_tile.h"
 #include "hit_cshape.h"
@@ -67,7 +66,7 @@
  * @param shape			Shape of the new CSR sparse domain.
  * @param allocOpts		Allocate memory for the vertices and/or the edges.
  */
-void hit_gcTileDomainShapeInternal(void * newVarP, size_t baseExtent, HitShape shape, int allocOpts);
+void hit_gcTileDomainShapeInternal(void *newVarP, size_t baseExtent, HitShape shape, int allocOpts);
 
 /**
  * Allocate a previously declared gcTile.
@@ -96,10 +95,9 @@ void hit_gcTileAllocInternal(void *newVarP, const char *name, const char *file, 
  * @see hit_gcTileDomainShape
  * @see hit_gcTileAlloc
  */
-#define hit_gcTileDomainShapeAlloc(var, baseType, shape, allocOpts)	\
+#define hit_gcTileDomainShapeAlloc(var, baseType, shape, allocOpts)         \
 	hit_gcTileDomainShapeInternal(var, sizeof(baseType), shape, allocOpts); \
 	hit_gcTileAllocInternal(var, #var, __FILE__, __LINE__);
-
 
 /* 2. INDEX ACCESS FUNCTIONS */
 /**
@@ -109,7 +107,7 @@ void hit_gcTileAllocInternal(void *newVarP, const char *name, const char *file, 
  * @param vertex The vertex coordinate.
  * @return The index element.
  */
-int hit_gcTileGraphVertexAtIndex(void * varP, int vertex);
+HitInd hit_gcTileGraphVertexAtIndex(void *varP, HitInd vertex);
 
 /**
  * Gets the index of a sparse element in local coordinates.
@@ -119,16 +117,16 @@ int hit_gcTileGraphVertexAtIndex(void * varP, int vertex);
  * @param local2 The second coordinate.
  * @return The index element.
  */
-static inline int hit_gcTileEdgeAtIndex(void * varP, int local1, int local2){
+static inline HitInd hit_gcTileEdgeAtIndex(void *varP, HitInd local1, HitInd local2) {
 
 	/* 1. Get the shape of the tile */
-	HitTile *var = (HitTile *)varP;
+	HitTile *var   = (HitTile *)varP;
 	HitShape shape = hit_tileShape(*var);
 
-	int edge;
-	hit_cShapeEdgeIterator(edge,shape,local1){
-		int dst = hit_cShapeEdgeTarget(shape,edge);
-		if(dst == local2) return edge;
+	HitInd edge;
+	hit_cShapeEdgeIterator(edge, shape, local1) {
+		HitInd dst = hit_cShapeEdgeTarget(shape, edge);
+		if (dst == local2) return edge;
 	}
 
 	return -1;
@@ -142,9 +140,7 @@ static inline int hit_gcTileEdgeAtIndex(void * varP, int local1, int local2){
  * @param pos2 The second coordinate.
  * @return The index element.
  */
-int hit_gcTileGraphEdgeAtIndex(void * varP, int pos1, int pos2);
-
-
+HitInd hit_gcTileGraphEdgeAtIndex(void *varP, HitInd pos1, HitInd pos2);
 
 /* 3. ELEMENT ACCESS FUNCTIONS */
 /**
@@ -164,7 +160,7 @@ int hit_gcTileGraphEdgeAtIndex(void * varP, int pos1, int pos2);
  * @param pos2 The second global coordinate.
  * @return The tile element.
  */
-#define hit_gcTileEdgeAt(var, pos1, pos2) ((var).data[hit_gcTileEdgeAtIndex(&(var),(pos1),(pos2))])
+#define hit_gcTileEdgeAt(var, pos1, pos2) ((var).data[hit_gcTileEdgeAtIndex(&(var), (pos1), (pos2))])
 
 /**
  * Gets a sparse element from a tile defined in graph coordinates.
@@ -173,7 +169,7 @@ int hit_gcTileGraphEdgeAtIndex(void * varP, int pos1, int pos2);
  * @param vertex The vertex graph coordinate.
  * @return The tile element.
  */
-#define hit_gcTileGraphVertexAt(var, vertex) ((var).dataVertices[hit_gcTileGraphVertexAtIndex(&(var),(vertex))])
+#define hit_gcTileGraphVertexAt(var, vertex) ((var).dataVertices[hit_gcTileGraphVertexAtIndex(&(var), (vertex))])
 
 /**
  * Gets a edge from a tile defined in graph coordinates.
@@ -183,8 +179,7 @@ int hit_gcTileGraphEdgeAtIndex(void * varP, int pos1, int pos2);
  * @param pos2 The second global coordinate.
  * @return The tile element.
  */
-#define hit_gcTileGraphEdgeAt(var, pos1, pos2) ((var).data[hit_gcTileGraphEdgeAtIndex(&(var),(pos1),(pos2))])
-
+#define hit_gcTileGraphEdgeAt(var, pos1, pos2) ((var).data[hit_gcTileGraphEdgeAtIndex(&(var), (pos1), (pos2))])
 
 /* 4. OTHER FUNCTIONS */
 /**
@@ -194,7 +189,7 @@ int hit_gcTileGraphEdgeAtIndex(void * varP, int pos1, int pos2);
  * @param srcTileP Pointer to the source tile.
  * @memberof HitGCTile
  */
-#define hit_gcTileVerticesCopy(dstTileP,srcTileP) hit_gcTileCopyVerticesInternal(dstTileP,srcTileP,1)
+#define hit_gcTileVerticesCopy(dstTileP, srcTileP) hit_gcTileCopyVerticesInternal(dstTileP, srcTileP, 1)
 
 /**
  * Copies a sparse tile using the globalName translation list.
@@ -206,11 +201,11 @@ int hit_gcTileGraphEdgeAtIndex(void * varP, int pos1, int pos2);
  * @param clear Flag to wipe the destination tile before the copy.
  * @memberof HitGCTile
  */
-void hit_gcTileCopyVerticesInternal(void * dstTileP, void * srcTileP, int clear);
+void hit_gcTileCopyVerticesInternal(void *dstTileP, void *srcTileP, int clear);
 
 /**
  * Access function to an edge element using a shape iterator.
- * @fn hit_gcTileEdgeIteratorAt(HitGBTile var, int vertex, int edge_index);
+ * @fn hit_gcTileEdgeIteratorAt(HitGBTile var, HitInd vertex, HitInd edge_index);
  * @memberof HitGCTile
  * @param var The tile.
  * @param vertex The vertex.
@@ -219,14 +214,13 @@ void hit_gcTileCopyVerticesInternal(void * dstTileP, void * srcTileP, int clear)
  */
 #define hit_gcTileEdgeIteratorAt(var, vertex, edge_index) ((var).data[edge_index])
 
-
-// 4. OTHER FUNCTIONS  
+// 4. OTHER FUNCTIONS
 /**
  * Clears the values of the vertices.
  * @memberof HitGCTile
  * @param varP A tile.
  */
-void hit_gcTileClearVertices(void * varP);
+void hit_gcTileClearVertices(void *varP);
 
 /**
  * Copies the values from a tile to the other.
@@ -234,9 +228,7 @@ void hit_gcTileClearVertices(void * varP);
  * @param destP Destination tile.
  * @param srcP Soruce tile
  */
-void hit_gcTileCopyVertices(void * destP, void * srcP);
-
-
+void hit_gcTileCopyVertices(void *destP, void *srcP);
 
 /* END OF HEADER FILE _HitGCTile_ */
 #endif

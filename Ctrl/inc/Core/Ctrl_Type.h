@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 /**
- * @brief Tipos de dispositivos que pueden gestionar los controladores.
+ * @brief Available types for a Conttroller object.
  */
 typedef enum {
 	CTRL_TYPE_NULL = 0,

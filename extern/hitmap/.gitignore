@@ -30,8 +30,16 @@ extern/**/*.a
 # Ignore libhit.a
 lib/
 
-# Ignore ciTests executables
+# Ignore ciTests executables and outputs
 ciTests/*/*.test
+ciTests/*/testsoutput.txt
+ciTests/*/testserrors.txt
+
+# Ignore utils executables
+utils/hitmap_files
+
+# Ignore examples outputs
+examples/*/*.out*
 
 # Ignore generated utils execs
 utils/hitmap_files
@@ -55,6 +63,7 @@ examples/Mmult/mmult_csr
 examples/Mmult/mmult_bit
 
 examples/NAS_IS/is
+examples/NAS_IS/check.err
 
 examples/NAS_MG/mg_classA
 examples/NAS_MG/mg_classS
@@ -63,6 +72,7 @@ examples/NAS_MG/mg_classB
 examples/NAS_MG/mg_classC
 examples/NAS_MG/mg_classD
 examples/NAS_MG/mg_classE
+examples/NAS_MG/check.err
 
 examples/QuickSort/quickSort
 examples/QuickSort/check.err
@@ -93,3 +103,7 @@ examples/Stencil_Jacobi2D/seqJacobi2D
 examples/Stencil_Jacobi2D/refMPIJacobi2D.v2.1
 examples/Stencil_Jacobi2D/jacobi2D
 examples/Stencil_Jacobi2D/check.err
+
+examples/Stencil_Jacobi1D/seqJacobi1D
+examples/Stencil_Jacobi1D/jacobi1D
+examples/Stencil_Jacobi1D/check.err

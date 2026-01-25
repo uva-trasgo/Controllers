@@ -43,8 +43,8 @@ CTRL_KERNEL_PROTO(Jacobi_2D, 1, GENERIC, DEFAULT, jacobi_params);
 CTRL_KERNEL_PROTO(Jacobi_3D, 1, GENERIC, DEFAULT, jacobi_params);
 CTRL_KERNEL_PROTO(Jacobi_4D, 1, GENERIC, DEFAULT, jacobi_params);
 
-HitClock mainClock;
-HitClock initClock;
+HitClock main_clock;
+HitClock init_clock;
 HitClock sequentialClock;
 
 int io_read_input;
@@ -235,10 +235,10 @@ CTRL_HOST_TASK_PROTO(Init_Matrix, 2, OUT, HitTile_double, tileMat, OUT, HitTile_
 void printClockInfo() {
 	#ifdef _CTRL_EXAMPLES_EXP_MODE_
 	if (hit_Rank == 0)
-		printf("%lf, %lf, %lf\n", mainClock.max, initClock.max, sequentialClock.max);
+		printf("%lf, %lf, %lf\n", main_clock.max, init_clock.max, sequentialClock.max);
 	#else  // _CTRL_EXAMPLES_EXP_MODE_
-	hit_clockPrintMax(mainClock);
-	hit_clockPrintMax(initClock);
+	hit_clockPrintMax(main_clock);
+	hit_clockPrintMax(init_clock);
 	hit_clockPrintMax(sequentialClock);
 	#endif // _CTRL_EXAMPLES_EXP_MODE_
 	fflush(stdout);
@@ -396,8 +396,8 @@ int main(int argc, char *argv[]) {
 
 		/* 0. Init clocks */
 		hit_clockSynchronizeAll();
-		hit_clockStart(mainClock);
-		hit_clockStart(initClock);
+		hit_clockStart(main_clock);
+		hit_clockStart(init_clock);
 		hit_clockReset(sequentialClock);
 
 		/* 1. Setup topology global matrix and partition */
@@ -473,8 +473,8 @@ int main(int argc, char *argv[]) {
 
 			/* 2.6. Clock results */
 			hit_clockStop(sequentialClock);
-			hit_clockStop(mainClock);
-			hit_clockReduce(matLayout, mainClock);
+			hit_clockStop(main_clock);
+			hit_clockReduce(matLayout, main_clock);
 			hit_clockReduce(matLayout, sequentialClock);
 			printClockInfo();
 
@@ -487,9 +487,9 @@ int main(int argc, char *argv[]) {
 		} else {
 			/* 5. Inactive processes: only collective clock operations */
 			printf("Warning -- Non-active process %d\n", hit_Rank);
-			hit_clockStop(initClock);
-			hit_clockStop(mainClock);
-			hit_clockReduce(matLayout, mainClock);
+			hit_clockStop(init_clock);
+			hit_clockStop(main_clock);
+			hit_clockReduce(matLayout, main_clock);
 			hit_clockReduce(matLayout, sequentialClock);
 			printClockInfo();
 		}

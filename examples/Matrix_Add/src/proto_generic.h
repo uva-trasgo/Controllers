@@ -6,6 +6,7 @@
  * The relevant license, warranty and copyright notice is available in the Controller project repository.
  */
 
+#include "Ctrl.h"
 #include "kernels_params.h"
 
 /* Defining kernel prototypes */

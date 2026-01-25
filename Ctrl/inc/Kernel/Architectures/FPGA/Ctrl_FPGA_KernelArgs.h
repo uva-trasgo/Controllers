@@ -9,7 +9,7 @@
  * The relevant license, warranty and copyright notice is available in the Controller project repository.
  */
 
-#ifndef CTRL_FPGA_KERNEL_FILE
+#ifndef _CTRL_FPGA_KERNEL_FILE_
 #include "Architectures/FPGA/Ctrl_FPGA_Tile.h"
 #include "Kernel/Ctrl_ImplType.h"
 
@@ -28,18 +28,18 @@
 		break;                                                                                                       \
 	}
 
-#else // !CTRL_FPGA_KERNEL_FILE
+#else // _CTRL_FPGA_KERNEL_FILE_
 
-#define Ctrl_Init_KTile(type, name)                                         \
-	KHitTile_##type name;                                                   \
-	name.data                                             = name##_data;    \
-	*((fpga_wrapper_KHitTile_##type *)&name.origAcumCard) = name##_wrapper; \
+#define Ctrl_Init_KTile(type, name)                                  \
+	KHitTile_##type name;                                            \
+	name.data                                      = name##_data;    \
+	*((KHitTile_fpga_wrapper *)&name.origAcumCard) = name##_wrapper; \
 	name.data += name.offset;
 
-#define Ctrl_Init_KTileR(type, name)                                        \
-	KHitTileR_##type name;                                                  \
-	name.data                                             = name##_data;    \
-	*((fpga_wrapper_KHitTile_##type *)&name.origAcumCard) = name##_wrapper; \
+#define Ctrl_Init_KTileR(type, name)                                 \
+	KHitTileR_##type name;                                           \
+	name.data                                      = name##_data;    \
+	*((KHitTile_fpga_wrapper *)&name.origAcumCard) = name##_wrapper; \
 	name.data += name.offset;
 
 #ifdef DOXYGEN
@@ -57,7 +57,7 @@
  */
 #define KHitTile_arg(type, name)
 #else // !DOXYGEN
-#define header_KHitTile_arg(type, name) , fpga_wrapper_KHitTile_##type name##_wrapper, data_KHitTile_##type name##_data
+#define header_KHitTile_arg(type, name) , KHitTile_fpga_wrapper name##_wrapper, data_KHitTile_##type name##_data
 #define init_KHitTile_arg(type, name)   Ctrl_Init_KTile(type, name)
 #endif // DOXYGEN
 
@@ -79,7 +79,7 @@
  */
 #define KHitTileR_arg(type, name)
 #else // !DOXYGEN
-#define header_KHitTileR_arg(type, name) , fpga_wrapper_KHitTile_##type name##_wrapper, data_KHitTileR_##type name##_data
+#define header_KHitTileR_arg(type, name) , KHitTile_fpga_wrapper name##_wrapper, data_KHitTileR_##type name##_data
 #define init_KHitTileR_arg(type, name)   Ctrl_Init_KTileR(type, name)
 #endif // DOXYGEN
 
@@ -125,7 +125,7 @@
 #define CTRL_KERNEL_FPGA_PROCESS_ARGS_19(processing_type, arg, ...) processing_type##_##arg CTRL_KERNEL_FPGA_PROCESS_ARGS_18(processing_type, __VA_ARGS__)
 #define CTRL_KERNEL_FPGA_PROCESS_ARGS_20(processing_type, arg, ...) processing_type##_##arg CTRL_KERNEL_FPGA_PROCESS_ARGS_19(processing_type, __VA_ARGS__)
 
-#endif // CTRL_FPGA_KERNEL_FILE
+#endif // _CTRL_FPGA_KERNEL_FILE_
 
 ///@endcond
 #endif // _CTRL_KERNEL_FPGA_ARGS_H_

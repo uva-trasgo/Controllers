@@ -31,6 +31,10 @@
 
 #include "Core/Ctrl_Type.h"
 
+/**
+ * @brief Abstract tile implementation.
+ * Represents an attachment of a tile to a single Controller object.
+ */
 typedef struct Ctrl_Tile_Impl {
 	Ctrl_Type type;
 	int       device_status;
@@ -58,6 +62,9 @@ typedef struct Ctrl_Tile_Impl {
 } Ctrl_Tile_Impl;
 
 // TODO @sergioalo pinned should probably use a different enum type
+/**
+ * @brief Controller extension for Hitmap tiles.
+ */
 typedef struct Ctrl_Tile {
 	Ctrl_GenericEvent last_host_read_event;  /**< Event to sincronyze tasks, represents last write operation on host*/
 	Ctrl_GenericEvent last_host_write_event; /**< Event to sincronyze tasks, represents last read operation on host*/

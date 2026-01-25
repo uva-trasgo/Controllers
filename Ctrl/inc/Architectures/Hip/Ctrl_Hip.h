@@ -206,5 +206,17 @@ void Ctrl_Hip_CreateTex(Ctrl_Hip *p_ctrl, HitTile *p_tile, Ctrl_TexDesc tex_desc
  * @return pointer to device memory for \p tile on device \p ctrl
  */
 void *Ctrl_Hip_GetDevPtr(Ctrl_Hip *p_ctrl, HitTile *p_tile);
+
+/**
+ * @brief Return the duration of the last kernel or memory transfer operation performed over \p tile.
+ *
+ * The last operation enqueued for \p tile must be completed before calling this function.
+ *
+ * @param p_ctrl Ctrl \p p_tile is associated to.
+ * @param p_tile HitTile attached to \p p_ctrl.
+ *
+ * @return Duration of the last op over \p p_tile in seconds.
+ */
+double Ctrl_Hip_TimeLastOp(Ctrl_Hip *p_ctrl, HitTile *p_tile);
 ///@endcond
 #endif /* _CTRL_HIP_H_ */

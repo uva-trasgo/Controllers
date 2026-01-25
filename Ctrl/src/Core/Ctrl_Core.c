@@ -12,6 +12,61 @@
 #include <string.h>
 
 /**
+ * Macro describing whether there is CPU architecture support, for stringification.
+ * @see CTRL_COMPILED_WITH_SUPPORT_FOR
+ */
+#ifdef _CTRL_ARCH_CPU_
+#define _CTRL_SUPPORT_CPU_ ON
+#else // !_CTRL_ARCH_CPU_
+#define _CTRL_SUPPORT_CPU_ OFF
+#endif // _CTRL_ARCH_CPU_
+
+/**
+ * Macro describing whether there is CUDA architecture support, for stringification.
+ * @see CTRL_COMPILED_WITH_SUPPORT_FOR
+ */
+#ifdef _CTRL_ARCH_CUDA_
+#define _CTRL_SUPPORT_CUDA_ ON
+#else // !_CTRL_ARCH_CUDA_
+#define _CTRL_SUPPORT_CUDA_ OFF
+#endif // _CTRL_ARCH_CUDA_
+
+/**
+ * Macro describing whether there is HIP architecture support, for stringification.
+ * @see CTRL_COMPILED_WITH_SUPPORT_FOR
+ */
+#ifdef _CTRL_ARCH_HIP_
+#define _CTRL_SUPPORT_HIP_ ON
+#else // !_CTRL_ARCH_HIP_
+#define _CTRL_SUPPORT_HIP_ OFF
+#endif // _CTRL_ARCH_HIP_
+
+/**
+ * Macro describing whether there is OPENCL_GPU architecture support, for stringification.
+ * @see CTRL_COMPILED_WITH_SUPPORT_FOR
+ */
+#ifdef _CTRL_ARCH_OPENCL_GPU_
+#define _CTRL_SUPPORT_OPENCL_GPU_ ON
+#else // !_CTRL_ARCH_OPENCL_GPU_
+#define _CTRL_SUPPORT_OPENCL_GPU_ OFF
+#endif // _CTRL_ARCH_OPENCL_GPU_
+
+/**
+ * Macro describing whether there is FPGA architecture support, for stringification.
+ * @see CTRL_COMPILED_WITH_SUPPORT_FOR
+ */
+#ifdef _CTRL_ARCH_FPGA_
+#define _CTRL_SUPPORT_FPGA_ ON
+#else // !_CTRL_ARCH_FPGA_
+#define _CTRL_SUPPORT_FPGA_ OFF
+#endif // _CTRL_ARCH_FPGA_
+
+/**
+ * Static string exporting the supported architectures in a Ctrl library instance.
+ */
+__attribute__((unused)) const char CTRL_COMPILED_WITH_SUPPORT_FOR[] = "CTRL_COMPILED_WITH_SUPPORT_FOR__CPU_" CTRL_MACRO_STRINGIFY(_CTRL_SUPPORT_CPU_) "_CUDA_" CTRL_MACRO_STRINGIFY(_CTRL_SUPPORT_CUDA_) "_HIP_" CTRL_MACRO_STRINGIFY(_CTRL_SUPPORT_HIP_) "_OPENCL_GPU_" CTRL_MACRO_STRINGIFY(_CTRL_SUPPORT_OPENCL_GPU_) "_FPGA_" CTRL_MACRO_STRINGIFY(_CTRL_SUPPORT_FPGA_);
+
+/**
  * Optional weights for distributed computations.
  */
 HitWeights ctrl_weights = {0, NULL};
@@ -82,8 +137,7 @@ void Ctrl_ExecTask(Ctrl *p_ctrl, Ctrl_Task *p_task);
 void Ctrl_AddTask(Ctrl *p_ctrl, Ctrl_TaskType type, HitTile *p_tile);
 
 /**
- * If ctrl queues are active add a task of type \p type that needs flags to \p p_ctrl inner queue, if ctrl queues are not
- * active pass that task to \e Ctrl_ExecTask instead.
+ * Create and execute a task of type \p type that needs flags associated to \p p_ctrl .
  *
  * @param p_ctrl ctrl to send the task to.
  * @param type type of the task to send.
@@ -200,6 +254,7 @@ void Ctrl_Init(int *pargc, char ***pargv) {
 		for (; i < argc - 1; i++) {
 			argv[i] = argv[i + 1];
 		}
+		argv[i] = NULL; // Erase last argument
 		(*pargc)--;
 	} else {
 		// Argument not found. Use default path (same as the executed program's, argv[0]).
@@ -450,7 +505,7 @@ void Ctrl_EndBlock() {
 	}
 
 	// Send destroy signal to host task queue
-	Ctrl_Task task;
+	Ctrl_Task task = CTRL_TASK_NULL;
 	task.task_type = CTRL_TASK_TYPE_DESTROYCTRL;
 	Ctrl_TaskQueue_Push(p_ctrl_host_stream, task);
 	// send destroy signal to queue manager thread
@@ -626,7 +681,7 @@ void Ctrl_AllocInner(Ctrl *p_ctrl, HitTile *p_tile, int flags) {
 		/* 3.2. UPDATE ORIGINAL ACUMULATED CARDINALITIES, NOW IT HAS ITS OWN MEMORY */
 		// Code below extracted from the body of hit_tileUpdateAcumCards(p_tile); (static inline fn)
 		p_tile->origAcumCard[hit_shapeDims(p_tile->shape)] = 1;
-		int cardinality                                    = 1;
+		HitInd cardinality                                 = 1;
 		for (int i = (hit_shapeDims(p_tile->shape) - 1); i >= 0; i--) {
 			cardinality             = cardinality * p_tile->card[i];
 			p_tile->origAcumCard[i] = cardinality;
@@ -847,10 +902,46 @@ Ctrl_Info Ctrl_GetInfo(Ctrl *p_ctrl) {
 			break;
 			#endif // _CTRL_ARCH_FPGA_
 		default:
-			fprintf(stderr, "[Ctrl_GetInfo] Unsupported architecture. Recompile Ctrl library with the proper support.\n");
+			fprintf(stderr, "[Ctrl_GetInfo] Unsupported architecture %d. Recompile Ctrl library with the proper support.\n", p_ctrl->type);
 			exit(EXIT_FAILURE);
 	}
 	return info;
+}
+
+double Ctrl_TimeLastOpInner(Ctrl *p_ctrl, HitTile *p_tile) {
+	if (hit_tileIsNull(*p_tile)) return -1;
+
+	// wait for last task in the tile to be done before getting it's duration
+	Ctrl_WaitTileInner(p_ctrl, p_tile);
+	switch (p_ctrl->type) {
+		#ifdef _CTRL_ARCH_CPU_
+		case CTRL_TYPE_CPU:
+			return Ctrl_Cpu_TimeLastOp(&(p_ctrl->p_impl->cpu), p_tile);
+		#endif // _CTRL_ARCH_CPU_
+
+		#ifdef _CTRL_ARCH_CUDA_
+		case CTRL_TYPE_CUDA:
+			return Ctrl_Cuda_TimeLastOp(&(p_ctrl->p_impl->cuda), p_tile);
+		#endif // _CTRL_ARCH_CUDA_
+
+		#ifdef _CTRL_ARCH_HIP_
+		case CTRL_TYPE_HIP:
+			return Ctrl_Hip_TimeLastOp(&(p_ctrl->p_impl->hip), p_tile);
+		#endif // _CTRL_ARCH_HIP_
+
+		#ifdef _CTRL_ARCH_OPENCL_GPU_
+		case CTRL_TYPE_OPENCL_GPU:
+			return Ctrl_OpenCLGpu_TimeLastOp(&(p_ctrl->p_impl->opencl_gpu), p_tile);
+		#endif // _CTRL_ARCH_OPENCL_GPU_
+
+		#ifdef _CTRL_ARCH_FPGA_
+		case CTRL_TYPE_FPGA:
+			return Ctrl_FPGA_TimeLastOp(&(p_ctrl->p_impl->fpga), p_tile);
+		#endif // _CTRL_ARCH_FPGA_
+		default:
+			fprintf(stderr, "[Ctrl_TimeLastOp] Unsupported architecture %d. Recompile Ctrl library with the proper support.\n", p_ctrl->type);
+			exit(EXIT_FAILURE);
+	}
 }
 
 int Ctrl_Dev(Ctrl_Type type, int *avail_impls, int n_impl) {
@@ -1398,8 +1489,13 @@ void Ctrl_Thread_QueueManager() {
 						}
 						return;
 					default:
-						fprintf(stderr, "[Ctrl Core] Queue manager: Unknown task type %d\n", p_task->task_type);
-						exit(EXIT_FAILURE);
+						#ifdef _CTRL_DEBUG_
+						fprintf(stderr, "[Ctrl Core] Queue manager: Unknown task type %d on queue %d of ctrl %d\n", p_task->task_type, qid, cid);
+						fflush(stderr);
+						#endif // _CTRL_DEBUG_
+
+						// FIXME Sometimes a null task (type 0) arrives here, caused by optimization to destroy all events from the same thread. Likely from queue sync issues.
+						// exit(EXIT_FAILURE);
 						break;
 				}
 			}

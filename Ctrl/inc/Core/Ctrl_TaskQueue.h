@@ -160,6 +160,8 @@ typedef struct Ctrl_Task {
 	HitTile          *p_tile;                        /**< For 1 tile tasks */
 	HitTile           tile;                          /**< For exec moveTo and moveFrom */
 	Ctrl_GenericEvent event;                         /**< For event related tasks */
+	Ctrl_GenericEvent event_start;                   /**< For timing of CUDA/HIP tasks */
+	double           *p_op_duration;                 /**< For timing of CPU tasks */
 	int               flags;                         /**< For tile allocation and dependance mode */
 	int               stream;                        /**< Stream to execute the task in (in kernel execution tasks) */
 	Ctrl_Request      request;                       /**< For kernel execution tasks */
@@ -206,6 +208,8 @@ typedef struct Ctrl_TaskQueue {
 		.p_tile               = NULL,                    \
 		.tile                 = HIT_TILE_NULL_STATIC,    \
 		.event                = CTRL_GENERIC_EVENT_NULL, \
+		.event_start          = CTRL_GENERIC_EVENT_NULL, \
+		.p_op_duration        = NULL,                    \
 		.flags                = 0,                       \
 		.stream               = 0}
 
@@ -224,6 +228,7 @@ static inline void Ctrl_TaskQueue_FreeTask(Ctrl_Task *p_task) {
 	if ((p_task->p_roles) != NULL) free(p_task->p_roles);
 	if ((p_task->pp_pointers) != NULL) free(p_task->pp_pointers);
 	if ((p_task->p_displacements) != NULL) free(p_task->p_displacements);
+	if ((p_task->p_op_duration) != NULL) free(p_task->p_op_duration);
 	p_task->p_tile = NULL;
 	p_task->tile   = (HitTile)HIT_TILE_NULL_STATIC;
 	p_task->event  = CTRL_GENERIC_EVENT_NULL;
@@ -324,9 +329,7 @@ static inline Ctrl_Task *Ctrl_TaskQueue_GetNext(Ctrl_TaskQueue *p_queue) {
  */
 static inline void Ctrl_TaskQueue_Destroy(Ctrl_TaskQueue *p_queue) {
 	for (int i = 0; i < p_queue->read; i++) {
-		if ((p_queue->buffer[i]).task_type == CTRL_TASK_TYPE_HOST || (p_queue->buffer[i]).task_type == CTRL_TASK_TYPE_KERNEL) {
-			Ctrl_TaskQueue_FreeTask(&(p_queue->buffer[i]));
-		}
+		Ctrl_TaskQueue_FreeTask(&(p_queue->buffer[i]));
 	}
 	p_queue->read = p_queue->write_cons = p_queue->write_prod = p_queue->last_finished = 0;
 	free(p_queue);
@@ -480,13 +483,13 @@ static inline Ctrl_GenericEvent Ctrl_GenericEvent_Create(Ctrl_EventType type, in
 	switch (type) {
 		#ifdef _CTRL_ARCH_CUDA_
 		case CTRL_EVENT_TYPE_CUDA:
-			event.event.p_event_cuda = (cudaEvent_t *)malloc(sizeof(cudaEvent_t));
+			event.event.p_event_cuda = (cudaEvent_t *)calloc(1, sizeof(cudaEvent_t));
 			break;
 		#endif //_CTRL_ARCH_CUDA_
 
 		#ifdef _CTRL_ARCH_HIP_
 		case CTRL_EVENT_TYPE_HIP:
-			event.event.p_event_hip = (hipEvent_t *)malloc(sizeof(hipEvent_t));
+			event.event.p_event_hip = (hipEvent_t *)calloc(1, sizeof(hipEvent_t));
 			break;
 		#endif //_CTRL_ARCH_HIP_
 
@@ -628,8 +631,13 @@ static inline void Ctrl_GenericEvent_Destroy(Ctrl_GenericEvent event) {
 			break;
 		#endif //_CTRL_ARCH_OPENCL_GPU_ || _CTRL_ARCH_FPGA_
 		default:
+			#ifdef _CTRL_DEBUG_
 			fprintf(stderr, "[Ctrl_GenericEvent_Destroy] Error: Unknown event type %d.\n", event.event_type);
-			exit(EXIT_FAILURE);
+			fflush(stderr);
+			#endif // _CTRL_DEBUG_
+
+			// FIXME Sometimes a null event (type 0) arrives here, caused by optimization to destroy all events from the same thread. Likely from queue sync issues.
+			// exit(EXIT_FAILURE);
 			break;
 	}
 }

@@ -25,8 +25,8 @@
 
 // TODO @sergioalo OUT tiles should not have sampler (cant be used for write image functions), IO tiles should not have texture nor sampler since we don't support rw textures. (if this changes remember changing the constructor parser)
 #define CTRL_KERNEL_OPENCL_PARSE_ARGS_INVAL(type, name) " const ", CTRL_MACRO_STRINGIFY(type), " ", CTRL_MACRO_STRINGIFY(name)
-#define CTRL_KERNEL_OPENCL_PARSE_ARGS_IN(type, name)    " const ", CTRL_MACRO_STRINGIFY(K##type##_wrapper), " ", CTRL_MACRO_STRINGIFY(ctrl_ktile_wrapper_##name), " , __global const ", raw_ktile_K##type, " ", CTRL_MACRO_STRINGIFY(*ctrl_mem_wrapper_##name), " , __read_only image2d_t ", CTRL_MACRO_STRINGIFY(name##_img), ", const sampler_t ", CTRL_MACRO_STRINGIFY(name##_smp)
-#define CTRL_KERNEL_OPENCL_PARSE_ARGS_OUT(type, name)   "  ", CTRL_MACRO_STRINGIFY(K##type##_wrapper), " ", CTRL_MACRO_STRINGIFY(ctrl_ktile_wrapper_##name), " , __global ", raw_ktile_K##type, " ", CTRL_MACRO_STRINGIFY(*ctrl_mem_wrapper_##name), " , __write_only image2d_t ", CTRL_MACRO_STRINGIFY(name##_img), ", const sampler_t ", CTRL_MACRO_STRINGIFY(name##_smp)
+#define CTRL_KERNEL_OPENCL_PARSE_ARGS_IN(type, name)    " const ", CTRL_MACRO_STRINGIFY(KHitTile_opencl_wrapper), " ", CTRL_MACRO_STRINGIFY(ctrl_ktile_wrapper_##name), " , __global const ", raw_ktile_K##type, " ", CTRL_MACRO_STRINGIFY(*ctrl_mem_wrapper_##name), " , __read_only image2d_t ", CTRL_MACRO_STRINGIFY(name##_img), ", const sampler_t ", CTRL_MACRO_STRINGIFY(name##_smp)
+#define CTRL_KERNEL_OPENCL_PARSE_ARGS_OUT(type, name)   "  ", CTRL_MACRO_STRINGIFY(KHitTile_opencl_wrapper), " ", CTRL_MACRO_STRINGIFY(ctrl_ktile_wrapper_##name), " , __global ", raw_ktile_K##type, " ", CTRL_MACRO_STRINGIFY(*ctrl_mem_wrapper_##name), " , __write_only image2d_t ", CTRL_MACRO_STRINGIFY(name##_img), ", const sampler_t ", CTRL_MACRO_STRINGIFY(name##_smp)
 #define CTRL_KERNEL_OPENCL_PARSE_ARGS_IO(type, name)    CTRL_KERNEL_OPENCL_PARSE_ARGS_OUT(type, name)
 
 #define CTRL_KERNEL_OPENCL_PARSE_ARGS_1(role, type, name)       CTRL_KERNEL_OPENCL_PARSE_ARGS_##role(type, name)
@@ -123,11 +123,11 @@
 #define CTRL_KERNEL_OPENCL_MOUNT_INNER_TILES_OUT(string, type, name) \
 	CTRL_KERNEL_OPENCL_MOUNT_INNER_TILES_GENERIC(string, type, name, write)
 
-#define CTRL_KERNEL_OPENCL_MOUNT_INNER_TILES_GENERIC(string, type, name, IOtype)                                                  \
-	strcat(string,                                                                                                                \
-		   CTRL_MACRO_STRINGIFY(                                                                                                  \
-			   K##type##_##IOtype name                    = {.data = ctrl_mem_wrapper_##name + ctrl_ktile_wrapper_##name.offset}; \
-			   *((K##type##_wrapper *)&name.origAcumCard) = ctrl_ktile_wrapper_##name;));
+#define CTRL_KERNEL_OPENCL_MOUNT_INNER_TILES_GENERIC(string, type, name, IOtype)                                                        \
+	strcat(string,                                                                                                                      \
+		   CTRL_MACRO_STRINGIFY(                                                                                                        \
+			   K##type##_##IOtype name                          = {.data = ctrl_mem_wrapper_##name + ctrl_ktile_wrapper_##name.offset}; \
+			   *((KHitTile_opencl_wrapper *)&name.origAcumCard) = ctrl_ktile_wrapper_##name;));
 
 #define CTRL_KERNEL_OPENCL_MOUNT_INNER_TILES_IO(string, type, name) CTRL_KERNEL_OPENCL_MOUNT_INNER_TILES_OUT(string, type, name)
 
@@ -337,7 +337,8 @@
 		OPENCL_ASSERT_OP(clEnqueueNDRangeKernel(*(request.opencl.queue), ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id],                                            \
 												threads.dims, NULL, global_size, local_size,                                                                                                            \
 												0, NULL, request.opencl.p_last_kernel_event));                                                                                                          \
-		OPENCL_ASSERT_OP(clFlush(*(request.opencl.queue)));                                                                                                                                             \
+		/* TODO @seralpa removing clflush allows the runtime to batch launches, but according to the standard it's needed before operating with the event */                                            \
+		/* OPENCL_ASSERT_OP(clFlush(*(request.opencl.queue))); */                                                                                                                                       \
 	}
 
 /**
@@ -386,7 +387,7 @@
 #define CTRL_KERNEL_WRAP_OPENCLGPULIB_DEFAULT(name, args_list, type, subtype, ...)                                                                                        \
 	{                                                                                                                                                                     \
 		Ctrl_Kernel_OpenCLGPU_##type##_##subtype##_##name(*(request.opencl.context), *(request.opencl.queue), CTRL_KERNEL_ARG_LIST_ACCESS_KTILE(args_list, __VA_ARGS__)); \
-		OPENCL_ASSERT_OP(clEnqueueBarrierWithWaitList((*request.opencl.queue), 0, NULL, request.opencl.p_last_kernel_event);                                              \
+		OPENCL_ASSERT_OP(clEnqueueBarrierWithWaitList((*request.opencl.queue), 0, NULL, request.opencl.p_last_kernel_event));                                             \
 	};
 
 /**
@@ -409,8 +410,14 @@
 		ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel_raw    = (char *)malloc(CTRL_KERNEL_OPENCL_MAX_CODE_SIZE * sizeof(char));                                                                                         \
 		ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel_raw[0] = '\0';                                                                                                                                                    \
 		/* definitions for each type at the begining of the kernel. */                                                                                                                                                               \
-		/* Copy new INVAL type definitions */                                                                                                                                                                                        \
-		strcpy(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel_raw, CTRL_MACRO_STRINGIFY(CTRL_USER_TYPES));                                                                                                               \
+		strcpy(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel_raw, "typedef long HitInd;");                                                                                                                              \
+		strcat(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel_raw, CTRL_MACRO_STRINGIFY(CTRL_USER_TYPES));                                                                                                               \
+		strcat(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel_raw, CTRL_MACRO_STRINGIFY(                                                                                                                                 \
+																				   typedef struct {                                                                                                                                  \
+																					   HitInd origAcumCard[HIT_MAXDIMS + 1];                                                                                                         \
+																					   HitInd card[HIT_MAXDIMS];                                                                                                                     \
+																					   HitInd offset;                                                                                                                                \
+																				   } KHitTile_opencl_wrapper;));                                                                                                                     \
                                                                                                                                                                                                                                      \
 		CTRL_KERNEL_OPENCL_RESET_TILES(n_args, __VA_ARGS__);                                                                                                                                                                         \
 		CTRL_KERNEL_OPENCL_PARSE_TILES(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel_raw, n_args, __VA_ARGS__);                                                                                                         \

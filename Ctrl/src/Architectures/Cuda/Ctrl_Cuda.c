@@ -303,25 +303,40 @@ void Ctrl_Cuda_ExecTask(Ctrl_Task *p_task, Ctrl_Cuda *p_ctrl) {
 	p_task->request.cuda.p_stream = &stream;
 	switch (p_task->task_type) {
 		case CTRL_TASK_TYPE_KERNEL:
+			if (Ctrl_GenericEvent_GetRefCount(p_task->event_start) > 1) {
+				CUDA_OP(cudaEventCreate(p_task->event_start.event.p_event_cuda));
+				CUDA_OP(cudaEventRecord(*p_task->event_start.event.p_event_cuda, stream));
+				Ctrl_GenericEvent_Release(p_task->event_start);
+			}
 			p_task->pfn_kernel_wrapper(p_task->request, p_task->device_id, CTRL_TYPE_CUDA, p_task->threads, p_task->blocksize, p_task->p_arguments);
 			if (Ctrl_GenericEvent_GetRefCount(p_task->event) > 1) {
-				CUDA_OP(cudaEventCreateWithFlags(p_task->event.event.p_event_cuda, cudaEventDisableTiming));
+				CUDA_OP(cudaEventCreate(p_task->event.event.p_event_cuda));
 				CUDA_OP(cudaEventRecord(*p_task->event.event.p_event_cuda, stream));
 				Ctrl_GenericEvent_Release(p_task->event);
 			}
 			break;
 		case CTRL_TASK_TYPE_MOVETO:
+			if (Ctrl_GenericEvent_GetRefCount(p_task->event_start) > 1) {
+				CUDA_OP(cudaEventCreate(p_task->event_start.event.p_event_cuda));
+				CUDA_OP(cudaEventRecord(*p_task->event_start.event.p_event_cuda, stream));
+				Ctrl_GenericEvent_Release(p_task->event_start);
+			}
 			Ctrl_Cuda_ExecTaskMoveTo(p_task, p_ctrl);
 			if (Ctrl_GenericEvent_GetRefCount(p_task->event) > 1) {
-				CUDA_OP(cudaEventCreateWithFlags(p_task->event.event.p_event_cuda, cudaEventDisableTiming));
+				CUDA_OP(cudaEventCreate(p_task->event.event.p_event_cuda));
 				CUDA_OP(cudaEventRecord(*p_task->event.event.p_event_cuda, stream));
 				Ctrl_GenericEvent_Release(p_task->event);
 			}
 			break;
 		case CTRL_TASK_TYPE_MOVEFROM:
+			if (Ctrl_GenericEvent_GetRefCount(p_task->event_start) > 1) {
+				CUDA_OP(cudaEventCreate(p_task->event_start.event.p_event_cuda));
+				CUDA_OP(cudaEventRecord(*p_task->event_start.event.p_event_cuda, stream));
+				Ctrl_GenericEvent_Release(p_task->event_start);
+			}
 			Ctrl_Cuda_ExecTaskMoveFrom(p_task, p_ctrl);
 			if (Ctrl_GenericEvent_GetRefCount(p_task->event) > 1) {
-				CUDA_OP(cudaEventCreateWithFlags(p_task->event.event.p_event_cuda, cudaEventDisableTiming));
+				CUDA_OP(cudaEventCreate(p_task->event.event.p_event_cuda));
 				CUDA_OP(cudaEventRecord(*p_task->event.event.p_event_cuda, stream));
 				Ctrl_GenericEvent_Release(p_task->event);
 			}
@@ -373,6 +388,16 @@ void Ctrl_Cuda_GetInfo(Ctrl_Cuda *p_ctrl, Ctrl_Info *p_info) {
 	strncpy(p_info->device_name, cu_dev_prop.name, CTRL_MAX_DEV_NAME - 1);
 	p_info->device_name[255] = '\0';
 	p_info->n_kernel_queues  = p_ctrl->n_kernel_streams;
+}
+
+double Ctrl_Cuda_TimeLastOp(Ctrl_Cuda *p_ctrl, HitTile *p_tile) {
+	Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)(p_tile->ext);
+	Ctrl_Tile_Impl *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
+	Ctrl_Cuda_Tile *p_tile_data_cuda = p_tile_data_impl->tile.p_cuda;
+
+	float ms;
+	CUDA_OP(cudaEventElapsedTime(&ms, *p_tile_data_cuda->last_op_start.event.p_event_cuda, *p_tile_data_cuda->last_op_stop.event.p_event_cuda));
+	return (double)ms / 1000.0;
 }
 
 void Ctrl_Cuda_CreateTex(Ctrl_Cuda *p_ctrl, HitTile *p_tile, Ctrl_TexDesc tex_desc) {
@@ -475,6 +500,8 @@ void Ctrl_Cuda_InitTile(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 	p_tile_data_impl_cuda->dev_last_kernel_write_event  = CTRL_GENERIC_EVENT_NULL;
 	p_tile_data_impl_cuda->dev_last_dth_event           = CTRL_GENERIC_EVENT_NULL;
 	p_tile_data_impl_cuda->dev_last_htd_event           = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_impl_cuda->last_op_start                = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_impl_cuda->last_op_stop                 = CTRL_GENERIC_EVENT_NULL;
 
 	p_tile_data_impl_cuda->streamid_last_kr = 0;
 	p_tile_data_impl_cuda->streamid_last_kw = 0;
@@ -529,8 +556,16 @@ void Ctrl_Cuda_EvalTaskMoveToInner(Ctrl_Cuda *p_ctrl, HitTile *p_tile) {
 	// Wait for previous task to finish if policy is sync
 	Ctrl_SyncWait(p_ctrl->p_htd_host_stream);
 
+	// Replace previous htd event
 	Ctrl_GenericEvent_Release(p_tile_data_cuda->dev_last_htd_event);
 	p_tile_data_cuda->dev_last_htd_event = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CUDA, p_ctrl->global_id);
+
+	// Replace previous last op events
+	Ctrl_GenericEvent_Release(p_tile_data_cuda->last_op_start);
+	p_tile_data_cuda->last_op_start = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CUDA, p_ctrl->global_id);
+	Ctrl_GenericEvent_Release(p_tile_data_cuda->last_op_stop);
+	p_tile_data_cuda->last_op_stop = p_tile_data_cuda->dev_last_htd_event;
+	Ctrl_GenericEvent_Retain(p_tile_data_cuda->last_op_stop);
 
 	Ctrl_Task task = CTRL_TASK_NULL;
 	task.task_type = CTRL_TASK_TYPE_MOVETO;
@@ -656,8 +691,16 @@ void Ctrl_Cuda_EvalTaskMoveFromInner(Ctrl_Cuda *p_ctrl, HitTile *p_tile) {
 	// wait for previous task to finish if policy is sync
 	Ctrl_SyncWait(p_ctrl->p_dth_host_stream);
 
+	// Replace previous dth event
 	Ctrl_GenericEvent_Release(p_tile_data_cuda->dev_last_dth_event);
 	p_tile_data_cuda->dev_last_dth_event = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CUDA, p_ctrl->global_id);
+
+	// Replace previous last op events
+	Ctrl_GenericEvent_Release(p_tile_data_cuda->last_op_start);
+	p_tile_data_cuda->last_op_start = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CUDA, p_ctrl->global_id);
+	Ctrl_GenericEvent_Release(p_tile_data_cuda->last_op_stop);
+	p_tile_data_cuda->last_op_stop = p_tile_data_cuda->dev_last_dth_event;
+	Ctrl_GenericEvent_Retain(p_tile_data_cuda->last_op_stop);
 
 	Ctrl_Task task = CTRL_TASK_NULL;
 	task.task_type = CTRL_TASK_TYPE_MOVEFROM;
@@ -942,11 +985,14 @@ void Ctrl_Cuda_EvalTaskKernelLaunch(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 	request.cuda.p_magma_queue = &(p_ctrl->magma_queue);
 	#endif // _CTRL_MAGMA_
 
-	Ctrl_GenericEvent kernel_event = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CUDA, p_ctrl->global_id);
+	Ctrl_GenericEvent kernel_event       = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CUDA, p_ctrl->global_id);
+	Ctrl_GenericEvent kernel_event_start = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CUDA, p_ctrl->global_id);
 
-	p_task->request = request;
-	p_task->event   = kernel_event;
+	p_task->request     = request;
+	p_task->event       = kernel_event;
+	p_task->event_start = kernel_event_start;
 	Ctrl_GenericEvent_Retain(p_task->event);
+	Ctrl_GenericEvent_Retain(p_task->event_start);
 	Ctrl_TaskQueue_Push(p_host_kernel_queue, *p_task);
 
 	// update events on arguments according to their roles
@@ -956,6 +1002,14 @@ void Ctrl_Cuda_EvalTaskKernelLaunch(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 			Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)(p_tile->ext);
 			Ctrl_Tile_Impl *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
 			Ctrl_Cuda_Tile *p_tile_data_cuda = p_tile_data_impl->tile.p_cuda;
+
+			Ctrl_GenericEvent_Release(p_tile_data_cuda->last_op_stop);
+			p_tile_data_cuda->last_op_stop = kernel_event;
+			Ctrl_GenericEvent_Retain(p_tile_data_cuda->last_op_stop);
+
+			Ctrl_GenericEvent_Release(p_tile_data_cuda->last_op_start);
+			p_tile_data_cuda->last_op_start = kernel_event_start;
+			Ctrl_GenericEvent_Retain(p_tile_data_cuda->last_op_start);
 
 			if (p_task->p_roles[i] != KERNEL_IN) {
 				if (p_tile_data->host_status == CTRL_TILE_VALID) p_tile_data->host_status = CTRL_TILE_INVALID;
@@ -993,6 +1047,7 @@ void Ctrl_Cuda_EvalTaskKernelLaunch(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 		Ctrl_GenericEvent_Retain(p_ctrl->dev_seq_event);
 	}
 	Ctrl_GenericEvent_Release(kernel_event);
+	Ctrl_GenericEvent_Release(kernel_event_start);
 }
 
 void Ctrl_Cuda_HostTaskWait(Ctrl_Cuda_Tile *p_tile, char rol, Ctrl_TaskQueue *p_queue) {
@@ -1115,6 +1170,8 @@ void Ctrl_Cuda_EvalTaskFreeTile(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 	Ctrl_GenericEvent_Release(p_tile_data_cuda->dev_last_kernel_write_event);
 	Ctrl_GenericEvent_Release(p_tile_data_cuda->dev_last_dth_event);
 	Ctrl_GenericEvent_Release(p_tile_data_cuda->dev_last_htd_event);
+	Ctrl_GenericEvent_Release(p_tile_data_cuda->last_op_start);
+	Ctrl_GenericEvent_Release(p_tile_data_cuda->last_op_stop);
 
 	// Remove tle from tile linked list
 	if (p_tile_data_cuda->p_tile_elem->p_prev != NULL) {

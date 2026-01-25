@@ -9,19 +9,19 @@
 
 /*
  * <license>
- * 
+ *
  * Hitmap v1.4
- * 
+ *
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
- * or use for commercial purpose, public redistribution, in source or binary forms, with or 
- * without modifications, is NOT ALLOWED without the previous authorization of the copyright 
+ * or use for commercial purpose, public redistribution, in source or binary forms, with or
+ * without modifications, is NOT ALLOWED without the previous authorization of the copyright
  * holder. The origin of this software must not be misrepresented; you must not claim that you
  * wrote the original software. If you use this software for any purpose (e.g. publication),
  * a reference to the software package and the authors must be included.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
  * THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
  * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
@@ -29,25 +29,24 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * 
- * Copyright (c) 2007-2024, Trasgo Group, Universidad de Valladolid.
+ *
+ * Copyright (c) 2007-2026, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
- * 
+ *
  * More information on http://trasgo.infor.uva.es/
- * 
+ *
  * </license>
-*/
+ */
 
 #ifndef _HitCShape_
 #define _HitCShape_
 
 #include "hit_shape.h"
 
-
 /** Constant for a CSR Sparse Matrix. */
 #define HIT_CSHAPE_MATRIX 0
 /** Constant for a CSR Sparse Graph. */
-#define HIT_CSHAPE_GRAPH  1
+#define HIT_CSHAPE_GRAPH 1
 
 /**
  * Null value for sparse domain shapes.
@@ -56,17 +55,22 @@ extern HitShape HIT_CSR_SHAPE_NULL;
 
 // @cond INTERNAL
 /** Null internal value for CSR sparse domain shapes. */
-#define HIT_CSR_SHAPE_INTERNAL_NULL_STATIC { {0,0}, NULL, NULL, {HIT_NAMELIST_NULL_STATIC,HIT_NAMELIST_NULL_STATIC} }
+#define HIT_CSR_SHAPE_INTERNAL_NULL_STATIC                                         \
+	{                                                                              \
+		{0, 0}, NULL, NULL, { HIT_NAMELIST_NULL_STATIC, HIT_NAMELIST_NULL_STATIC } \
+	}
 /** Null static value for CSR sparse domain shapes. */
-// @note 
+// @note
 // @author javfres: C++ do not support this kind of struct initialization.
 // @author arturo: Solution, do the initialization in two assignments in the .c file. Done.
 #ifdef __cplusplus
 #else
-#define HIT_CSR_SHAPE_NULL_STATIC { HIT_CSR_SHAPE, {.csr = HIT_CSR_SHAPE_INTERNAL_NULL_STATIC} }
+#define HIT_CSR_SHAPE_NULL_STATIC                                    \
+	{                                                                \
+		HIT_CSR_SHAPE, { .csr = HIT_CSR_SHAPE_INTERNAL_NULL_STATIC } \
+	}
 #endif
-// @endcond
-
+//  @endcond
 
 /* 1. Hit CSR Sparse Shape generating functions */
 /**
@@ -77,7 +81,7 @@ extern HitShape HIT_CSR_SHAPE_NULL;
  * @param nedges number of edges.
  * @return the new CSR Sparse Shape.
  */
-HitShape hit_csrShape(int nvertices, int nedges);
+HitShape hit_csrShape(HitInd nvertices, HitInd nedges);
 
 /**
  * Sparse CSR matrix shape constructor.
@@ -87,7 +91,7 @@ HitShape hit_csrShape(int nvertices, int nedges);
  * @param nz Number of nonzero elements.
  * @return the new CSR Sparse Shape.
  */
-HitShape hit_csrShapeMatrix(int n, int m, int nz);
+HitShape hit_csrShapeMatrix(HitInd n, HitInd m, HitInd nz);
 
 /**
  * Hit CSR Shape destructor.
@@ -95,8 +99,6 @@ HitShape hit_csrShapeMatrix(int n, int m, int nz);
  * @param shape A Hit CSR Shape.
  */
 void hit_cShapeFree(HitShape shape);
-
-
 
 /* 2. Hit Sparse Shape access macros */
 /**
@@ -107,7 +109,6 @@ void hit_cShapeFree(HitShape shape);
  */
 #define hit_cShapeCard(shape, dim) (hit_cShapeAccess(shape).cards[(dim)])
 
-
 /**
  * Get the cardinality (number of vertices) of the CSR graph.
  * @memberof HitCShape
@@ -117,14 +118,12 @@ void hit_cShapeFree(HitShape shape);
  */
 #define hit_cShapeNvertices(shape) (hit_cShapeCard(shape, 0))
 
-
 /**
  * Get the number of non zero elements.
  * @param shape A HitCShape
  * @return
  */
 #define hit_cShapeNZElems(shape) (hit_cShapeXadj((shape))[hit_cShapeNvertices(shape)])
-
 
 /**
  * Get the number of edges in the graph.
@@ -159,7 +158,7 @@ void hit_cShapeFree(HitShape shape);
  * @param dim The dimension (0 for rows, 1 for columns).
  * @return The name list
  */
-#define hit_cShapeNameList(shape,dim) (hit_cShapeAccess((shape)).names[(dim)])
+#define hit_cShapeNameList(shape, dim) (hit_cShapeAccess((shape)).names[(dim)])
 
 /**
  * Checks if a element exists in a HitCShape
@@ -168,8 +167,7 @@ void hit_cShapeFree(HitShape shape);
  * @param y The col index.
  * @return 1 if the element exists, 0 otherwise.
  */
-int hit_cShapeElemExists(HitShape shape, int x, int y);
-
+int hit_cShapeElemExists(HitShape shape, HitInd x, HitInd y);
 
 /**
  * Returns the fist column index from a given row.
@@ -189,12 +187,12 @@ int hit_cShapeElemExists(HitShape shape, int x, int y);
  * @param row A row in local coordinates.
  * @return The last column index.
  */
-#define hit_cShapeLastColumn(s, row) (hit_cShapeXadj(s)[(row)+1])
+#define hit_cShapeLastColumn(s, row) (hit_cShapeXadj(s)[(row) + 1])
 
 /**
  * Returns the number of edges from a given vertex.
  * @memberof HitCShape
- * @fn int hit_cShapeNEdgesFromVertex(HitShape s, int vertex)
+ * @fn int hit_cShapeNEdgesFromVertex(HitShape s, HitInd vertex)
  * @param s A CShape.
  * @param vertex A vertex.
  * @return The number of edges.
@@ -212,26 +210,24 @@ int hit_cShapeElemExists(HitShape shape, int x, int y);
 /**
  * Returns the target vertex of an edge.
  * @memberof HitCShape
- * @fn int hit_cShapeEdgeTarget(HitShape s, int edge)
+ * @fn int hit_cShapeEdgeTarget(HitShape s, HitInd edge)
  * @param s A HitCShape.
  * @param edge An edge.
  * @return A vertex.
  */
-#define hit_cShapeEdgeTarget(s,edge) (hit_cShapeAdjncy(s)[(edge)])
-
+#define hit_cShapeEdgeTarget(s, edge) (hit_cShapeAdjncy(s)[(edge)])
 
 /* 3. Hit CSR Sparse Shape operations */
 /**
  * Translates a vertex in the local domain (start at 0) to
  * the global domain of vertices.
- * @fn int hit_cShapeVertexToGlobal(HitShape s, int vertex)
+ * @fn int hit_cShapeVertexToGlobal(HitShape s, HitInd vertex)
  * @memberof HitCShape
  * @param s The CShape.
  * @param vertex The local vertex.
  * @return A global vertex.
  */
-#define hit_cShapeVertexToGlobal(s,vertex) (hit_nameListIndex2Name(hit_cShapeNameList(s,0),vertex))
-
+#define hit_cShapeVertexToGlobal(s, vertex) (hit_nameListIndex2Name(hit_cShapeNameList(s, 0), vertex))
 
 /**
  * Translates a vertex in the global domain to the local domain.
@@ -240,8 +236,7 @@ int hit_cShapeElemExists(HitShape shape, int x, int y);
  * @param vertex the global vertex.
  * @return A local vertex.
  */
-#define hit_cShapeVertexToLocal(s,vertex) (hit_nameListName2Index(hit_cShapeNameList(s,0),vertex))
-
+#define hit_cShapeVertexToLocal(s, vertex) (hit_nameListName2Index(hit_cShapeNameList(s, 0), vertex))
 
 /**
  * Converts a local coordinate to global.
@@ -250,8 +245,7 @@ int hit_cShapeElemExists(HitShape shape, int x, int y);
  * @param elem The element using local coordinates.
  * @return The global coordinate.
  */
-#define hit_cShapeCoordToGlobal(s,dim,elem) (hit_nameListIndex2Name(hit_cShapeNameList((s),(dim)),(elem)))
-
+#define hit_cShapeCoordToGlobal(s, dim, elem) (hit_nameListIndex2Name(hit_cShapeNameList((s), (dim)), (elem)))
 
 /**
  * Converts a global coordinate to local.
@@ -260,10 +254,7 @@ int hit_cShapeElemExists(HitShape shape, int x, int y);
  * @param elem The element using global coordinates.
  * @return The local coordinate.
  */
-#define hit_cShapeCoordToLocal(s,dim,elem)  (hit_nameListName2Index(hit_cShapeNameList((s),(dim)),(elem)))
-
-
-
+#define hit_cShapeCoordToLocal(s, dim, elem) (hit_nameListName2Index(hit_cShapeNameList((s), (dim)), (elem)))
 
 /**
  * Checks if the sparse shape has a vertex.
@@ -273,7 +264,7 @@ int hit_cShapeElemExists(HitShape shape, int x, int y);
  * @param v The vertex.
  * @return 0 if the shape do not have the vertex, other value otherwise.
  */
-#define hit_cShapeHasVertex(s,v) (hit_cShapeVertexToLocal(s, v) != -1)
+#define hit_cShapeHasVertex(s, v) (hit_cShapeVertexToLocal(s, v) != -1)
 
 /**
  * Sparse Shape selection.
@@ -284,21 +275,19 @@ int hit_cShapeElemExists(HitShape shape, int x, int y);
  * @param vertices An array with the selected vertices in the global domain.
  * @return a New CShape.
  */
-HitShape hit_cShapeSelect(HitShape s, int nvertices, int * vertices);
+HitShape hit_cShapeSelect(HitShape s, HitInd nvertices, HitInd *vertices);
 
-
- /**
-  * Sparse Shape Matrix selection.
-  * Makes a sparse shape with the selected rows of the source shape.
-  * @memberof HitCShape
-  * @param s The source sparse shape.
-  * @param n The number of selected rows.
-  * @param names Selected name list in global coordinates.
-  * @return a New CShape.
-  *
-  */
-HitShape hit_cShapeSelectRows(HitShape shape, int n, int * names);
-
+/**
+ * Sparse Shape Matrix selection.
+ * Makes a sparse shape with the selected rows of the source shape.
+ * @memberof HitCShape
+ * @param s The source sparse shape.
+ * @param n The number of selected rows.
+ * @param names Selected name list in global coordinates.
+ * @return a New CShape.
+ *
+ */
+HitShape hit_cShapeSelectRows(HitShape shape, HitInd n, HitInd *names);
 
 /**
  * Expand a CSR Sparse Shape adding new vertices of the original graph.
@@ -319,7 +308,7 @@ HitShape hit_cShapeExpand(HitShape shape, HitShape original, int amount);
  * @param newNames An array with the new order of vertices using the global domain.
  * @return A new CShape reordered.
  */
-HitShape hit_cShapeReorder(HitShape s, int * newNames);
+HitShape hit_cShapeReorder(HitShape s, int *newNames);
 
 /**
  * Adds the vertex x.
@@ -335,7 +324,7 @@ HitShape hit_cShapeReorder(HitShape s, int * newNames);
  * @param shape The CShape pointer of the graph.
  * @param x A row/vertex (in global coordinates).
  */
-void hit_cShapeAddEmptyRow_or_Vertex(HitShape * shape, int x, int mode);
+void hit_cShapeAddEmptyRow_or_Vertex(HitShape *shape, HitInd x, int mode);
 
 /**
  * Adds the edge x->y.
@@ -355,7 +344,11 @@ void hit_cShapeAddEmptyRow_or_Vertex(HitShape * shape, int x, int mode);
  * @param x A node (in global coordinates).
  * @param y A node (in global coordinates).
  */
-#define hit_cShapeAddEdge2(shape,x,y) {hit_cShapeAddEdge(shape,x,y); hit_cShapeAddEdge(shape,y,x);}
+#define hit_cShapeAddEdge2(shape, x, y) \
+	{                                   \
+		hit_cShapeAddEdge(shape, x, y); \
+		hit_cShapeAddEdge(shape, y, x); \
+	}
 
 /**
  * Creates the inverse translation list of vertex names.
@@ -365,9 +358,7 @@ void hit_cShapeAddEmptyRow_or_Vertex(HitShape * shape, int x, int mode);
  * @memberof HitCShape
  * @param shape A pointer to HitCShape.
  */
-void hit_cShapeCreateInvNames(HitShape * shape);
-
-
+void hit_cShapeCreateInvNames(HitShape *shape);
 
 /* 4. Hit CSR Sparse Shape Iterators */
 
@@ -378,8 +369,8 @@ void hit_cShapeCreateInvNames(HitShape * shape);
  * @param var Loop variable
  * @param shape A HitCShape.
  */
-#define hit_cShapeRowIterator(var,shape) \
-	for(var=0; var<hit_cShapeCard(shape, 0); var++)
+#define hit_cShapeRowIterator(var, shape) \
+	for (var = 0; var < hit_cShapeCard(shape, 0); var++)
 
 /**
  * Vertex iterator.
@@ -389,7 +380,7 @@ void hit_cShapeCreateInvNames(HitShape * shape);
  * @param var Loop variable
  * @param shape The CShape
  */
-#define hit_cShapeVertexIterator(var,shape) hit_cShapeRowIterator(var,shape)
+#define hit_cShapeVertexIterator(var, shape) hit_cShapeRowIterator(var, shape)
 
 /**
  * Column iterator from a given row.
@@ -400,9 +391,8 @@ void hit_cShapeCreateInvNames(HitShape * shape);
  * @param shape The HitCShape
  * @param row The row
  */
-#define hit_cShapeColumnIterator(var,shape,row) \
-	for(var=hit_cShapeFistColumn(shape,row); var<hit_cShapeLastColumn(shape,row); var++)
-
+#define hit_cShapeColumnIterator(var, shape, row) \
+	for (var = hit_cShapeFistColumn(shape, row); var < hit_cShapeLastColumn(shape, row); var++)
 
 /**
  * Edge iterator from a given vertex.
@@ -413,8 +403,7 @@ void hit_cShapeCreateInvNames(HitShape * shape);
  * @param shape The HitCShape
  * @param vertex The vertex
  */
-#define hit_cShapeEdgeIterator(var,shape,vertex) hit_cShapeColumnIterator(var,shape,vertex)
-
+#define hit_cShapeEdgeIterator(var, shape, vertex) hit_cShapeColumnIterator(var, shape, vertex)
 
 /**
  * Adds a new element to a matrix or and edge to a graph
@@ -423,8 +412,7 @@ void hit_cShapeCreateInvNames(HitShape * shape);
  * @param y The y coordinate or destination vertex.
  * @param mode The Matrix or Graph mode
  */
-void hit_cShapeAddElem_or_Edge(HitShape * shape, int x, int y, int mode);
-
+void hit_cShapeAddElem_or_Edge(HitShape *shape, HitInd x, HitInd y, int mode);
 
 /**
  * Adds a new element to a matrix or and edge to a graph
@@ -433,8 +421,6 @@ void hit_cShapeAddElem_or_Edge(HitShape * shape, int x, int y, int mode);
  * @param y The y coordinate.
  */
 #define hit_cShapeAddElem(shapep, x, y) hit_cShapeAddElem_or_Edge(shapep, x, y, HIT_CSHAPE_MATRIX)
-
-
 
 /* END OF HEADER FILE _HitCShape_ */
 #endif

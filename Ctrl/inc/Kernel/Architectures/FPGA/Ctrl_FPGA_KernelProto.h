@@ -18,19 +18,22 @@
 #include "Kernel/Ctrl_KernelArgs.h"
 #include "Kernel/Ctrl_Thread.h"
 
-#ifndef CTRL_FPGA_KERNEL_FILE
+#ifndef _CTRL_FPGA_KERNEL_FILE_
 #include "Core/Ctrl_Request.h"
-#endif // CTRL_FPGA_KERNEL_FILE
+#endif // _CTRL_FPGA_KERNEL_FILE_
 
 #define __CTRL_FPGA_KERNEL_OPTIMIZE_FOR(simd_lanes, sx, sy, sz) \
 	__attribute__((reqd_work_group_size(sx, sy, sz)))           \
-	__attribute__((num_simd_work_items(simd_lanes)))
+	__attribute__((num_simd_work_items(simd_lanes))) // Might not work, depending on aoc version used
+
+#define __CTRL_FPGA_KERNEL_REPLICATE(...) __attribute__((num_compute_units(__VA_ARGS__)))
 
 #define CTRL_KERNEL_FN_FPGA(name, type, subtype, ...) \
 	CTRL_KERNEL_FN_FPGA_##subtype(name, type, subtype, __VA_ARGS__)
 
 #define CTRL_KERNEL_FN_FPGA_TASK(name, type, subtype, ...)                                                            \
 	__attribute__((max_global_work_dim(0)))                                                                           \
+	__attribute__((uses_global_work_offset(0)))                                                                       \
 	__kernel void                                                                                                     \
 	ctrl_kernel_fpga_##type##_##subtype##_##name(Ctrl_Thread ctrl_threads CTRL_KERNEL_FPGA_PARSE_ARGS(__VA_ARGS__)) { \
 		CTRL_KERNEL_FPGA_INIT_ARGS(__VA_ARGS__)
@@ -56,13 +59,13 @@
 		if (thr_i >= (int)ctrl_threads.i || thr_j >= (int)ctrl_threads.j || thr_k >= (int)ctrl_threads.k)             \
 			return;
 /*
-	@author: Gabriel Rodriguez-Canal
-	@brief: CTRL_PARSE_ARGS generates the arguments passed to the kernel. Recall they must be passed by value in the case of INVAL while
-	IN and OUT must be split in a wrapper and a pointer to data. The wrapper will be of the form fpga_wrapper_KHitTile_<type> <name>_wrapper.
-	This macro is leveraged to have both the type of the wrapper and the index of the displacement at the moment of the creation of the arguments.
-	Take into account the macro arguments type and name are referring to the type and the name of the kernel argument and not those of the kernel
-	as in the case of CTRL_KERNEL_WRAP_FPGA. For that reason, the kernel name must also be passed.
-	*/
+ * @brief: CTRL_PARSE_ARGS generates the arguments passed to the FPGA kernels.
+ * Recall they must be passed by value in the case of INVAL while.
+ *
+ * IN and OUT must be split in a wrapper and a pointer to data. The wrapper will be of the form KHitTile_wrapper <name>_wrapper.
+ *
+ * This macro is leveraged to have both the type of the wrapper and the index of the displacement at the moment of the creation of the arguments.
+ */
 #define CTRL_PARSE_ARGS(kernel, n_args, ...) CTRL_PARSE_ARGS_##n_args(kernel, 0, __VA_ARGS__)
 
 #define CTRL_PARSE_ARGS_1(kernel, arg_idx, role, type, name, ...)  CTRL_PARSE_ARGS_##role(kernel, arg_idx, type, name)
@@ -87,17 +90,16 @@
 #define CTRL_PARSE_ARGS_20(kernel, arg_idx, role, type, name, ...) CTRL_PARSE_ARGS_##role(kernel, arg_idx, type, name) CTRL_PARSE_ARGS_19(kernel, arg_idx + 1, __VA_ARGS__)
 #define CTRL_PARSE_ARGS_21(kernel, arg_idx, role, type, name, ...) CTRL_PARSE_ARGS_##role(kernel, arg_idx, type, name) CTRL_PARSE_ARGS_20(kernel, arg_idx + 1, __VA_ARGS__)
 
-// FIXME: clang-format breaks the formatting of the following define.
-#define CTRL_PARSE_ARGS_IN(kernel, arg_idx, type, name)                                                                                    \
-	KHitTile            *p_ktile_##type##_##subtype##_##name = (KHitTile *)((uint8_t *)args_list + request.fpga.p_displacements[arg_idx]); \
-	fpga_wrapper_K##type ktile_fpga_wrapper_##type##_##subtype##_##name;                                                                   \
-	for (int i = 0; i < HIT_MAXDIMS + 1; i++)                                                                                              \
-		ktile_fpga_wrapper_##type##_##subtype##_##name.origAcumCard[i] = p_ktile_##type##_##subtype##_##name->origAcumCard[i];             \
-	for (int i = 0; i < HIT_MAXDIMS; i++)                                                                                                  \
-		ktile_fpga_wrapper_##type##_##subtype##_##name.card[i] = hit_tileDimCard((*p_ktile_##type##_##subtype##_##name), i);               \
-	ktile_fpga_wrapper_##type##_##subtype##_##name.offset = p_ktile_##type##_##subtype##_##name->offset;                                   \
-	err |= clSetKernelArg(kernel, arg_pos++, sizeof(fpga_wrapper_K##type), &ktile_fpga_wrapper_##type##_##subtype##_##name);               \
-	err |= clSetKernelArg(kernel, arg_pos++, sizeof(cl_mem), (cl_mem *)(p_ktile_##type##_##subtype##_##name->data));
+#define CTRL_PARSE_ARGS_IN(kernel, arg_idx, type, name)                                                                                     \
+	KHitTile             *p_ktile_##type##_##subtype##_##name = (KHitTile *)((uint8_t *)args_list + request.fpga.p_displacements[arg_idx]); \
+	KHitTile_fpga_wrapper ktile_fpga_wrapper_##type##_##subtype##_##name;                                                                   \
+	for (int i = 0; i < HIT_MAXDIMS + 1; i++)                                                                                               \
+		ktile_fpga_wrapper_##type##_##subtype##_##name.origAcumCard[i] = p_ktile_##type##_##subtype##_##name->origAcumCard[i];              \
+	for (int i = 0; i < HIT_MAXDIMS; i++)                                                                                                   \
+		ktile_fpga_wrapper_##type##_##subtype##_##name.card[i] = hit_tileDimCard((*p_ktile_##type##_##subtype##_##name), i);                \
+	ktile_fpga_wrapper_##type##_##subtype##_##name.offset = p_ktile_##type##_##subtype##_##name->offset;                                    \
+	OPENCL_ASSERT_OP(clSetKernelArg(kernel, arg_pos++, sizeof(KHitTile_fpga_wrapper), &ktile_fpga_wrapper_##type##_##subtype##_##name));    \
+	OPENCL_ASSERT_OP(clSetKernelArg(kernel, arg_pos++, sizeof(cl_mem), (cl_mem *)(p_ktile_##type##_##subtype##_##name->data)));
 
 #define CTRL_PARSE_ARGS_OUT(kernel, arg_idx, type, name) \
 	CTRL_PARSE_ARGS_IN(kernel, arg_idx, type, name)
@@ -105,10 +107,10 @@
 #define CTRL_PARSE_ARGS_IO(kernel, arg_idx, type, name) \
 	CTRL_PARSE_ARGS_IN(kernel, arg_idx, type, name)
 
-#define CTRL_PARSE_ARGS_INVAL(kernel, arg_idx, type, name)                                                   \
-	err |= clSetKernelArg(kernel, arg_pos++,                                                                 \
-						  request.fpga.p_displacements[arg_idx + 1] - request.fpga.p_displacements[arg_idx], \
-						  ((uint8_t *)args_list + request.fpga.p_displacements[arg_idx]));
+#define CTRL_PARSE_ARGS_INVAL(kernel, arg_idx, type, name)                                                             \
+	OPENCL_ASSERT_OP(clSetKernelArg(kernel, arg_pos++,                                                                 \
+									request.fpga.p_displacements[arg_idx + 1] - request.fpga.p_displacements[arg_idx], \
+									((uint8_t *)args_list + request.fpga.p_displacements[arg_idx])));
 
 /**
  * Defines stuff needed for a \e FPGALIB type kernel launch from the information passed by the user on the kernel definition.
@@ -142,8 +144,7 @@
 
 #define CTRL_KERNEL_WRAP_FPGA(name, args_list, type, subtype, n_args, ...)                                                             \
 	{                                                                                                                                  \
-		cl_int err     = 0;                                                                                                            \
-		int    arg_pos = 0;                                                                                                            \
+		int arg_pos = 0;                                                                                                               \
 		OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_fpga_##type##_##subtype##_##name.p_kernel[request.fpga.type_id], arg_pos++,        \
 										sizeof(Ctrl_Thread), &threads));                                                               \
 		CTRL_PARSE_ARGS(ctrl_kernel_fpga_##type##_##subtype##_##name.p_kernel[request.fpga.type_id], n_args, __VA_ARGS__)              \

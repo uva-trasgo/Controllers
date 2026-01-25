@@ -28,7 +28,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # 
-# Copyright (c) 2007-2024, Trasgo Group, Universidad de Valladolid.
+# Copyright (c) 2007-2026, Trasgo Group, Universidad de Valladolid.
 # All rights reserved.
 # 
 # More information on http://trasgo.infor.uva.es/

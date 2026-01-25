@@ -1,1 +1,0 @@
-test_poisson_kernels.cu

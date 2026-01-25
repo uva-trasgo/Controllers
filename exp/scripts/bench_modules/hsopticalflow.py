@@ -4,7 +4,6 @@ import subprocess as sp
 from typing import TextIO
 import os
 import matplotlib.pyplot as plt
-import matplotlib
 import utils
 
 

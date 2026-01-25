@@ -276,7 +276,7 @@ void Ctrl_FPGA_GetKernelFiles(const char *dir_path, char *kernel_files[CTRL_FPGA
 
 	while ((entry = readdir(dir)) != NULL) {
 		// Check if the file ends with ".aocx"
-		if (strstr(entry->d_name, ".aocx") != NULL) {
+		if (strstr(entry->d_name, ".aocx\0") != NULL) {
 			if (*count < CTRL_FPGA_MAX_KERNEL_FILES) {
 				// Allocate space for the file path
 				kernel_files[*count] = malloc(PATH_MAX);
@@ -286,7 +286,7 @@ void Ctrl_FPGA_GetKernelFiles(const char *dir_path, char *kernel_files[CTRL_FPGA
 				}
 
 				// Construct the full path
-				snprintf(kernel_files[*count], PATH_MAX, "%s%s", dir_path, entry->d_name);
+				snprintf(kernel_files[*count], PATH_MAX, "%s/%s", dir_path, entry->d_name);
 				(*count)++;
 			} else {
 				fprintf(stderr, "[Ctrl_FPGA] Warning: Found more than %d kernels in the kernel path. Some of them will be ignored.\n",
@@ -535,9 +535,8 @@ void Ctrl_FPGA_Create(Ctrl_FPGA *p_ctrl, Ctrl_Policy policy, char *args) {
 	OPENCL_ASSERT_ERROR(err);
 
 	p_ctrl->queue_properties = 0;
-	#ifdef _CTRL_FPGA_PROFILING_
+	// Enable op timing
 	p_ctrl->queue_properties |= CL_QUEUE_PROFILING_ENABLE;
-	#endif
 
 	p_ctrl->p_tile_list_head = NULL;
 	p_ctrl->p_tile_list_tail = NULL;
@@ -729,6 +728,20 @@ void Ctrl_FPGA_GetInfo(Ctrl_FPGA *p_ctrl, Ctrl_Info *p_info) {
 	p_info->n_kernel_queues    = p_ctrl->n_kernel_streams;
 }
 
+double Ctrl_FPGA_TimeLastOp(Ctrl_FPGA *p_ctrl, HitTile *p_tile) {
+	Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)(p_tile->ext);
+	Ctrl_Tile_Impl *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
+	Ctrl_FPGA_Tile *p_tile_data_fpga = p_tile_data_impl->tile.p_fpga;
+
+	cl_ulong time_start;
+	cl_ulong time_end;
+
+	clGetEventProfilingInfo(*p_tile_data_fpga->last_op.event.p_event_cl, CL_PROFILING_COMMAND_START, sizeof(time_start), &time_start, NULL);
+	clGetEventProfilingInfo(*p_tile_data_fpga->last_op.event.p_event_cl, CL_PROFILING_COMMAND_END, sizeof(time_end), &time_end, NULL);
+
+	return (time_end - time_start) / 1.0e9;
+}
+
 void Ctrl_FPGA_CreateTex(Ctrl_FPGA *p_ctrl, HitTile *p_tile, Ctrl_TexDesc tex_desc) {
 	#ifdef _CTRL_DEBUG_
 	fprintf(stderr, "[Ctrl_FPGA_CreateTex] Warning: not implemented\n");
@@ -775,6 +788,7 @@ void Ctrl_FPGA_InitTile(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 	p_tile_data_impl_fpga->dev_last_kernel_write_event  = CTRL_GENERIC_EVENT_NULL;
 	p_tile_data_impl_fpga->dev_last_dth_event           = CTRL_GENERIC_EVENT_NULL;
 	p_tile_data_impl_fpga->dev_last_htd_event           = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_impl_fpga->last_op                      = CTRL_GENERIC_EVENT_NULL;
 
 	p_tile_data_impl_fpga->streamid_last_kr = 0;
 	p_tile_data_impl_fpga->streamid_last_kw = 0;
@@ -908,8 +922,14 @@ void Ctrl_FPGA_EvalTaskMoveToInner(Ctrl_FPGA *p_ctrl, HitTile *p_tile) {
 	// Wait for previous task to finish if policy is sync
 	Ctrl_SyncWait(p_ctrl->p_htd_host_stream);
 
+	// Replace previous htd event
 	Ctrl_GenericEvent_Release(p_tile_data_fpga->dev_last_htd_event);
 	p_tile_data_fpga->dev_last_htd_event = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_OPENCL, p_ctrl->global_id);
+
+	// Replace previous last op event
+	Ctrl_GenericEvent_Release(p_tile_data_fpga->last_op);
+	p_tile_data_fpga->last_op = p_tile_data_fpga->dev_last_htd_event;
+	Ctrl_GenericEvent_Retain(p_tile_data_fpga->last_op);
 
 	Ctrl_Task task = CTRL_TASK_NULL;
 	task.task_type = CTRL_TASK_TYPE_MOVETO;
@@ -969,8 +989,14 @@ void Ctrl_FPGA_EvalTaskMoveFromInner(Ctrl_FPGA *p_ctrl, HitTile *p_tile) {
 	// wait for previous task to finish if policy is sync
 	Ctrl_SyncWait(p_ctrl->p_dth_host_stream);
 
+	// Replace previous dth event
 	Ctrl_GenericEvent_Release(p_tile_data_fpga->dev_last_dth_event);
 	p_tile_data_fpga->dev_last_dth_event = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_OPENCL, p_ctrl->global_id);
+
+	// Replace previous last op event
+	Ctrl_GenericEvent_Release(p_tile_data_fpga->last_op);
+	p_tile_data_fpga->last_op = p_tile_data_fpga->dev_last_dth_event;
+	Ctrl_GenericEvent_Retain(p_tile_data_fpga->last_op);
 
 	Ctrl_Task task = CTRL_TASK_NULL;
 	task.task_type = CTRL_TASK_TYPE_MOVEFROM;
@@ -1295,6 +1321,10 @@ void Ctrl_FPGA_EvalTaskKernelLaunch(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 			Ctrl_Tile_Impl *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
 			Ctrl_FPGA_Tile *p_tile_data_fpga = p_tile_data_impl->tile.p_fpga;
 
+			Ctrl_GenericEvent_Release(p_tile_data_fpga->last_op);
+			p_tile_data_fpga->last_op = kernel_event;
+			Ctrl_GenericEvent_Retain(p_tile_data_fpga->last_op);
+
 			if (p_task->p_roles[i] != KERNEL_IN) {
 				if (p_tile_data->host_status == CTRL_TILE_VALID) p_tile_data->host_status = CTRL_TILE_INVALID;
 				// invalidate tile on all other devs except this
@@ -1429,6 +1459,7 @@ void Ctrl_FPGA_EvalTaskFreeTile(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 	Ctrl_GenericEvent_Release(p_tile_data_fpga->dev_last_kernel_write_event);
 	Ctrl_GenericEvent_Release(p_tile_data_fpga->dev_last_dth_event);
 	Ctrl_GenericEvent_Release(p_tile_data_fpga->dev_last_htd_event);
+	Ctrl_GenericEvent_Release(p_tile_data_fpga->last_op);
 
 	if (p_tile->memStatus == HIT_MS_OWNER) {
 		if (p_tile_data_impl->device_status != CTRL_TILE_UNALLOC) {

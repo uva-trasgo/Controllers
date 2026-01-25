@@ -1,1 +1,0 @@
-test_wavesim_kernels.cu

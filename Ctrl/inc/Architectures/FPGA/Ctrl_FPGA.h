@@ -243,6 +243,18 @@ void Ctrl_FPGA_GetInfo(Ctrl_FPGA *p_ctrl, Ctrl_Info *p_info);
  */
 void Ctrl_FPGA_CreateTex(Ctrl_FPGA *p_ctrl, HitTile *p_tile, Ctrl_TexDesc tex_desc);
 
+/**
+ * @brief Return the duration of the last kernel or memory transfer operation performed over \p tile.
+ *
+ * The last operation enqueued for \p tile must be completed before calling this function.
+ *
+ * @param p_ctrl Ctrl \p p_tile is associated to.
+ * @param p_tile HitTile attached to \p p_ctrl.
+ *
+ * @return Duration of the last op over \p p_tile in seconds.
+ */
+double Ctrl_FPGA_TimeLastOp(Ctrl_FPGA *p_ctrl, HitTile *p_tile);
+
 #ifdef __cplusplus
 }
 #endif

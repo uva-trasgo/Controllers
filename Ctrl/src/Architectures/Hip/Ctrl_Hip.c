@@ -49,7 +49,7 @@ void Ctrl_Hip_EvalTaskMoveToInner(Ctrl_Hip *p_ctrl, HitTile *p_tile);
  * @param p_task Task containing the tile to be moved.
  * @param p_ctrl Ctrl responsible for this task
  *
- * @see Ctrl_Cuda_EvalTaskMoveTo
+ * @see Ctrl_Hip_EvalTaskMoveTo
  */
 void Ctrl_Hip_ExecTaskMoveTo(Ctrl_Task *p_task, Ctrl_Hip *p_ctrl);
 
@@ -280,28 +280,43 @@ void Ctrl_Hip_ExecTask(Ctrl_Task *p_task, Ctrl_Hip *p_ctrl) {
 	p_task->request.hip.p_stream = &stream;
 	switch (p_task->task_type) {
 		case CTRL_TASK_TYPE_KERNEL:
+			if (Ctrl_GenericEvent_GetRefCount(p_task->event_start) > 1) {
+				HIP_OP(hipEventCreate(p_task->event_start.event.p_event_hip));
+				HIP_OP(hipEventRecord(*p_task->event_start.event.p_event_hip, stream));
+				Ctrl_GenericEvent_Release(p_task->event_start);
+			}
 			p_task->pfn_kernel_wrapper(p_task->request, p_task->device_id, CTRL_TYPE_HIP, p_task->threads, p_task->blocksize, p_task->p_arguments);
 			// skip creating/recording event if this is the last reference to it
 			if (Ctrl_GenericEvent_GetRefCount(p_task->event) > 1) {
-				HIP_OP(hipEventCreateWithFlags(p_task->event.event.p_event_hip, hipEventDisableTiming));
+				HIP_OP(hipEventCreate(p_task->event.event.p_event_hip));
 				HIP_OP(hipEventRecord(*p_task->event.event.p_event_hip, stream));
 				Ctrl_GenericEvent_Release(p_task->event);
 			}
 			break;
 		case CTRL_TASK_TYPE_MOVETO:
+			if (Ctrl_GenericEvent_GetRefCount(p_task->event_start) > 1) {
+				HIP_OP(hipEventCreate(p_task->event_start.event.p_event_hip));
+				HIP_OP(hipEventRecord(*p_task->event_start.event.p_event_hip, stream));
+				Ctrl_GenericEvent_Release(p_task->event_start);
+			}
 			Ctrl_Hip_ExecTaskMoveTo(p_task, p_ctrl);
 			// skip creating/recording event if this is the last reference to it
 			if (Ctrl_GenericEvent_GetRefCount(p_task->event) > 1) {
-				HIP_OP(hipEventCreateWithFlags(p_task->event.event.p_event_hip, hipEventDisableTiming));
+				HIP_OP(hipEventCreate(p_task->event.event.p_event_hip));
 				HIP_OP(hipEventRecord(*p_task->event.event.p_event_hip, stream));
 				Ctrl_GenericEvent_Release(p_task->event);
 			}
 			break;
 		case CTRL_TASK_TYPE_MOVEFROM:
+			if (Ctrl_GenericEvent_GetRefCount(p_task->event_start) > 1) {
+				HIP_OP(hipEventCreate(p_task->event_start.event.p_event_hip));
+				HIP_OP(hipEventRecord(*p_task->event_start.event.p_event_hip, stream));
+				Ctrl_GenericEvent_Release(p_task->event_start);
+			}
 			Ctrl_Hip_ExecTaskMoveFrom(p_task, p_ctrl);
 			// skip creating/recording event if this is the last reference to it
 			if (Ctrl_GenericEvent_GetRefCount(p_task->event) > 1) {
-				HIP_OP(hipEventCreateWithFlags(p_task->event.event.p_event_hip, hipEventDisableTiming));
+				HIP_OP(hipEventCreate(p_task->event.event.p_event_hip));
 				HIP_OP(hipEventRecord(*p_task->event.event.p_event_hip, stream));
 				Ctrl_GenericEvent_Release(p_task->event);
 			}
@@ -353,6 +368,16 @@ void Ctrl_Hip_GetInfo(Ctrl_Hip *p_ctrl, Ctrl_Info *p_info) {
 	strncpy(p_info->device_name, hip_dev_prop.name, CTRL_MAX_DEV_NAME - 1);
 	p_info->device_name[255] = '\0';
 	p_info->n_kernel_queues  = p_ctrl->n_kernel_streams;
+}
+
+double Ctrl_Hip_TimeLastOp(Ctrl_Hip *p_ctrl, HitTile *p_tile) {
+	Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)(p_tile->ext);
+	Ctrl_Tile_Impl *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
+	Ctrl_Hip_Tile  *p_tile_data_hip  = p_tile_data_impl->tile.p_hip;
+
+	float ms;
+	HIP_OP(hipEventElapsedTime(&ms, *p_tile_data_hip->last_op_start.event.p_event_hip, *p_tile_data_hip->last_op_stop.event.p_event_hip));
+	return (double)ms / 1000.0;
 }
 
 void Ctrl_Hip_CreateTex(Ctrl_Hip *p_ctrl, HitTile *p_tile, Ctrl_TexDesc tex_desc) {
@@ -451,6 +476,8 @@ void Ctrl_Hip_InitTile(Ctrl_Hip *p_ctrl, Ctrl_Task *p_task) {
 	p_tile_data_impl_hip->dev_last_kernel_write_event  = CTRL_GENERIC_EVENT_NULL;
 	p_tile_data_impl_hip->dev_last_dth_event           = CTRL_GENERIC_EVENT_NULL;
 	p_tile_data_impl_hip->dev_last_htd_event           = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_impl_hip->last_op_start                = CTRL_GENERIC_EVENT_NULL;
+	p_tile_data_impl_hip->last_op_stop                 = CTRL_GENERIC_EVENT_NULL;
 
 	p_tile_data_impl_hip->streamid_last_kr = 0;
 	p_tile_data_impl_hip->streamid_last_kw = 0;
@@ -505,8 +532,16 @@ void Ctrl_Hip_EvalTaskMoveToInner(Ctrl_Hip *p_ctrl, HitTile *p_tile) {
 	// Wait for previous task to finish if policy is sync
 	Ctrl_SyncWait(p_ctrl->p_htd_host_stream);
 
+	// Replace previous htd event
 	Ctrl_GenericEvent_Release(p_tile_data_hip->dev_last_htd_event);
 	p_tile_data_hip->dev_last_htd_event = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_HIP, p_ctrl->global_id);
+
+	// Replace previous last op events
+	Ctrl_GenericEvent_Release(p_tile_data_hip->last_op_start);
+	p_tile_data_hip->last_op_start = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_HIP, p_ctrl->global_id);
+	Ctrl_GenericEvent_Release(p_tile_data_hip->last_op_stop);
+	p_tile_data_hip->last_op_stop = p_tile_data_hip->dev_last_htd_event;
+	Ctrl_GenericEvent_Retain(p_tile_data_hip->last_op_stop);
 
 	Ctrl_Task task = CTRL_TASK_NULL;
 	task.task_type = CTRL_TASK_TYPE_MOVETO;
@@ -632,8 +667,16 @@ void Ctrl_Hip_EvalTaskMoveFromInner(Ctrl_Hip *p_ctrl, HitTile *p_tile) {
 	// wait for previous task to finish if policy is sync
 	Ctrl_SyncWait(p_ctrl->p_dth_host_stream);
 
+	// Replace previous dth event
 	Ctrl_GenericEvent_Release(p_tile_data_hip->dev_last_dth_event);
 	p_tile_data_hip->dev_last_dth_event = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_HIP, p_ctrl->global_id);
+
+	// Replace previous last op events
+	Ctrl_GenericEvent_Release(p_tile_data_hip->last_op_start);
+	p_tile_data_hip->last_op_start = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_HIP, p_ctrl->global_id);
+	Ctrl_GenericEvent_Release(p_tile_data_hip->last_op_stop);
+	p_tile_data_hip->last_op_stop = p_tile_data_hip->dev_last_dth_event;
+	Ctrl_GenericEvent_Retain(p_tile_data_hip->last_op_stop);
 
 	Ctrl_Task task = CTRL_TASK_NULL;
 	task.task_type = CTRL_TASK_TYPE_MOVEFROM;
@@ -905,11 +948,14 @@ void Ctrl_Hip_EvalTaskKernelLaunch(Ctrl_Hip *p_ctrl, Ctrl_Task *p_task) {
 	request.hip.p_hipblas_handle = &(p_ctrl->hipblas_handle);
 	#endif // _CTRL_HIPBLAS_
 
-	Ctrl_GenericEvent kernel_event = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_HIP, p_ctrl->global_id);
+	Ctrl_GenericEvent kernel_event       = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_HIP, p_ctrl->global_id);
+	Ctrl_GenericEvent kernel_event_start = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_HIP, p_ctrl->global_id);
 
-	p_task->request = request;
-	p_task->event   = kernel_event;
+	p_task->request     = request;
+	p_task->event       = kernel_event;
+	p_task->event_start = kernel_event_start;
 	Ctrl_GenericEvent_Retain(p_task->event);
+	Ctrl_GenericEvent_Retain(p_task->event_start);
 	Ctrl_TaskQueue_Push(p_host_kernel_queue, *p_task);
 
 	// update events on arguments according to their roles
@@ -919,6 +965,14 @@ void Ctrl_Hip_EvalTaskKernelLaunch(Ctrl_Hip *p_ctrl, Ctrl_Task *p_task) {
 			Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)(p_tile->ext);
 			Ctrl_Tile_Impl *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
 			Ctrl_Hip_Tile  *p_tile_data_hip  = p_tile_data_impl->tile.p_hip;
+
+			Ctrl_GenericEvent_Release(p_tile_data_hip->last_op_stop);
+			p_tile_data_hip->last_op_stop = kernel_event;
+			Ctrl_GenericEvent_Retain(p_tile_data_hip->last_op_stop);
+
+			Ctrl_GenericEvent_Release(p_tile_data_hip->last_op_start);
+			p_tile_data_hip->last_op_start = kernel_event_start;
+			Ctrl_GenericEvent_Retain(p_tile_data_hip->last_op_start);
 
 			if (p_task->p_roles[i] != KERNEL_IN) {
 				if (p_tile_data->host_status == CTRL_TILE_VALID) p_tile_data->host_status = CTRL_TILE_INVALID;
@@ -956,6 +1010,7 @@ void Ctrl_Hip_EvalTaskKernelLaunch(Ctrl_Hip *p_ctrl, Ctrl_Task *p_task) {
 		Ctrl_GenericEvent_Retain(p_ctrl->dev_seq_event);
 	}
 	Ctrl_GenericEvent_Release(kernel_event);
+	Ctrl_GenericEvent_Release(kernel_event_start);
 }
 
 void Ctrl_Hip_HostTaskWait(Ctrl_Hip_Tile *p_tile, char rol, Ctrl_TaskQueue *p_queue) {
@@ -1071,6 +1126,8 @@ void Ctrl_Hip_EvalTaskFreeTile(Ctrl_Hip *p_ctrl, Ctrl_Task *p_task) {
 	Ctrl_GenericEvent_Release(p_tile_data_hip->dev_last_kernel_write_event);
 	Ctrl_GenericEvent_Release(p_tile_data_hip->dev_last_dth_event);
 	Ctrl_GenericEvent_Release(p_tile_data_hip->dev_last_htd_event);
+	Ctrl_GenericEvent_Release(p_tile_data_hip->last_op_start);
+	Ctrl_GenericEvent_Release(p_tile_data_hip->last_op_stop);
 
 	// Remove tle from tile linked list
 	if (p_tile_data_hip->p_tile_elem->p_prev != NULL) {

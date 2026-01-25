@@ -515,6 +515,20 @@ int Ctrl_GetNCtrls();
 Ctrl_Info Ctrl_GetInfo(Ctrl *p_ctrl);
 
 /**
+ * @brief Return the duration of the last kernel or memory transfer operation performed over \p tile by ctrl \p ctrl.
+ *
+ * This performs an implicit wait of \p tile to make sure the last task enqueued has finished.
+ *
+ * @param ctrl Ctrl \p tile is associated to.
+ * @param tile HitTile attached to \p ctrl.
+ *
+ * @hideinitializer
+ * @return [double] Duration of the last op over \p tile in seconds.
+ */
+#define Ctrl_TimeLastOp(ctrl, tile) Ctrl_TimeLastOpInner(ctrl, (HitTile *)&tile)
+double Ctrl_TimeLastOpInner(Ctrl *p_ctrl, HitTile *p_tile);
+
+/**
  * Get the device ptr of tile \p tile on ctrl \p ctrl.
  *
  * If \p ctrl is of type OpenCL GPU or FPGA NULL is returned.
