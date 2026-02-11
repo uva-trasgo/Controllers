@@ -934,6 +934,7 @@ void Ctrl_Cpu_EvalTaskAllocTile(Ctrl_Cpu *p_ctrl, Ctrl_Task *p_task) {
 			p_tile_data->host_status = CTRL_TILE_INVALID;
 			p_tile_data->pinned      = CTRL_TYPE_CPU;
 			p_tile->data             = p_tile_data_cpu->p_device_data;
+			p_tile->memPtr           = p_tile->data;
 		}
 	}
 }

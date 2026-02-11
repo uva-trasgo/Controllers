@@ -1666,24 +1666,24 @@ void Ctrl_FreeHostInner(HitTile *p_tile) {
 			switch (p_tile_data->pinned) {
 				case CTRL_TYPE_CPU:
 					// global hwloc topology is the same that cpu ctrls use
-					hwloc_free(topo, p_tile->data, (size_t)p_tile->acumCard * p_tile->baseExtent);
+					hwloc_free(topo, p_tile->memPtr, (size_t)p_tile->acumCard * p_tile->baseExtent);
 					break;
 
 				#ifdef _CTRL_ARCH_CUDA_
 				case CTRL_TYPE_CUDA:
-					CUDA_OP(cudaFreeHost(p_tile->data));
+					CUDA_OP(cudaFreeHost(p_tile->memPtr));
 					break;
 				#endif //_CTRL_ARCH_CUDA_
 
 				#ifdef _CTRL_ARCH_HIP_
 				case CTRL_TYPE_HIP:
-					HIP_OP(hipHostFree(p_tile->data));
+					HIP_OP(hipHostFree(p_tile->memPtr));
 					break;
 				#endif //_CTRL_ARCH_HIP_
 
 				#if defined(_CTRL_ARCH_OPENCL_GPU_) || defined(_CTRL_ARCH_FPGA_)
 				case CTRL_TYPE_OPENCL_GPU:
-					OPENCL_ASSERT_OP(clEnqueueUnmapMemObject((cl_command_queue)p_tile_data->p_pin_queue, (cl_mem)p_tile_data->p_pinned_data, p_tile->data, 0, NULL, NULL));
+					OPENCL_ASSERT_OP(clEnqueueUnmapMemObject((cl_command_queue)p_tile_data->p_pin_queue, (cl_mem)p_tile_data->p_pinned_data, p_tile->memPtr, 0, NULL, NULL));
 					OPENCL_ASSERT_OP(clFlush((cl_command_queue)p_tile_data->p_pin_queue));
 					OPENCL_ASSERT_OP(clFinish((cl_command_queue)p_tile_data->p_pin_queue));
 					OPENCL_ASSERT_OP(clReleaseMemObject((cl_mem)p_tile_data->p_pinned_data));
@@ -1691,7 +1691,7 @@ void Ctrl_FreeHostInner(HitTile *p_tile) {
 					break;
 				#endif //_CTRL_ARCH_OPENCL_GPU_ || _CTRL_ARCH_FPGA_
 				default:
-					free(p_tile->data);
+					free(p_tile->memPtr);
 					break;
 			}
 		}
