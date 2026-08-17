@@ -205,7 +205,7 @@
 #define CTRL_KERNEL_WRAP_FPGALIB(name, args_list, type, subtype, ...)                                                         \
 	{                                                                                                                         \
 		Ctrl_Kernel_FPGA_##type##_##subtype##_##name(CTRL_KERNEL_ARG_LIST_ACCESS_KTILE(args_list, __VA_ARGS__));              \
-		/* TODO @sergioalo: retain needed because rn this does not generate a new clevent, proper lib implementations will */ \
+		/* NOTE @sergioalo: retain needed because rn this does not generate a new clevent, proper lib implementations will */ \
 		clRetainEvent(*request.fpga.p_last_kernel_event);                                                                     \
 	};
 
@@ -222,7 +222,7 @@
 	Ctrl_FPGA_KernelParams ctrl_kernel_fpga_##type##_##subtype##_##name = (Ctrl_FPGA_KernelParams){ \
 		.p_kernel      = NULL,                                                                      \
 		.p_kernel_name = CTRL_MACRO_STRINGIFY(ctrl_kernel_fpga_##type##_##subtype##_##name),        \
-		.p_next        = NULL};                                                                            \
+		.p_next        = NULL};                                                                     \
                                                                                                     \
 	__attribute__((constructor)) static void Ctrl_FPGA_InitKernel_##type##_##subtype##_##name() {   \
 		Ctrl_FPGA_KernelParams *curr_k_par = &FPGA_initial_kp;                                      \

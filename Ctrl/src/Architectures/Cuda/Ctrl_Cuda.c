@@ -183,11 +183,13 @@ void Ctrl_Cuda_EvalTaskSetDependanceMode(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task);
  ******** CUDA Controller functions *********
  ********************************************/
 
-void Ctrl_Cuda_Create(Ctrl_Cuda *p_ctrl, Ctrl_Policy policy, char *args) {
-	p_ctrl->policy           = policy;
-	p_ctrl->device           = atoi(strtok(args, " "));
-	char *streams            = strtok(NULL, "");
-	p_ctrl->n_kernel_streams = streams == NULL ? 1 : atoi(streams);
+void Ctrl_Cuda_Create(Ctrl_Cuda *p_ctrl, Ctrl_Policy policy, Ctrl_Config_Dev dev) {
+	p_ctrl->policy    = policy;
+	p_ctrl->alignment = atoi(Ctrl_Config_GetVal(dev, "align", "0"));
+
+	p_ctrl->device = atoi(Ctrl_Config_GetVal(dev, "dev", NULL));
+
+	p_ctrl->n_kernel_streams = atoi(Ctrl_Config_GetVal(dev, "kstreams", "1"));
 	if (p_ctrl->n_kernel_streams <= 0) {
 		p_ctrl->n_kernel_streams = 1;
 		fprintf(stderr, "[Ctrl_Cuda] Warning: Tried to create Cuda Ctrl with less than one stream; defaulting to 1.");
@@ -417,15 +419,16 @@ void Ctrl_Cuda_CreateTex(Ctrl_Cuda *p_ctrl, HitTile *p_tile, Ctrl_TexDesc tex_de
 		exit(EXIT_FAILURE);
 	}
 
-	// TODO @sergioalo check if pitch is valid for texture
+	// TODO @sergioalo check if pitch is valid for texture cudaDeviceProp::textureAlignment
 
-	if (p_tile_data_impl->device_status == CTRL_TILE_UNALLOC) {
+	if (p_tile_data_impl->device_memowner == HIT_MS_NOMEM) {
 		fprintf(stderr, "[Ctrl_Cuda_CreateTex] Error: Device memory not allocated for this tile. You must allocate device memory before creating textures.\n");
 		exit(EXIT_FAILURE);
 	}
 
 	// TODO @sergioalo channel descriptor stuff should not be hardcoded
 	// TODO @sergioalo overriden texture objects are not destroyed, but this is also not done on cuda samples
+	// TODO support other dim textures
 
 	// Create texture object
 	struct cudaResourceDesc resDesc;
@@ -435,7 +438,7 @@ void Ctrl_Cuda_CreateTex(Ctrl_Cuda *p_ctrl, HitTile *p_tile, Ctrl_TexDesc tex_de
 	resDesc.res.pitch2D.width        = tex_desc.width == 0 ? hit_tileDimCard(*p_tile, 1) : tex_desc.width;
 	resDesc.res.pitch2D.height       = tex_desc.height == 0 ? hit_tileDimCard(*p_tile, 0) : tex_desc.height;
 	resDesc.res.pitch2D.desc         = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
-	resDesc.res.pitch2D.pitchInBytes = p_tile_data_cuda->pitch;
+	resDesc.res.pitch2D.pitchInBytes = p_tile_data_impl->origAcumCard[1] * p_tile->baseExtent;
 	struct cudaTextureDesc texDesc;
 	memset(&texDesc, 0, sizeof(texDesc));
 	texDesc.normalizedCoords = tex_desc.normalized_coords;
@@ -456,7 +459,7 @@ void *Ctrl_Cuda_GetDevPtr(Ctrl_Cuda *p_ctrl, HitTile *p_tile) {
 	Ctrl_Tile_Impl *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
 	Ctrl_Cuda_Tile *p_tile_data_cuda = p_tile_data_impl->tile.p_cuda;
 
-	if (p_tile_data_cuda == NULL || p_tile_data_impl->device_status == CTRL_TILE_UNALLOC) return NULL;
+	if (p_tile_data_cuda == NULL || p_tile_data_impl->device_memowner == HIT_MS_NOMEM) return NULL;
 
 	return p_tile_data_cuda->p_device_data;
 }
@@ -469,12 +472,14 @@ void Ctrl_Cuda_InitTile(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 	Ctrl_Tile *p_tile_data = (Ctrl_Tile *)(p_task->p_tile->ext);
 	p_tile_data->valid_impls++;
 
-	Ctrl_Cuda_Tile *p_tile_data_impl_cuda               = (Ctrl_Cuda_Tile *)malloc(sizeof(Ctrl_Cuda_Tile));
-	p_tile_data->p_impls[p_ctrl->global_id].type        = CTRL_TYPE_CUDA;
-	p_tile_data->p_impls[p_ctrl->global_id].tile.p_cuda = p_tile_data_impl_cuda;
+	Ctrl_Tile_Impl *p_tile_data_impl      = &p_tile_data->p_impls[p_ctrl->global_id];
+	Ctrl_Cuda_Tile *p_tile_data_impl_cuda = (Ctrl_Cuda_Tile *)malloc(sizeof(Ctrl_Cuda_Tile));
+	p_tile_data_impl->type                = CTRL_TYPE_CUDA;
+	p_tile_data_impl->tile.p_cuda         = p_tile_data_impl_cuda;
+	p_tile_data_impl->device_status       = CTRL_TILE_INVALID;
+	p_tile_data_impl->device_memowner     = HIT_MS_NOMEM;
 
 	p_tile_data_impl_cuda->p_ctrl  = p_ctrl;
-	p_tile_data_impl_cuda->pitch   = 0;
 	p_tile_data_impl_cuda->texture = 0;
 
 	Ctrl_Tile_List *p_list_node = (Ctrl_Tile_List *)malloc(sizeof(Ctrl_Tile_List));
@@ -595,67 +600,62 @@ void Ctrl_Cuda_MoveToWait(Ctrl_Cuda_Tile *p_tile_data, Ctrl_TaskQueue *p_queue) 
 void Ctrl_Cuda_ExecTaskMoveTo(Ctrl_Task *p_task, Ctrl_Cuda *p_ctrl) {
 	HitTile        *p_tile           = &p_task->tile;
 	Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)p_tile->ext;
-	Ctrl_Cuda_Tile *p_tile_data_cuda = p_tile_data->p_impls[p_ctrl->global_id].tile.p_cuda;
+	Ctrl_Tile_Impl *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
+	Ctrl_Cuda_Tile *p_tile_data_cuda = p_tile_data_impl->tile.p_cuda;
 
-	HitTile flat_tile = *p_tile;
-	size_t  pitch     = p_tile_data_cuda->pitch;
-	if (pitch == 0) {
-		hit_tileFlattenDims(&flat_tile);
-		pitch = (flat_tile.baseExtent) * flat_tile.origAcumCard[1];
-	}
-
-	switch (hit_tileDims(flat_tile)) {
+	switch (hit_tileDims(*p_tile)) {
 		case 1:
 			CUDA_OP(
 				cudaMemcpyAsync(p_tile_data_cuda->p_device_data,
-								flat_tile.data,
-								(size_t)flat_tile.acumCard * flat_tile.baseExtent,
+								p_tile->data,
+								(size_t)p_tile->acumCard * p_tile->baseExtent,
 								cudaMemcpyHostToDevice,
 								p_ctrl->htd_driver_stream));
 			break;
 		case 2:
 			CUDA_OP(
 				cudaMemcpy2DAsync(p_tile_data_cuda->p_device_data,
-								  pitch,
-								  flat_tile.data,
-								  flat_tile.baseExtent * flat_tile.origAcumCard[1],
-								  flat_tile.baseExtent * flat_tile.card[1],
-								  flat_tile.card[0],
+								  p_tile->baseExtent * p_tile_data_impl->origAcumCard[1],
+								  p_tile->data,
+								  p_tile->baseExtent * p_tile->origAcumCard[1],
+								  p_tile->baseExtent * p_tile->card[1],
+								  p_tile->card[0],
 								  cudaMemcpyHostToDevice,
 								  p_ctrl->htd_driver_stream));
 			break;
 		case 3: {
 			struct cudaMemcpy3DParms params = {0};
-
-			params.srcPtr = make_cudaPitchedPtr(flat_tile.data,
-												flat_tile.baseExtent * flat_tile.origAcumCard[2],
-												flat_tile.baseExtent * flat_tile.origAcumCard[2],
-												flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
+			// NOTE: for pointers cuda assumes the element size to be uchar
+			params.srcPtr = make_cudaPitchedPtr(p_tile->data,
+												p_tile->baseExtent * p_tile->origAcumCard[2],
+												p_tile->baseExtent * p_tile->origAcumCard[2],
+												p_tile->origAcumCard[1] / p_tile->origAcumCard[2]);
 			params.dstPtr = make_cudaPitchedPtr(p_tile_data_cuda->p_device_data,
-												flat_tile.baseExtent * flat_tile.origAcumCard[2],
-												flat_tile.baseExtent * flat_tile.origAcumCard[2],
-												flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
-			params.extent = make_cudaExtent(flat_tile.card[2] * flat_tile.baseExtent, flat_tile.card[1], flat_tile.card[0]);
+												p_tile->baseExtent * p_tile_data_impl->origAcumCard[2],
+												p_tile->baseExtent * p_tile->origAcumCard[2],
+												p_tile->origAcumCard[1] / p_tile->origAcumCard[2]);
+			params.extent = make_cudaExtent(p_tile->card[2] * p_tile->baseExtent, p_tile->card[1], p_tile->card[0]);
 			params.kind   = cudaMemcpyHostToDevice;
 
 			CUDA_OP(cudaMemcpy3DAsync(&params, p_ctrl->htd_driver_stream));
 			break;
 		}
 		case 4:
-			for (int i = 0; i < hit_tileDimCard(flat_tile, 0); i++) {
-				size_t matrix_offset = flat_tile.baseExtent * i * flat_tile.origAcumCard[1];
+			for (int i = 0; i < hit_tileDimCard(*p_tile, 0); i++) {
+				size_t matrix_offset_host = p_tile->baseExtent * i * p_tile->origAcumCard[1];
+				size_t matrix_offset_dev  = p_tile->baseExtent * i * p_tile_data_impl->origAcumCard[1];
 
 				struct cudaMemcpy3DParms params = {0};
 
-				params.srcPtr = make_cudaPitchedPtr((void *)((char *)flat_tile.data + matrix_offset),
-													flat_tile.baseExtent * flat_tile.origAcumCard[3],
-													flat_tile.baseExtent * flat_tile.origAcumCard[3],
-													flat_tile.origAcumCard[2] / flat_tile.origAcumCard[3]);
-				params.dstPtr = make_cudaPitchedPtr((void *)((char *)p_tile_data_cuda->p_device_data + matrix_offset),
-													flat_tile.baseExtent * flat_tile.origAcumCard[3],
-													flat_tile.baseExtent * flat_tile.origAcumCard[3],
-													flat_tile.origAcumCard[2] / flat_tile.origAcumCard[3]);
-				params.extent = make_cudaExtent(flat_tile.card[3] * flat_tile.baseExtent, flat_tile.card[2], flat_tile.card[1]);
+				params.srcPtr = make_cudaPitchedPtr((void *)((char *)p_tile->data + matrix_offset_host),
+													p_tile->baseExtent * p_tile->origAcumCard[3],
+													p_tile->baseExtent * p_tile->origAcumCard[3],
+													p_tile->origAcumCard[2] / p_tile->origAcumCard[3]);
+				params.dstPtr = make_cudaPitchedPtr((void *)((char *)p_tile_data_cuda->p_device_data + matrix_offset_dev),
+													p_tile->baseExtent * p_tile_data_impl->origAcumCard[3],
+													p_tile->baseExtent * p_tile->origAcumCard[3],
+													p_tile->origAcumCard[2] / p_tile->origAcumCard[3]);
+				params.extent = make_cudaExtent(p_tile->card[3] * p_tile->baseExtent, p_tile->card[2], p_tile->card[1]);
 				params.kind   = cudaMemcpyHostToDevice;
 
 				CUDA_OP(cudaMemcpy3DAsync(&params, p_ctrl->htd_driver_stream));
@@ -663,7 +663,7 @@ void Ctrl_Cuda_ExecTaskMoveTo(Ctrl_Task *p_task, Ctrl_Cuda *p_ctrl) {
 			break;
 
 		default:
-			fprintf(stderr, "Internal Error: Number of dimensions not supported for non-owner tile in MoveFrom: %d\n", hit_tileDims(flat_tile));
+			fprintf(stderr, "Internal Error: Number of dimensions not supported for non-owner tile in MoveFrom: %d\n", hit_tileDims(*p_tile));
 			exit(EXIT_FAILURE);
 			break;
 	}
@@ -731,67 +731,62 @@ void Ctrl_Cuda_MoveFromWait(Ctrl_Cuda_Tile *p_tile_data, Ctrl_TaskQueue *p_queue
 void Ctrl_Cuda_ExecTaskMoveFrom(Ctrl_Task *p_task, Ctrl_Cuda *p_ctrl) {
 	HitTile        *p_tile           = &p_task->tile;
 	Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)p_tile->ext;
-	Ctrl_Cuda_Tile *p_tile_data_cuda = p_tile_data->p_impls[p_ctrl->global_id].tile.p_cuda;
+	Ctrl_Tile_Impl *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
+	Ctrl_Cuda_Tile *p_tile_data_cuda = p_tile_data_impl->tile.p_cuda;
 
-	HitTile flat_tile = *p_tile;
-	size_t  pitch     = p_tile_data_cuda->pitch;
-	if (pitch == 0) {
-		hit_tileFlattenDims(&flat_tile);
-		pitch = (flat_tile.baseExtent) * flat_tile.origAcumCard[1];
-	}
-
-	switch (hit_tileDims(flat_tile)) {
+	switch (hit_tileDims(*p_tile)) {
 		case 1:
 			CUDA_OP(
-				cudaMemcpyAsync(flat_tile.data,
+				cudaMemcpyAsync(p_tile->data,
 								p_tile_data_cuda->p_device_data,
-								(size_t)flat_tile.acumCard * flat_tile.baseExtent,
+								(size_t)p_tile->acumCard * p_tile->baseExtent,
 								cudaMemcpyDeviceToHost,
 								p_ctrl->dth_driver_stream));
 			break;
 		case 2:
 			CUDA_OP(
-				cudaMemcpy2DAsync(flat_tile.data,                                   // dst
-								  flat_tile.baseExtent * flat_tile.origAcumCard[1], // dpitch
-								  p_tile_data_cuda->p_device_data,                  // src
-								  pitch,                                            // spitch
-								  flat_tile.baseExtent * flat_tile.card[1],         // width
-								  flat_tile.card[0],                                // height
+				cudaMemcpy2DAsync(p_tile->data,                                           // dst
+								  p_tile->baseExtent * p_tile->origAcumCard[1],           // dpitch
+								  p_tile_data_cuda->p_device_data,                        // src
+								  p_tile->baseExtent * p_tile_data_impl->origAcumCard[1], // spitch
+								  p_tile->baseExtent * p_tile->card[1],                   // width
+								  p_tile->card[0],                                        // height
 								  cudaMemcpyDeviceToHost,
 								  p_ctrl->dth_driver_stream));
 			break;
 		case 3: {
 			struct cudaMemcpy3DParms params = {0};
-
+			// NOTE: for pointers hip assumes the element size to be uchar
 			params.srcPtr = make_cudaPitchedPtr(p_tile_data_cuda->p_device_data,
-												flat_tile.baseExtent * flat_tile.origAcumCard[2],
-												flat_tile.baseExtent * flat_tile.origAcumCard[2],
-												flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
-			params.dstPtr = make_cudaPitchedPtr(flat_tile.data,
-												flat_tile.baseExtent * flat_tile.origAcumCard[2],
-												flat_tile.baseExtent * flat_tile.origAcumCard[2],
-												flat_tile.origAcumCard[1] / flat_tile.origAcumCard[2]);
-			params.extent = make_cudaExtent(flat_tile.card[2] * flat_tile.baseExtent, flat_tile.card[1], flat_tile.card[0]);
+												p_tile->baseExtent * p_tile_data_impl->origAcumCard[2],
+												p_tile->baseExtent * p_tile->origAcumCard[2],
+												p_tile->origAcumCard[1] / p_tile->origAcumCard[2]);
+			params.dstPtr = make_cudaPitchedPtr(p_tile->data,
+												p_tile->baseExtent * p_tile->origAcumCard[2],
+												p_tile->baseExtent * p_tile->origAcumCard[2],
+												p_tile->origAcumCard[1] / p_tile->origAcumCard[2]);
+			params.extent = make_cudaExtent(p_tile->card[2] * p_tile->baseExtent, p_tile->card[1], p_tile->card[0]);
 			params.kind   = cudaMemcpyDeviceToHost;
 
 			CUDA_OP(cudaMemcpy3DAsync(&params, p_ctrl->dth_driver_stream));
 			break;
 		}
 		case 4:
-			for (int i = 0; i < hit_tileDimCard(flat_tile, 0); i++) {
-				size_t matrix_offset = flat_tile.baseExtent * i * flat_tile.origAcumCard[1];
+			for (int i = 0; i < hit_tileDimCard(*p_tile, 0); i++) {
+				size_t matrix_offset_host = p_tile->baseExtent * i * p_tile->origAcumCard[1];
+				size_t matrix_offset_dev  = p_tile->baseExtent * i * p_tile_data_impl->origAcumCard[1];
 
 				struct cudaMemcpy3DParms params = {0};
 
-				params.srcPtr = make_cudaPitchedPtr((void *)((char *)p_tile_data_cuda->p_device_data + matrix_offset),
-													flat_tile.baseExtent * flat_tile.origAcumCard[3],
-													flat_tile.baseExtent * flat_tile.origAcumCard[3],
-													flat_tile.origAcumCard[2] / flat_tile.origAcumCard[3]);
-				params.dstPtr = make_cudaPitchedPtr((void *)((char *)flat_tile.data + matrix_offset),
-													flat_tile.baseExtent * flat_tile.origAcumCard[3],
-													flat_tile.baseExtent * flat_tile.origAcumCard[3],
-													flat_tile.origAcumCard[2] / flat_tile.origAcumCard[3]);
-				params.extent = make_cudaExtent(flat_tile.card[3] * flat_tile.baseExtent, flat_tile.card[2], flat_tile.card[1]);
+				params.srcPtr = make_cudaPitchedPtr((void *)((char *)p_tile_data_cuda->p_device_data + matrix_offset_dev),
+													p_tile->baseExtent * p_tile_data_impl->origAcumCard[3],
+													p_tile->baseExtent * p_tile->origAcumCard[3],
+													p_tile->origAcumCard[2] / p_tile->origAcumCard[3]);
+				params.dstPtr = make_cudaPitchedPtr((void *)((char *)p_tile->data + matrix_offset_host),
+													p_tile->baseExtent * p_tile->origAcumCard[3],
+													p_tile->baseExtent * p_tile->origAcumCard[3],
+													p_tile->origAcumCard[2] / p_tile->origAcumCard[3]);
+				params.extent = make_cudaExtent(p_tile->card[3] * p_tile->baseExtent, p_tile->card[2], p_tile->card[1]);
 				params.kind   = cudaMemcpyDeviceToHost;
 
 				CUDA_OP(cudaMemcpy3DAsync(&params, p_ctrl->dth_driver_stream));
@@ -799,7 +794,7 @@ void Ctrl_Cuda_ExecTaskMoveFrom(Ctrl_Task *p_task, Ctrl_Cuda *p_ctrl) {
 			break;
 
 		default:
-			fprintf(stderr, "Internal Error: Number of dimensions not supported for non-owner tile in MoveFrom: %d\n", hit_tileDims(flat_tile));
+			fprintf(stderr, "Internal Error: Number of dimensions not supported for non-owner tile in MoveFrom: %d\n", hit_tileDims(*p_tile));
 			exit(EXIT_FAILURE);
 			break;
 	}
@@ -869,7 +864,6 @@ void Ctrl_Cuda_EvalTaskKernelLaunch(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 			Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)(p_tile->ext);
 			Ctrl_Tile_Impl *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
 			Ctrl_Cuda_Tile *p_tile_data_cuda = p_tile_data_impl->tile.p_cuda;
-			KHitTile       *p_ktile          = (KHitTile *)((char *)p_task->p_arguments + p_task->p_displacements[i]);
 
 			if (hit_tileIsNull(*p_tile)) {
 				fprintf(stderr, "Warning: Launching task %s, skipping null tile on parameter %d (starting at 0)\n", p_task->p_func_name, i);
@@ -877,20 +871,15 @@ void Ctrl_Cuda_EvalTaskKernelLaunch(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 				continue;
 			}
 
-			if (p_tile_data_impl->device_status == CTRL_TILE_UNALLOC) {
+			if (p_tile_data_impl->device_memowner == HIT_MS_NOMEM) {
 				fprintf(stderr, "[Ctrl_Cuda] Internal Error: Launching kernel %s with a tile with no device memory as parameter %d (starting at 0)\n", p_task->p_func_name, i);
 				fflush(stderr);
 				exit(EXIT_FAILURE);
 			}
 
-			// TODO @sergioalo care for other dimensions
-			if (p_tile_data_cuda->pitch != 0) {
-				p_ktile->origAcumCard[1] = p_tile_data_cuda->pitch / p_tile->baseExtent;
-			}
-
 			// if tile's role is IN or IO, is not updated on device and host has memory allocated transfer it
 			if (p_task->p_roles[i] != KERNEL_OUT && p_tile_data_impl->device_status == CTRL_TILE_INVALID &&
-				p_tile_data->host_status != CTRL_TILE_UNALLOC && p_ctrl->dependance_mode == CTRL_MODE_IMPLICIT) {
+				p_tile->memStatus != HIT_MS_NOMEM && p_ctrl->dependance_mode == CTRL_MODE_IMPLICIT) {
 				if (p_tile_data->host_status != CTRL_TILE_VALID) {
 					for (int j = 0; j < Ctrl_GetNCtrls(); j++) {
 						Ctrl_Tile_Impl *p_tile_impl_j = &p_tile_data->p_impls[j];
@@ -951,7 +940,7 @@ void Ctrl_Cuda_EvalTaskKernelLaunch(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 				Ctrl_GenericEvent_StreamWait(p_tile_data_cuda->dev_last_kernel_write_event, p_host_kernel_queue);
 			}
 
-			if (p_tile_data->host_status != CTRL_TILE_UNALLOC && !(p_tile_data_impl->device_status == CTRL_TILE_VALID && p_tile_data->host_status == CTRL_TILE_INVALID)) {
+			if (p_tile->memStatus != HIT_MS_NOMEM && !(p_tile_data_impl->device_status == CTRL_TILE_VALID && p_tile_data->host_status == CTRL_TILE_INVALID)) {
 				Ctrl_GenericEvent_StreamWait(p_tile_data_cuda->host_last_htd_event, p_host_kernel_queue);
 				Ctrl_GenericEvent_StreamWait(p_tile_data_cuda->dev_last_htd_event, p_host_kernel_queue);
 			}
@@ -963,7 +952,7 @@ void Ctrl_Cuda_EvalTaskKernelLaunch(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 					Ctrl_GenericEvent_StreamWait(p_tile_data_cuda->dev_last_kernel_read_event, p_host_kernel_queue);
 				}
 
-				if (p_tile_data->host_status != CTRL_TILE_UNALLOC && !(p_tile_data_impl->device_status == CTRL_TILE_VALID && p_tile_data->host_status == CTRL_TILE_INVALID)) {
+				if (p_tile->memStatus != HIT_MS_NOMEM && !(p_tile_data_impl->device_status == CTRL_TILE_VALID && p_tile_data->host_status == CTRL_TILE_INVALID)) {
 					Ctrl_GenericEvent_StreamWait(p_tile_data_cuda->host_last_dth_event, p_host_kernel_queue);
 					Ctrl_GenericEvent_StreamWait(p_tile_data_cuda->dev_last_dth_event, p_host_kernel_queue);
 				}
@@ -1065,26 +1054,16 @@ void Ctrl_Cuda_SyncWait(Ctrl_Cuda *p_ctrl, Ctrl_TaskQueue *p_queue) {
 	Ctrl_GenericEvent_StreamWait(p_ctrl->dev_seq_event, p_queue);
 }
 
-void Ctrl_Cuda_AllocHost(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
-	HitTile   *p_tile      = p_task->p_tile;
+bool Ctrl_Cuda_AllocPinned(Ctrl_Cuda *p_ctrl, HitTile *p_tile, int flags) {
+	// don't alloc pinned mem if explicitly requested or no request made and default is to not use pinned
+	if (!(flags & CTRL_MEM_PINNED) && ((flags | p_ctrl->default_alloc_mode) & CTRL_MEM_NOPINNED))
+		return false;
+
 	Ctrl_Tile *p_tile_data = (Ctrl_Tile *)(p_tile->ext);
 
-	// TODO @sergioalo pinned for multiple devices?
-	if (p_tile_data->host_status == CTRL_TILE_UNALLOC) {
-		if (p_task->flags & CTRL_MEM_ALLOC_HOST || !(p_task->flags & CTRL_MEM_ALLOC_DEV)) {
-			if ((p_task->flags & CTRL_MEM_PINNED) || (!(p_task->flags & CTRL_MEM_NOPINNED) && p_ctrl->default_alloc_mode == CTRL_MEM_PINNED)) {
-				// Allocate host "pinned" memory
-				p_tile_data->pinned = CTRL_TYPE_CUDA;
-				CUDA_OP(cudaHostAlloc(&(p_tile->data), ((size_t)(p_tile->origAcumCard[0])) * (p_tile->baseExtent), cudaHostAllocPortable));
-			} else {
-				// Allocate host memory the usual way (on CUDA this is probably never a good idea to do, but the option is there)
-				p_tile_data->pinned = CTRL_TYPE_NULL;
-				p_tile->data        = (void *)malloc((size_t)p_tile->acumCard * p_tile->baseExtent);
-			}
-			p_tile_data->host_status = CTRL_TILE_INVALID;
-			p_tile->memPtr           = p_tile->data;
-		}
-	}
+	p_tile_data->pinned = CTRL_TYPE_CUDA;
+	CUDA_OP(cudaHostAlloc(&(p_tile->data), (size_t)p_tile->origAcumCard[0] * p_tile->baseExtent, cudaHostAllocPortable));
+	return true;
 }
 
 void Ctrl_Cuda_EvalTaskAllocTile(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
@@ -1098,25 +1077,53 @@ void Ctrl_Cuda_EvalTaskAllocTile(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 		Ctrl_Cuda_InitTile(p_ctrl, p_task);
 
 	Ctrl_Cuda_Tile *p_tile_data_cuda = p_tile_data_impl->tile.p_cuda;
-	Ctrl_Cuda_AllocHost(p_ctrl, p_task);
 
 	if (p_task->flags & CTRL_MEM_ALLOC_DEV || !(p_task->flags & CTRL_MEM_ALLOC_HOST)) {
-		if (p_tile_data_impl->device_status != CTRL_TILE_UNALLOC) {
-			fprintf(stderr, "[Ctrl_Cuda] Warning: Device memory already allocated for this tile, ignoring this call.\n");
+		if (p_tile_data_impl->device_memowner == HIT_MS_OWNER) {
+			fprintf(stderr, "[Ctrl_Cuda] Warning: This tile already owns a memory image on this device, ignoring this call.\n");
 			fflush(stderr);
 			return;
 		}
+
+		int dims = hit_tileDims(*p_tile);
 		// Allocate device memory
-		if (p_task->flags & CTRL_MEM_ALIGNED && hit_tileDims(*p_tile) == 2) {
-			CUDA_OP(cudaMallocPitch(&(p_tile_data_cuda->p_device_data), &p_tile_data_cuda->pitch, (p_tile->baseExtent) * p_tile->card[1], p_tile->card[0]));
+		if (p_task->flags & CTRL_MEM_ALIGNED && hit_tileDims(*p_tile) > 1) {
+			size_t pitch;
+			if (p_ctrl->alignment == 0) {
+				// allow cuda to chose the alignment
+
+				// accumulated cardinality minus the most contiguous dimension which will have the padding
+				HitInd acc_card = 1;
+				for (int i = 0; i < dims - 1; i++) {
+					acc_card *= p_tile->card[i];
+				}
+
+				CUDA_OP(cudaMallocPitch(&(p_tile_data_cuda->p_device_data), &pitch, p_tile->baseExtent * p_tile->card[dims - 1], acc_card));
+				Ctrl_Tile_UpdateOrigAcumCards(p_tile_data_impl->origAcumCard, dims, p_tile->card, pitch / p_tile->baseExtent);
+				// reject algnments not divisible by base extent
+				if (pitch % p_tile->baseExtent != 0) {
+					fprintf(stderr, "[Ctrl_Cuda] Error: tile pitch %lu is not divisible by type size %lu. \n", pitch, p_tile->baseExtent);
+					exit(EXIT_FAILURE);
+				}
+			} else {
+				// manual alignment
+				Ctrl_Tile_UpdateOrigAcumCards(p_tile_data_impl->origAcumCard, dims, p_tile->card, p_ctrl->alignment / p_tile->baseExtent);
+				CUDA_OP(cudaMalloc(&(p_tile_data_cuda->p_device_data), p_tile_data_impl->origAcumCard[0] * p_tile->baseExtent));
+				// reject algnments not divisible by base extent
+				if (p_ctrl->alignment % p_tile->baseExtent != 0) {
+					fprintf(stderr, "[Ctrl_Cuda] Error: tile alignment %d is not divisible by type size %lu. \n", p_ctrl->alignment, p_tile->baseExtent);
+					exit(EXIT_FAILURE);
+				}
+			}
 		} else {
-			CUDA_OP(cudaMalloc(&(p_tile_data_cuda->p_device_data), ((size_t)(p_tile->origAcumCard[0])) * (p_tile->baseExtent)));
+			CUDA_OP(cudaMalloc(&(p_tile_data_cuda->p_device_data), ((size_t)(p_tile->acumCard)) * (p_tile->baseExtent)));
+			Ctrl_Tile_UpdateOrigAcumCards(p_tile_data_impl->origAcumCard, dims, p_tile->card, 0);
 		}
 
-		p_tile_data_impl->device_status = CTRL_TILE_INVALID;
+		p_tile_data_impl->device_status   = CTRL_TILE_INVALID;
+		p_tile_data_impl->device_memowner = HIT_MS_OWNER;
+		p_tile_data_impl->offset          = 0;
 	}
-
-	// TODO Habria que poner qstride, origAcumCard, y memStatus en p_tile_data con los dev (al tener dos espacios de memoria)
 }
 
 void Ctrl_Cuda_EvalTaskSelectTile(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
@@ -1129,18 +1136,22 @@ void Ctrl_Cuda_EvalTaskSelectTile(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 	Ctrl_Tile      *p_tile_data        = (Ctrl_Tile *)(p_tile->ext);
 	Ctrl_Tile_Impl *p_tile_data_impl   = &p_tile_data->p_impls[p_ctrl->global_id];
 	Ctrl_Cuda_Tile *p_tile_data_cuda   = p_tile_data_impl->tile.p_cuda;
-	Ctrl_Tile      *p_parent_data      = ((Ctrl_Tile *)(p_tile->ref->ext));
+	Ctrl_Tile      *p_parent_data      = (Ctrl_Tile *)(p_parent->ext);
 	Ctrl_Tile_Impl *p_parent_data_impl = &p_parent_data->p_impls[p_ctrl->global_id];
 	Ctrl_Cuda_Tile *p_parent_data_cuda = p_parent_data_impl->tile.p_cuda;
 
-	if (p_tile->memStatus == HIT_MS_NOT_OWNER) {
-		p_tile_data_impl->device_status = p_parent_data_impl->device_status;
-		p_tile_data_cuda->p_device_data = (char *)p_parent_data_cuda->p_device_data + ((char *)p_tile->data - (char *)p_parent->data);
+	if (p_parent_data_impl->device_memowner != HIT_MS_NOMEM) {
+		p_tile_data_impl->device_status   = p_parent_data_impl->device_status;
+		p_tile_data_impl->device_memowner = HIT_MS_NOT_OWNER;
 
-		if (p_parent_data_cuda->pitch != 0) {
-			fprintf(stderr, "[Ctrl_Cuda_EvalTaskSelectTile] Error: subselections of tiles with padding on the device (allocated with CTRL_MEM_ALIGNED) not supported.\n");
-			exit(EXIT_FAILURE);
+		for (int i = 0; i < HIT_MAXDIMS + 1; i++) {
+			p_tile_data_impl->origAcumCard[i] = p_parent_data_impl->origAcumCard[i];
 		}
+
+		HitInd offset = Ctrl_Tile_ParentDeviceOffset(p_tile, p_tile_data_impl);
+
+		p_tile_data_cuda->p_device_data = (char *)p_parent_data_cuda->p_device_data + (offset * p_tile->baseExtent);
+		p_tile_data_impl->offset        = offset + p_parent_data_impl->offset;
 	}
 }
 
@@ -1194,13 +1205,11 @@ void Ctrl_Cuda_EvalTaskFreeTile(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 	// Free node
 	free(p_tile_data_cuda->p_tile_elem);
 
-	if (p_tile->memStatus == HIT_MS_OWNER) {
-		if (p_tile_data_impl->device_status != CTRL_TILE_UNALLOC) {
-			// Free device image of the tile
-			CUDA_OP(cudaFree(p_tile_data_cuda->p_device_data));
-			if (p_tile_data_cuda->texture != 0) {
-				cudaDestroyTextureObject(p_tile_data_cuda->texture);
-			}
+	if (p_tile_data_impl->device_memowner == HIT_MS_OWNER) {
+		// Free device image of the tile
+		CUDA_OP(cudaFree(p_tile_data_cuda->p_device_data));
+		if (p_tile_data_cuda->texture != 0) {
+			cudaDestroyTextureObject(p_tile_data_cuda->texture);
 		}
 	}
 
@@ -1223,13 +1232,13 @@ void Ctrl_Cuda_EvalTaskMoveTo(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 
 	if (hit_tileIsNull(*p_tile)) return;
 
-	if (p_tile_data->host_status == CTRL_TILE_UNALLOC) {
+	if (p_tile->memStatus == HIT_MS_NOMEM) {
 		fprintf(stderr, "[Ctrl_Cuda] Internal Error: Trying to move tile from host to device but host memory was not allocated\n");
 		fflush(stderr);
 		exit(EXIT_FAILURE);
 	}
 
-	if (p_tile_data_impl->device_status == CTRL_TILE_UNALLOC) {
+	if (p_tile_data_impl->device_memowner == HIT_MS_NOMEM) {
 		fprintf(stderr, "[Ctrl_Cuda] Internal Error: Trying to move tile from host to device but device memory was not allocated\n");
 		fflush(stderr);
 		exit(EXIT_FAILURE);
@@ -1253,13 +1262,13 @@ void Ctrl_Cuda_EvalTaskMoveFrom(Ctrl_Cuda *p_ctrl, Ctrl_Task *p_task) {
 
 	if (hit_tileIsNull(*p_tile)) return;
 
-	if (p_tile_data->host_status == CTRL_TILE_UNALLOC) {
+	if (p_tile->memStatus == HIT_MS_NOMEM) {
 		fprintf(stderr, "[Ctrl_Cuda] Internal Error: Trying to move tile from device to host but host memory was not allocated\n");
 		fflush(stderr);
 		exit(EXIT_FAILURE);
 	}
 
-	if (p_tile_data_impl->device_status == CTRL_TILE_UNALLOC) {
+	if (p_tile_data_impl->device_memowner == HIT_MS_NOMEM) {
 		fprintf(stderr, "[Ctrl_Cuda] Internal Error: Trying to move tile from device to host but device memory was not allocated\n");
 		fflush(stderr);
 		exit(EXIT_FAILURE);

@@ -23,11 +23,11 @@
 #include "Kernel/Ctrl_KernelArgs.h"
 #include "Kernel/Ctrl_Thread.h"
 
-// TODO @sergioalo OUT tiles should not have sampler (cant be used for write image functions), IO tiles should not have texture nor sampler since we don't support rw textures. (if this changes remember changing the constructor parser)
+// NOTE @sergioalo IO tiles would need opencl compiler checks because some platforms (eg. AMD) doesn't support it (compilation failure: '__read_write' can not be used for '__read_write image2d_t' prior to OpenCL C version 2.0 or in version 3.0 and without __opencl_c_read_write_images feature). (if this changes remember changing the constructor parser arg count)
 #define CTRL_KERNEL_OPENCL_PARSE_ARGS_INVAL(type, name) " const ", CTRL_MACRO_STRINGIFY(type), " ", CTRL_MACRO_STRINGIFY(name)
 #define CTRL_KERNEL_OPENCL_PARSE_ARGS_IN(type, name)    " const ", CTRL_MACRO_STRINGIFY(KHitTile_opencl_wrapper), " ", CTRL_MACRO_STRINGIFY(ctrl_ktile_wrapper_##name), " , __global const ", raw_ktile_K##type, " ", CTRL_MACRO_STRINGIFY(*ctrl_mem_wrapper_##name), " , __read_only image2d_t ", CTRL_MACRO_STRINGIFY(name##_img), ", const sampler_t ", CTRL_MACRO_STRINGIFY(name##_smp)
-#define CTRL_KERNEL_OPENCL_PARSE_ARGS_OUT(type, name)   "  ", CTRL_MACRO_STRINGIFY(KHitTile_opencl_wrapper), " ", CTRL_MACRO_STRINGIFY(ctrl_ktile_wrapper_##name), " , __global ", raw_ktile_K##type, " ", CTRL_MACRO_STRINGIFY(*ctrl_mem_wrapper_##name), " , __write_only image2d_t ", CTRL_MACRO_STRINGIFY(name##_img), ", const sampler_t ", CTRL_MACRO_STRINGIFY(name##_smp)
-#define CTRL_KERNEL_OPENCL_PARSE_ARGS_IO(type, name)    CTRL_KERNEL_OPENCL_PARSE_ARGS_OUT(type, name)
+#define CTRL_KERNEL_OPENCL_PARSE_ARGS_OUT(type, name)   "  ", CTRL_MACRO_STRINGIFY(KHitTile_opencl_wrapper), " ", CTRL_MACRO_STRINGIFY(ctrl_ktile_wrapper_##name), " , __global ", raw_ktile_K##type, " ", CTRL_MACRO_STRINGIFY(*ctrl_mem_wrapper_##name), " , __write_only image2d_t ", CTRL_MACRO_STRINGIFY(name##_img)
+#define CTRL_KERNEL_OPENCL_PARSE_ARGS_IO(type, name)    "  ", CTRL_MACRO_STRINGIFY(KHitTile_opencl_wrapper), " ", CTRL_MACRO_STRINGIFY(ctrl_ktile_wrapper_##name), " , __global ", raw_ktile_K##type, " ", CTRL_MACRO_STRINGIFY(*ctrl_mem_wrapper_##name)
 
 #define CTRL_KERNEL_OPENCL_PARSE_ARGS_1(role, type, name)       CTRL_KERNEL_OPENCL_PARSE_ARGS_##role(type, name)
 #define CTRL_KERNEL_OPENCL_PARSE_ARGS_2(role, type, name, ...)  CTRL_KERNEL_OPENCL_PARSE_ARGS_##role(type, name), CTRL_KERNEL_OPENCL_PARSE_ARGS_1(__VA_ARGS__)
@@ -292,16 +292,20 @@
 				KHitTile *p_ktile = (KHitTile *)((uint8_t *)args_list + request.opencl.p_displacements[i]);                                                                                             \
                                                                                                                                                                                                         \
 				KHitTile_opencl_wrapper ktile_opencl_wraper;                                                                                                                                            \
-				for (int i = 0; i < HIT_MAXDIMS + 1; i++)                                                                                                                                               \
-					ktile_opencl_wraper.origAcumCard[i] = p_ktile->origAcumCard[i];                                                                                                                     \
-				for (int i = 0; i < HIT_MAXDIMS; i++)                                                                                                                                                   \
-					ktile_opencl_wraper.card[i] = hit_tileDimCard((*p_ktile), i);                                                                                                                       \
+				for (int j = 0; j < HIT_MAXDIMS + 1; j++)                                                                                                                                               \
+					ktile_opencl_wraper.origAcumCard[j] = p_ktile->origAcumCard[j];                                                                                                                     \
+				for (int j = 0; j < HIT_MAXDIMS; j++)                                                                                                                                                   \
+					ktile_opencl_wraper.card[j] = hit_tileDimCard((*p_ktile), j);                                                                                                                       \
 				ktile_opencl_wraper.offset = p_ktile->offset;                                                                                                                                           \
-                                                                                                                                                                                                        \
 				OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos++, sizeof(KHitTile_opencl_wrapper), &ktile_opencl_wraper)); \
 				OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos++, sizeof(cl_mem), (cl_mem *)(p_ktile->data)));             \
-				OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos++, sizeof(cl_mem), &p_ktile->ext.ocl.tex));                 \
-				OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos++, sizeof(cl_sampler), &p_ktile->ext.ocl.smp));             \
+				/* IO args don't support textures, OUT args don't need samplers */                                                                                                                      \
+				if (request.opencl.p_roles[i] != KERNEL_IO) {                                                                                                                                           \
+					OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos++, sizeof(cl_mem), &p_ktile->ext.ocl.tex));             \
+					if (request.opencl.p_roles[i] == KERNEL_IN) {                                                                                                                                       \
+						OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos++, sizeof(cl_sampler), &p_ktile->ext.ocl.smp));     \
+					}                                                                                                                                                                                   \
+				}                                                                                                                                                                                       \
 			}                                                                                                                                                                                           \
 		}                                                                                                                                                                                               \
 		OPENCL_ASSERT_OP(clSetKernelArg(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel[request.opencl.type_id], arg_pos++, sizeof(Ctrl_Thread), &threads));                                 \
@@ -437,14 +441,16 @@
 			if (i != 0) {                                                                                                                                                                                                            \
 				strcat(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel_raw, " , ");                                                                                                                                       \
 			}                                                                                                                                                                                                                        \
-			if (p_roles[i] == KERNEL_INVAL) {                                                                                                                                                                                        \
-				for (int j = 0; j < 4; j++) {                                                                                                                                                                                        \
-					strcat(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel_raw, pp_args_names[index++]);                                                                                                                  \
-				}                                                                                                                                                                                                                    \
-			} else {                                                                                                                                                                                                                 \
-				for (int j = 0; j < 12; j++) {                                                                                                                                                                                       \
-					strcat(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel_raw, pp_args_names[index++]);                                                                                                                  \
-				}                                                                                                                                                                                                                    \
+			/* Number of tokens in the list for this argument. Comes from CTRL_KERNEL_OPENCL_PARSE_ARGS_<type> */                                                                                                                    \
+			int arg_ntoks = 0;                                                                                                                                                                                                       \
+			switch (p_roles[i]) {                                                                                                                                                                                                    \
+				case KERNEL_INVAL: arg_ntoks = 4; break;                                                                                                                                                                             \
+				case KERNEL_IN: arg_ntoks = 12; break;                                                                                                                                                                               \
+				case KERNEL_IO: arg_ntoks = 8; break;                                                                                                                                                                                \
+				case KERNEL_OUT: arg_ntoks = 10; break;                                                                                                                                                                              \
+			}                                                                                                                                                                                                                        \
+			for (int j = 0; j < arg_ntoks; j++) {                                                                                                                                                                                    \
+				strcat(ctrl_kernel_openclgpu_##type##_##subtype##_##name.p_kernel_raw, pp_args_names[index++]);                                                                                                                      \
 			}                                                                                                                                                                                                                        \
 		}                                                                                                                                                                                                                            \
 		/* locate first "{" on used defined kernel, this is needed to insert stuff at the begining of the kernel */                                                                                                                  \

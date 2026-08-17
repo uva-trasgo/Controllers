@@ -1,7 +1,7 @@
 node *
-	proc 0 0
-		fpga 2 0 6
-	proc 1 0
-		cpu 12 0-0 0
-	proc 2 0
-		cuda 0 6
+	proc 0 numa = 0
+		fpga platform=2 dev=0 kstreams=6
+	proc 1 numa = 0
+		cpu threads=12 numa_range=0-0 memmoves=0
+	proc 2 numa = 0
+		cuda dev=0 kstreams=6

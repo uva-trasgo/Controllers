@@ -7,7 +7,6 @@
  * The relevant license, warranty and copyright notice is available in the Controller project repository.
  */
 
-#include "Core/Ctrl_Config.h"
 #include "Core/Ctrl_Core.h"
 #include <string.h>
 
@@ -90,6 +89,11 @@ hwloc_topology_t topo;
  * Index of the numa node to use for host threads.
  */
 int host_node = 0;
+
+/**
+ * Host memory alignment.
+ */
+int mem_alignment = 0;
 
 /**
  * Path to the FPGA kernel binaries.
@@ -210,15 +214,13 @@ int Ctrl_GetNumQueues(Ctrl *p_ctrl);
 Ctrl_TaskQueue **Ctrl_GetHostQueues(Ctrl *p_ctrl, Ctrl_TaskQueue **pp_queues);
 
 /**
- * Creates a ctrl with the args especified.
+ * Creates a ctrl with the config specified in \p dev
  *
- * @param type type of the ctrl to create
- * @param id id for the ctrl. Must be positive.
- * @param args string with the argument to the ctrl. Corresponds to a line of the config file for the ctrl_block
+ * @param dev Device specification. Corresponds to a line of the config file for the ctrl_block
  *
- * @see __ctrl_block__
+ * @see __ctrl_block__ Ctrl_ParseConfig
  */
-void Ctrl_Create(Ctrl_Type type, int id, char *args);
+void Ctrl_Create(Ctrl_Config_Dev dev);
 
 /**
  * @brief Push a wait operation of \p event to \p stream if they are compatible
@@ -391,50 +393,51 @@ void Ctrl_Thread_Spawner() {
 	}
 }
 
-void Ctrl_Create(Ctrl_Type type, int id, char *args) {
-	PCtrl p_ctrl   = &p_ctrl_global[id];
-	p_ctrl->p_impl = (Ctrl_Impl *)malloc(sizeof(Ctrl_Impl));
-	p_ctrl->id     = id;
-	p_ctrl->type   = type;
+void Ctrl_Create(Ctrl_Config_Dev dev) {
+	static int id     = 0;
+	PCtrl      p_ctrl = &p_ctrl_global[id];
+	p_ctrl->p_impl    = (Ctrl_Impl *)malloc(sizeof(Ctrl_Impl));
+	p_ctrl->id        = id++;
+	p_ctrl->type      = dev.type;
 	// TODO @sergioalo send id as param to inner create?
-	switch (type) {
+	switch (dev.type) {
 			#ifdef _CTRL_ARCH_CPU_
 		case CTRL_TYPE_CPU:
 			p_ctrl->p_impl->cpu.topo      = topo;
 			p_ctrl->p_impl->cpu.global_id = p_ctrl->id;
-			Ctrl_Cpu_Create(&(p_ctrl->p_impl->cpu), policy, args);
+			Ctrl_Cpu_Create(&(p_ctrl->p_impl->cpu), policy, dev);
 			break;
 			#endif // _CTRL_ARCH_CPU_
 
 			#ifdef _CTRL_ARCH_CUDA_
 		case CTRL_TYPE_CUDA:
 			p_ctrl->p_impl->cuda.global_id = p_ctrl->id;
-			Ctrl_Cuda_Create(&(p_ctrl->p_impl->cuda), policy, args);
+			Ctrl_Cuda_Create(&(p_ctrl->p_impl->cuda), policy, dev);
 			break;
 			#endif // _CTRL_ARCH_CUDA_
 
 			#ifdef _CTRL_ARCH_HIP_
 		case CTRL_TYPE_HIP:
 			p_ctrl->p_impl->hip.global_id = p_ctrl->id;
-			Ctrl_Hip_Create(&(p_ctrl->p_impl->hip), policy, args);
+			Ctrl_Hip_Create(&(p_ctrl->p_impl->hip), policy, dev);
 			break;
 			#endif // _CTRL_ARCH_HIP_
 
 			#ifdef _CTRL_ARCH_OPENCL_GPU_
 		case CTRL_TYPE_OPENCL_GPU:
 			p_ctrl->p_impl->opencl_gpu.global_id = p_ctrl->id;
-			Ctrl_OpenCLGpu_Create(&(p_ctrl->p_impl->opencl_gpu), policy, args);
+			Ctrl_OpenCLGpu_Create(&(p_ctrl->p_impl->opencl_gpu), policy, dev);
 			break;
 			#endif // _CTRL_ARCH_OPENCL_GPU_
 
 			#ifdef _CTRL_ARCH_FPGA_
 		case CTRL_TYPE_FPGA:
 			p_ctrl->p_impl->fpga.global_id = p_ctrl->id;
-			Ctrl_FPGA_Create(&(p_ctrl->p_impl->fpga), policy, args);
+			Ctrl_FPGA_Create(&(p_ctrl->p_impl->fpga), policy, dev);
 			break;
 			#endif // _CTRL_ARCH_FPGA_
 		default:
-			fprintf(stderr, "[Ctrl_Create] Unknown or unsupported architecture: %d\n", type);
+			fprintf(stderr, "[Ctrl_Create] Unknown or unsupported architecture: %d\n", dev.type);
 			exit(EXIT_FAILURE);
 	}
 }
@@ -551,7 +554,7 @@ void Ctrl_LaunchHostTask(Ctrl_Task task) {
 			HitTile   *p_tile      = (HitTile *)(p_task->pp_pointers[i]);
 			Ctrl_Tile *p_tile_data = (Ctrl_Tile *)(p_tile->ext);
 
-			if (p_tile_data->host_status == CTRL_TILE_UNALLOC) {
+			if (p_tile->memStatus == HIT_MS_NOMEM) {
 				fprintf(stderr, "[Ctrl_Core] Ctrl_LaunchHostTask: Launching host task %s with tile with no host memory as argument %d\n", p_task->p_func_name, i);
 				fflush(stderr);
 				exit(EXIT_FAILURE);
@@ -670,43 +673,61 @@ void Ctrl_GlobalSync(Ctrl *p_ctrl) {
 }
 
 void Ctrl_AllocInner(Ctrl *p_ctrl, HitTile *p_tile, int flags) {
-	/* UPDATES FOR SHADOW COPIES, OR ALLOCATION OF SELECTIONS OF NO-MEMORY VARIABLES */
-	// ADJUST ORIG_ACUM_CARD TO CARDINALITIES TO TRANSFORM ON MEMORY_OWNER, AS IN HITMAP
-	if ((p_tile->memStatus == HIT_MS_NOT_OWNER) || (p_tile->memStatus == HIT_MS_NOMEM)) {
-		/* 3.1. NEW STRIDES TO ACCESS ARE ALWAYS 1 */
-		for (int i = 0; i < hit_shapeDims(p_tile->shape); i++) {
-			p_tile->qstride[i] = 1;
+	// Allocate host memory
+	if (p_tile->memStatus != HIT_MS_OWNER && (flags & CTRL_MEM_ALLOC_HOST || !(flags & CTRL_MEM_ALLOC_DEV))) {
+		Ctrl_Tile *p_tile_data = (Ctrl_Tile *)(p_tile->ext);
+		size_t     alignment   = (flags & CTRL_MEM_ALIGNED) && hit_tileDims(*p_tile) > 1 ? mem_alignment : 0;
+		if (alignment % p_tile->baseExtent != 0) {
+			fprintf(stderr, "[Ctrl_Alloc] Error: tile host alignment %lu is not divisible by type size %lu.\n", alignment, p_tile->baseExtent);
+			exit(EXIT_FAILURE);
 		}
 
-		/* 3.2. UPDATE ORIGINAL ACUMULATED CARDINALITIES, NOW IT HAS ITS OWN MEMORY */
-		// Code below extracted from the body of hit_tileUpdateAcumCards(p_tile); (static inline fn)
-		p_tile->origAcumCard[hit_shapeDims(p_tile->shape)] = 1;
-		HitInd cardinality                                 = 1;
-		for (int i = (hit_shapeDims(p_tile->shape) - 1); i >= 0; i--) {
-			cardinality             = cardinality * p_tile->card[i];
-			p_tile->origAcumCard[i] = cardinality;
+		Ctrl_Tile_UpdateOrigAcumCards(p_tile->origAcumCard, hit_tileDims(*p_tile), p_tile->card, alignment / p_tile->baseExtent);
+		bool pinned = false;
+		// Allocate host "pinned" memory
+		switch (p_ctrl->type) {
+			#ifdef _CTRL_ARCH_CPU_
+			case CTRL_TYPE_CPU:
+				// no pinned memory on cpu
+				break;
+			#endif // _CTRL_ARCH_CPU_
+
+			#ifdef _CTRL_ARCH_CUDA_
+			case CTRL_TYPE_CUDA:
+				pinned = Ctrl_Cuda_AllocPinned(&p_ctrl->p_impl->cuda, p_tile, flags);
+				break;
+			#endif // _CTRL_ARCH_CUDA_
+
+			#ifdef _CTRL_ARCH_HIP_
+			case CTRL_TYPE_HIP:
+				pinned = Ctrl_Hip_AllocPinned(&p_ctrl->p_impl->hip, p_tile, flags);
+				break;
+			#endif // _CTRL_ARCH_HIP_
+
+			#ifdef _CTRL_ARCH_OPENCL_GPU_
+			case CTRL_TYPE_OPENCL_GPU:
+				pinned = Ctrl_OpenCLGpu_AllocPinned(&p_ctrl->p_impl->opencl_gpu, p_tile, flags);
+				break;
+			#endif // _CTRL_ARCH_OPENCL_GPU_
+
+			#ifdef _CTRL_ARCH_FPGA_
+			case CTRL_TYPE_FPGA:
+				pinned = Ctrl_FPGA_AllocPinned(&p_ctrl->p_impl->fpga, p_tile, flags);
+				break;
+			#endif // _CTRL_ARCH_FPGA_
+			default:
+				fprintf(stderr, "[Ctrl_Core] Ctrl_AllocPinned: Unknown ctrl type %d", p_ctrl->type);
+				exit(EXIT_FAILURE);
 		}
-		p_tile->acumCard = p_tile->origAcumCard[0];
+		if (!pinned) {
+			// Allocate host memory the usual way
+			p_tile_data->pinned = CTRL_TYPE_NULL;
+			p_tile->data        = (void *)malloc((size_t)p_tile->origAcumCard[0] * p_tile->baseExtent);
+		}
+		p_tile_data->host_status = CTRL_TILE_INVALID;
+		p_tile->memPtr           = p_tile->data;
+		p_tile->memStatus        = HIT_MS_OWNER;
 	}
-	p_tile->memStatus = HIT_MS_OWNER;
-
-	// RE-ADJUST TO PITCHED CARDINALITIES
-	#ifdef ALIGNED_SIZE
-	// TODO: Check if this works. This code was written by Arturo.
-	//  Manu 04/2021
-	int dims = hit_tileDims(*p_tile);
-	if (dims > 1) {
-		size_t toPitch = p_tile->card[dims - 1] * p_tile->baseExtent;
-
-		toPitch = ((toPitch + ALIGNED_SIZE - 1) / ALIGNED_SIZE) * ALIGNED_SIZE / p_tile->baseExtent;
-
-		p_tile->origAcumCard[dims - 1] = toPitch;
-		for (int i = dims - 2; i >= 0; i--) {
-			toPtich *= p_tile->card[1];
-			p_tile->origAcumCard[i] = toPitch;
-		}
-	}
-	#endif
 
 	Ctrl_AddTaskFlagged(p_ctrl, CTRL_TASK_TYPE_ALLOCTILE, p_tile, flags);
 }
@@ -809,7 +830,7 @@ void Ctrl_DomainInner(HitTile *p_tile) {
 
 	p_tile_data->p_impls = (Ctrl_Tile_Impl *)calloc(Ctrl_GetNCtrls(), sizeof(Ctrl_Tile_Impl));
 
-	p_tile_data->host_status = CTRL_TILE_UNALLOC;
+	p_tile_data->host_status = CTRL_TILE_INVALID;
 	p_tile_data->valid_impls = 0;
 
 	p_tile_data->last_host_read_event  = Ctrl_GenericEvent_Create(CTRL_EVENT_TYPE_CPU, -1);
@@ -1145,176 +1166,36 @@ void Ctrl_SetPolicy(Ctrl_Policy p) {
 	policy = p;
 }
 
-/**
- * Helper function to read a file to a string.
- *
- * @param file path to file
- * @return char* string with the contents of \p file . Must be freed after use.
- */
-char *read_file(const char *file) {
-	FILE *f = fopen(file, "r");
-
-	if (!f) {
-		fprintf(stderr, "ERROR: File for devices selection could not be opened: %s\n", file);
-		exit(EXIT_FAILURE);
-	}
-
-	fseek(f, 0, SEEK_END);
-	size_t length = ftell(f);
-	fseek(f, 0, SEEK_SET);
-
-	char *buffer = (char *)malloc(length + 1);
-
-	size_t read_length = fread(buffer, 1, length, f);
-	if (length != read_length) {
-		free(buffer);
-		fprintf(stderr, "ERROR: Reading devices selection file: %s\n", file);
-		exit(EXIT_FAILURE);
-	}
-	fclose(f);
-
-	buffer[length] = '\0';
-	return buffer;
-}
-
-void Ctrl_ParseConfig(const char *file) {
-	// READ CONFIG FILE IN A STRING BUFFER
-	char *buffer = read_file(file);
-
-	// GET HOST NAME AND RANK IN NODE
-	char *hostname     = hit_comNodeName();
-	int   rank_in_node = hit_comNodeGroupRank();
-
-	// WEIGHTS: GET NUMBER OF ACTIVE PROCESSES TO CREATE ARRAY
+void Ctrl_InitWeights(float com_weight) {
+	// Get number of active processes to create array
 	HitTopology com_topo         = hit_topology(plug_topPlain);
 	int         global_num_procs = hit_topDimCard(com_topo, 0);
 	int         global_rank      = hit_topDimRank(com_topo, 0);
-	float       com_weight       = 1.0f; // Default value
 	ctrl_weights.ratios          = (float *)malloc(sizeof(float) * global_num_procs);
 	for (int i = 0; i < global_num_procs; i++)
 		ctrl_weights.ratios[global_rank] = 1.0f; // Default value
 	ctrl_weights.num_procs = global_num_procs;
 	hit_topFree(com_topo);
 
-	// LOCATE START OF THIS MACHINE NAME SECTION
-	char node_name[MPI_MAX_PROCESSOR_NAME + 6]; // extra space for the "NODE " string
-	sprintf(node_name, "node %s", hostname);
-
-	char *node_data = strstr(buffer, node_name);
-	if (node_data == NULL) {
-		// FALLBACK: TRY TO LOCATE WILDCARD NODE SECTION
-		sprintf(node_name, "node *");
-		node_data = strstr(buffer, node_name);
-
-		if (node_data == NULL) {
-			fprintf(stderr, "ERROR: Device selection file -- No NODE section in file %s for node %s\n", file, hostname);
-			exit(EXIT_FAILURE);
-		}
-	}
-	// LOCATE END OF THIS MACHINE NAME SECTION AND CLEAN THE REST OF THE BUFFER
-	char *end_node_data = strstr(node_data + 4, "node ");
-	if (end_node_data != NULL) *end_node_data = '\0';
-
-	// LOCATE START OF THIS RANK SECTION
-	char proc_str[10];
-	sprintf(proc_str, "proc %d ", rank_in_node);
-	char *rank_data = strstr(node_data, proc_str);
-
-	char proc_str_noaff[10];
-	sprintf(proc_str_noaff, "proc %d\n", rank_in_node);
-	char *rank_data_noaff = strstr(node_data, proc_str_noaff);
-	if (rank_data == NULL && rank_data_noaff == NULL) {
-		fprintf(stderr, "ERROR: Device selection file -- No config found in file %s for rank %d of node %s\n", file, rank_in_node, hostname);
-		exit(EXIT_FAILURE);
-	} else if (rank_data != NULL && rank_data_noaff != NULL) {
-		fprintf(stderr, "ERROR: Device selection file -- Multiple configs found in file %s for rank %d of node %s\n", file, rank_in_node, hostname);
-		exit(EXIT_FAILURE);
-	}
-	rank_data = rank_data == NULL ? rank_data_noaff : rank_data;
-
-	// LOCATE END OF THIS RANK SECTION AND CLEAN THE REST OF THE BUFFER
-	char *end_rank_data = strstr(rank_data + 4, "proc ");
-	if (end_rank_data != NULL) *end_rank_data = '\0';
-
-	// AFFINITY: GET (OPTIONAL) NUMA NODE IDENTIFIER FOR HOST CODE
-	// SKIP "PROC" STRING AND RANK ID
-	int foo, aff;
-	int count = sscanf(rank_data, "proc %d %d\n", &foo, &aff);
-	if (count < 1) {
-		fprintf(stderr, "INTERNAL ERROR: Device selection file -- Internal proc rank missed! %d\n", rank_in_node);
-		exit(EXIT_FAILURE);
-	}
-	if (foo != rank_in_node) {
-		fprintf(stderr, "INTERNAL ERROR: Proc rank has changed during parsing! %d != %d\n", rank_in_node, foo);
-		exit(EXIT_FAILURE);
-	}
-	// AFFINITY SPECIFICATION FOUND FOR THIS RANK
-	if (count == 2) host_node = aff;
-
-	// CONSUME LINE
-	rank_data = strstr(rank_data, "\n");
-	if (rank_data == NULL) {
-		fprintf(stderr, "ERROR: Device selection file -- No devices, premature end of section in file %s, node %s, rank %d\n", file, hostname, rank_in_node);
-		exit(EXIT_FAILURE);
-	}
-	// SKIP NEW LINE CHAR
-	rank_data++;
-
-	// READ DEVICES
-	Ctrl_Config *devs = (Ctrl_Config *)malloc(sizeof(Ctrl_Config));
-
-	int ndevs                           = 0;
-	int ncpu                            = 0;
-	int noclgpu __attribute__((unused)) = 0;
-	int nfpga __attribute__((unused))   = 0;
-
-	for (char *tok = strtok(rank_data, " \t\n");
-		 tok != NULL;
-		 tok = strtok(NULL, " \t\n")) {
-
-		ndevs++;
-		devs = (Ctrl_Config *)realloc(devs, ndevs * sizeof(Ctrl_Config));
-
-		if (!strcmp(tok, "cpu")) {
-			ncpu++;
-			devs[ndevs - 1] = (Ctrl_Config){.type = CTRL_TYPE_CPU, .args = strtok(NULL, "\n")};
-		} else if (!strcmp(tok, "cuda")) {
-			devs[ndevs - 1] = (Ctrl_Config){.type = CTRL_TYPE_CUDA, .args = strtok(NULL, "\n")};
-		} else if (!strcmp(tok, "hip")) {
-			devs[ndevs - 1] = (Ctrl_Config){.type = CTRL_TYPE_HIP, .args = strtok(NULL, "\n")};
-		} else if (!strcmp(tok, "opencl")) {
-			noclgpu++;
-			devs[ndevs - 1] = (Ctrl_Config){.type = CTRL_TYPE_OPENCL_GPU, .args = strtok(NULL, "\n")};
-		} else if (!strcmp(tok, "fpga")) {
-			nfpga++;
-			devs[ndevs - 1] = (Ctrl_Config){.type = CTRL_TYPE_FPGA, .args = strtok(NULL, "\n")};
-		} else if (!strcmp(tok, "weight")) {
-			ndevs--; // This entry is not a device
-			char *weight_str = strtok(NULL, "\n");
-			int   ok         = sscanf(weight_str, "%f\n", &com_weight);
-			if (ok != 1) {
-				fprintf(stderr, "ERROR: Device selection file -- Non readable weight value in file %s, node %s, proc %d, value string: %s\n", file, hostname, rank_in_node, tok);
-				exit(EXIT_FAILURE);
-			}
-		} else {
-			fprintf(stderr, "ERROR: Device selection file -- Unknown device type in file %s, node %s, proc %d, device name: %s\n", file, hostname, rank_in_node, tok);
-			exit(EXIT_FAILURE);
-		}
-	}
-
-	// WEIGHTS: COMMUNICATE WEIGHTS
+	// Communicate weights
 	MPI_Allgather(&com_weight, 1, MPI_FLOAT, ctrl_weights.ratios, 1, MPI_FLOAT, MPI_COMM_WORLD);
+}
 
-	// LOAD HARDWARE TOPOLOGY INFO
+HitWeights Ctrl_GetWeights() {
+	return ctrl_weights;
+}
+
+void Ctrl_InitCore(Ctrl_Config cfg) {
+	Ctrl_InitWeights(cfg.weight);
+	host_node     = cfg.host_affinity;
+	mem_alignment = cfg.host_alignment != 0 ? cfg.host_alignment : CTRL_DEFAULT_TILE_ALIGNMENT;
+
+	// Load hardware topology info
 	hwloc_topology_init(&topo);
 	hwloc_topology_set_flags(topo, HWLOC_TOPOLOGY_FLAG_INCLUDE_DISALLOWED);
 	hwloc_topology_load(topo);
 
-	// INITIALIZE CONTROLLERS LIST
-	n_ctrls       = ndevs;
-	p_ctrl_global = (Ctrl *)malloc(ndevs * sizeof(Ctrl));
-	omp_set_num_threads(3 + ncpu);
-
+	// Set policy
 	if (policy == CTRL_POLICY_DEFAULT) {
 		if (getenv("CTRL_POLICY")) {
 			if (!strcmp(getenv("CTRL_POLICY"), "SYNC")) {
@@ -1327,28 +1208,42 @@ void Ctrl_ParseConfig(const char *file) {
 		}
 	}
 
+	// Count ctrls
+	int __attribute__((unused)) ncpu = 0, nocl = 0, nfpga = 0, real_ndevs = 0;
+	for (int i = 0; i < cfg.ndevs; i++) {
+		if (cfg.p_devs[i].type == CTRL_TYPE_NULL)
+			continue;
+		real_ndevs++;
+		switch (cfg.p_devs[i].type) {
+			case CTRL_TYPE_CPU: ncpu++; break;
+			case CTRL_TYPE_OPENCL_GPU: nocl++; break;
+			case CTRL_TYPE_FPGA: nfpga++; break;
+			default: break;
+		}
+	}
+
+	// Initialize controllers list
+	n_ctrls       = real_ndevs;
+	p_ctrl_global = (Ctrl *)malloc(n_ctrls * sizeof(Ctrl));
+	omp_set_num_threads(3 + ncpu);
+
 	#ifdef _CTRL_ARCH_OPENCL_GPU_
-	Ctrl_OpenCLGpu_AllocKernel(noclgpu);
+	Ctrl_OpenCLGpu_AllocKernel(nocl);
 	#endif // _CTRL_ARCH_OPENCL_GPU_
 	#ifdef _CTRL_ARCH_FPGA_
 	Ctrl_FPGA_AllocKernel(nfpga);
 	#endif // _CTRL_ARCH_FPGA_
 
-	// CREATE HOST TASK QUEUE
+	// Create host task queue
 	p_ctrl_host_stream = Ctrl_TaskQueue_Create();
 
-	// CREATE CONTROLLERS
-	for (int i = 0; i < ndevs; i++) {
-		Ctrl_Create(devs[i].type, i, devs[i].args);
+	// Create controllers
+	for (int i = 0; i < cfg.ndevs; i++) {
+		if (cfg.p_devs[i].type == CTRL_TYPE_NULL)
+			continue;
+
+		Ctrl_Create(cfg.p_devs[i]);
 	}
-
-	// FREE TEMP DATA STRUCTURES
-	free(devs);
-	free(buffer);
-}
-
-HitWeights Ctrl_ConfigWeights() {
-	return ctrl_weights;
 }
 
 bool Ctrl_PushEventIfCompat(Ctrl_GenericEvent event, int qid, Ctrl *p_ctrl) {
@@ -1659,41 +1554,39 @@ void Ctrl_FreeHostInner(HitTile *p_tile) {
 	Ctrl_GenericEvent_Release(p_tile_data->last_host_read_event);
 	Ctrl_GenericEvent_Release(p_tile_data->last_host_write_event);
 
+	// Free host image of the tile, equivalent to hit_tileFree(*p_tile);
 	if (p_tile->memStatus == HIT_MS_OWNER) {
-		// Free host image of the tile, equivalent to hit_tileFree(*p_tile);
-		if (p_tile_data->host_status != CTRL_TILE_UNALLOC) {
-			// TODO @sergioalo move stuff to apropiate backend
-			switch (p_tile_data->pinned) {
-				case CTRL_TYPE_CPU:
-					// global hwloc topology is the same that cpu ctrls use
-					hwloc_free(topo, p_tile->memPtr, (size_t)p_tile->acumCard * p_tile->baseExtent);
-					break;
+		// TODO @sergioalo move stuff to apropiate backend
+		switch (p_tile_data->pinned) {
+			case CTRL_TYPE_CPU:
+				// global hwloc topology is the same that cpu ctrls use
+				hwloc_free(topo, p_tile->memPtr, (size_t)p_tile->acumCard * p_tile->baseExtent);
+				break;
 
-				#ifdef _CTRL_ARCH_CUDA_
-				case CTRL_TYPE_CUDA:
-					CUDA_OP(cudaFreeHost(p_tile->memPtr));
-					break;
-				#endif //_CTRL_ARCH_CUDA_
+			#ifdef _CTRL_ARCH_CUDA_
+			case CTRL_TYPE_CUDA:
+				CUDA_OP(cudaFreeHost(p_tile->memPtr));
+				break;
+			#endif //_CTRL_ARCH_CUDA_
 
-				#ifdef _CTRL_ARCH_HIP_
-				case CTRL_TYPE_HIP:
-					HIP_OP(hipHostFree(p_tile->memPtr));
-					break;
-				#endif //_CTRL_ARCH_HIP_
+			#ifdef _CTRL_ARCH_HIP_
+			case CTRL_TYPE_HIP:
+				HIP_OP(hipHostFree(p_tile->memPtr));
+				break;
+			#endif //_CTRL_ARCH_HIP_
 
-				#if defined(_CTRL_ARCH_OPENCL_GPU_) || defined(_CTRL_ARCH_FPGA_)
-				case CTRL_TYPE_OPENCL_GPU:
-					OPENCL_ASSERT_OP(clEnqueueUnmapMemObject((cl_command_queue)p_tile_data->p_pin_queue, (cl_mem)p_tile_data->p_pinned_data, p_tile->memPtr, 0, NULL, NULL));
-					OPENCL_ASSERT_OP(clFlush((cl_command_queue)p_tile_data->p_pin_queue));
-					OPENCL_ASSERT_OP(clFinish((cl_command_queue)p_tile_data->p_pin_queue));
-					OPENCL_ASSERT_OP(clReleaseMemObject((cl_mem)p_tile_data->p_pinned_data));
-					OPENCL_ASSERT_OP(clReleaseCommandQueue((cl_command_queue)p_tile_data->p_pin_queue));
-					break;
-				#endif //_CTRL_ARCH_OPENCL_GPU_ || _CTRL_ARCH_FPGA_
-				default:
-					free(p_tile->memPtr);
-					break;
-			}
+			#if defined(_CTRL_ARCH_OPENCL_GPU_) || defined(_CTRL_ARCH_FPGA_)
+			case CTRL_TYPE_OPENCL_GPU:
+				OPENCL_ASSERT_OP(clEnqueueUnmapMemObject((cl_command_queue)p_tile_data->p_pin_queue, (cl_mem)p_tile_data->p_pinned_data, p_tile->memPtr, 0, NULL, NULL));
+				OPENCL_ASSERT_OP(clFlush((cl_command_queue)p_tile_data->p_pin_queue));
+				OPENCL_ASSERT_OP(clFinish((cl_command_queue)p_tile_data->p_pin_queue));
+				OPENCL_ASSERT_OP(clReleaseMemObject((cl_mem)p_tile_data->p_pinned_data));
+				OPENCL_ASSERT_OP(clReleaseCommandQueue((cl_command_queue)p_tile_data->p_pin_queue));
+				break;
+			#endif //_CTRL_ARCH_OPENCL_GPU_ || _CTRL_ARCH_FPGA_
+			default:
+				free(p_tile->memPtr);
+				break;
 		}
 		p_tile->memPtr    = NULL;
 		p_tile->data      = NULL;

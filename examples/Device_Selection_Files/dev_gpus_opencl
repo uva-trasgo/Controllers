@@ -1,18 +1,18 @@
 node gorgon
-    proc 0 0
-        opencl 1 0 6
-    proc 1 0
-        opencl 1 1 6
-    proc 2 0
-        opencl 1 2 6
-    proc 3 0
-        opencl 0 0 6
+    proc 0 numa = 0
+        opencl platform=1 dev=0 kstreams=6
+    proc 1 numa = 0
+        opencl platform=1 dev=1 kstreams=6
+    proc 2 numa = 0
+        opencl platform=1 dev=2 kstreams=6
+    proc 3 numa = 0
+        opencl platform=0 dev=0 kstreams=6
 node manticore
-    proc 0 0
-        opencl 0 0 6
-    proc 1 0
-        opencl 0 1 6
-    proc 2 0
-        cuda 0 6
-    proc 3 0
-        cuda 1 6
+    proc 0 numa = 0
+        opencl platform=0 dev=0 kstreams=6
+    proc 1 numa = 0
+        opencl platform=0 dev=1 kstreams=6
+    proc 2 numa = 0
+        cuda dev=0 kstreams=6
+    proc 3 numa = 0
+        cuda dev=1 kstreams=2

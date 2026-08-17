@@ -1,6 +1,6 @@
 /**
  * Tiling of sparse CSR graphs.
- * Definitions and functions to manipulate gcHitTile types.
+ * Definitions and functions to manipulate gcHitTile types. 
  *
  * @file hit_mcTile.h
  * @version 1.0
@@ -10,19 +10,19 @@
 
 /*
  * <license>
- *
+ * 
  * Hitmap v1.4
- *
+ * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
- * or use for commercial purpose, public redistribution, in source or binary forms, with or
- * without modifications, is NOT ALLOWED without the previous authorization of the copyright
+ * or use for commercial purpose, public redistribution, in source or binary forms, with or 
+ * without modifications, is NOT ALLOWED without the previous authorization of the copyright 
  * holder. The origin of this software must not be misrepresented; you must not claim that you
  * wrote the original software. If you use this software for any purpose (e.g. publication),
  * a reference to the software package and the authors must be included.
- *
+ * 
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
  * THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
  * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
@@ -30,17 +30,18 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Copyright (c) 2007-2026, Trasgo Group, Universidad de Valladolid.
+ * 
+ * Copyright (c) 2007-2024, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
- *
+ * 
  * More information on http://trasgo.infor.uva.es/
- *
+ * 
  * </license>
- */
+*/
 
 #ifndef _HitMCTile_
 #define _HitMCTile_
+
 
 #include "hit_tile.h"
 
@@ -64,7 +65,7 @@
  * @param baseExtent 	Size of the base type for the elements.
  * @param shape			Shape of the new CSR sparse domain.
  */
-void hit_mcTileDomainShapeInternal(void *newVarP, size_t baseExtent, HitShape shape);
+void hit_mcTileDomainShapeInternal(void * newVarP, size_t baseExtent, HitShape shape);
 
 /**
  * Allocate a previously declared gcTile.
@@ -93,9 +94,10 @@ void hit_mcTileAllocInternal(void *newVarP, const char *name, const char *file, 
  * @see hit_mcTileDomainShape
  * @see hit_mcTileAlloc
  */
-#define hit_mcTileDomainShapeAlloc(var, baseType, shape)         \
+#define hit_mcTileDomainShapeAlloc(var, baseType, shape)	\
 	hit_mcTileDomainShapeInternal(var, sizeof(baseType), shape); \
 	hit_mcTileAllocInternal(var, #var, __FILE__, __LINE__);
+
 
 /* 2. INDEX ACCESS FUNCTIONS */
 
@@ -107,7 +109,7 @@ void hit_mcTileAllocInternal(void *newVarP, const char *name, const char *file, 
  * @param local2 The second coordinate.
  * @return The index element.
  */
-HitInd hit_mcTileElemAtIndex(void *varP, HitInd local1, HitInd local2);
+HitInd hit_mcTileElemAtIndex(void * varP, HitInd local1, HitInd local2);
 
 /**
  * Gets the index of a sparse element in graph (global) coordinates.
@@ -117,9 +119,11 @@ HitInd hit_mcTileElemAtIndex(void *varP, HitInd local1, HitInd local2);
  * @param local2 The second coordinate.
  * @return The index element.
  */
-HitInd hit_mcTileGraphElemAtIndex(void *varP, HitInd pos1, HitInd pos2);
+HitInd hit_mcTileGraphElemAtIndex(void * varP, HitInd pos1, HitInd pos2);
+
 
 /* 3. ELEMENT ACCESS FUNCTIONS */
+
 
 /**
  * Gets a edge from a tile.
@@ -129,7 +133,8 @@ HitInd hit_mcTileGraphElemAtIndex(void *varP, HitInd pos1, HitInd pos2);
  * @param pos2 The second global coordinate.
  * @return The tile element.
  */
-#define hit_mcTileElemAt(var, pos1, pos2) ((var).data[hit_mcTileElemAtIndex(&(var), (pos1), (pos2))])
+#define hit_mcTileElemAt(var, pos1, pos2) ((var).data[hit_mcTileElemAtIndex(&(var),(pos1),(pos2))])
+
 
 /**
  * Gets a edge from a tile defined in graph coordinates.
@@ -139,7 +144,8 @@ HitInd hit_mcTileGraphElemAtIndex(void *varP, HitInd pos1, HitInd pos2);
  * @param pos2 The second global coordinate.
  * @return The tile element.
  */
-#define hit_mcTileGraphElemAt(var, pos1, pos2) ((var).data[hit_mcTileGraphElemAtIndex(&(var), (pos1), (pos2))])
+#define hit_mcTileGraphElemAt(var, pos1, pos2) ((var).data[hit_mcTileGraphElemAtIndex(&(var),(pos1),(pos2))])
+
 
 /**
  * Access function to an edge element using a shape iterator.
@@ -152,13 +158,16 @@ HitInd hit_mcTileGraphElemAtIndex(void *varP, HitInd pos1, HitInd pos2);
  */
 #define hit_mcTileElemIteratorAt(var, iterX, iterY) ((var).data[(iterY)])
 
-// 4. OTHER FUNCTIONS
+
+// 4. OTHER FUNCTIONS  
 
 /**
  * Cleans a CSR Tile Matrix.
  * @param tileP The Tile.
  */
-void hit_mcTileClear(void *tileP);
+void hit_mcTileClear(void * tileP);
+
+
 
 /* END OF HEADER FILE _HitMCTile_ */
 #endif

@@ -1,10 +1,7 @@
 node *
-	proc 0 0
-		weight 0.6007239666638606
-		cpu 12 0-0 0
-	proc 1 0
-		weight 0.3992760333361394
-		fpga 2 0 6
-	proc 2 0
-		weight 0.70212392487274
-		cuda 0 6
+	proc 0 numa = 0	weight = 0.6007239666638606
+		cpu threads=12 numa_range=0-0 memmoves=0
+	proc 1 numa = 0	weight = 0.3992760333361394
+		fpga platform=2 dev=0 kstreams=6
+	proc 2 numa = 0	weight = 0.70212392487274
+		cuda dev=0 kstreams=6

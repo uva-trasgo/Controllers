@@ -204,16 +204,17 @@ void Ctrl_OpenCLGpu_EvalTaskSetDependanceMode(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Task 
  ***** OpenCL GPU Controller functions ******
  ********************************************/
 
-void Ctrl_OpenCLGpu_Create(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Policy policy, char *args) {
+void Ctrl_OpenCLGpu_Create(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Policy policy, Ctrl_Config_Dev dev) {
 	cl_int err;
 
-	p_ctrl->policy           = policy;
-	p_ctrl->type_id          = next_oclgpu_id++;
-	int   platform           = atoi(strtok(args, " "));
-	int   device             = atoi(strtok(NULL, " "));
-	char *streams            = strtok(NULL, "");
-	p_ctrl->n_kernel_streams = streams == NULL ? 1 : atoi(streams);
+	p_ctrl->policy    = policy;
+	p_ctrl->type_id   = next_oclgpu_id++;
+	p_ctrl->alignment = atoi(Ctrl_Config_GetVal(dev, "align", "0"));
 
+	int platform = atoi(Ctrl_Config_GetVal(dev, "platform", NULL));
+	int device   = atoi(Ctrl_Config_GetVal(dev, "dev", NULL));
+
+	p_ctrl->n_kernel_streams = atoi(Ctrl_Config_GetVal(dev, "kstreams", "1"));
 	if (p_ctrl->n_kernel_streams <= 0) {
 		p_ctrl->n_kernel_streams = 1;
 		fprintf(stderr, "[Ctrl_OpenCL_Gpu] Warning: Tried to create OpenCL_Gpu Ctrl with less than one queue; defaulting to 1.\n");
@@ -519,7 +520,7 @@ void Ctrl_OpenCLGpu_CreateTex(Ctrl_OpenCLGpu *p_ctrl, HitTile *p_tile, Ctrl_TexD
 		exit(EXIT_FAILURE);
 	}
 
-	if (p_tile_data_impl->device_status == CTRL_TILE_UNALLOC) {
+	if (p_tile_data_impl->device_memowner == HIT_MS_NOMEM) {
 		fprintf(stderr, "[Ctrl_OpenCLGPU_CreateTex] Error: Device memory not allocated for this tile. You must allocate device memory before creating textures.\n");
 		exit(EXIT_FAILURE);
 	}
@@ -546,7 +547,7 @@ void Ctrl_OpenCLGpu_CreateTex(Ctrl_OpenCLGpu *p_ctrl, HitTile *p_tile, Ctrl_TexD
 	image_desc.image_width       = tex_desc.width == 0 ? hit_tileDimCard(*p_tile, 1) : tex_desc.width;
 	image_desc.image_height      = tex_desc.height == 0 ? hit_tileDimCard(*p_tile, 0) : tex_desc.height;
 	image_desc.image_array_size  = 1;
-	image_desc.image_row_pitch   = p_tile_data_ocl->pitch;
+	image_desc.image_row_pitch   = p_tile_data_impl->origAcumCard[1] * p_tile->baseExtent;
 	image_desc.image_slice_pitch = 0;
 	image_desc.num_mip_levels    = 0;
 	image_desc.num_samples       = 0;
@@ -596,12 +597,14 @@ void Ctrl_OpenCLGpu_InitTile(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Task *p_task) {
 	Ctrl_Tile *p_tile_data = (Ctrl_Tile *)(p_task->p_tile->ext);
 	p_tile_data->valid_impls++;
 
-	Ctrl_OpenCL_Tile *p_tile_data_impl_ocl                = (Ctrl_OpenCL_Tile *)malloc(sizeof(Ctrl_OpenCL_Tile));
-	p_tile_data->p_impls[p_ctrl->global_id].type          = CTRL_TYPE_OPENCL_GPU;
-	p_tile_data->p_impls[p_ctrl->global_id].tile.p_opencl = p_tile_data_impl_ocl;
+	Ctrl_Tile_Impl   *p_tile_data_impl     = &p_tile_data->p_impls[p_ctrl->global_id];
+	Ctrl_OpenCL_Tile *p_tile_data_impl_ocl = (Ctrl_OpenCL_Tile *)malloc(sizeof(Ctrl_OpenCL_Tile));
+	p_tile_data_impl->type                 = CTRL_TYPE_OPENCL_GPU;
+	p_tile_data_impl->tile.p_opencl        = p_tile_data_impl_ocl;
+	p_tile_data_impl->device_status        = CTRL_TILE_INVALID;
+	p_tile_data_impl->device_memowner      = HIT_MS_NOMEM;
 
 	p_tile_data_impl_ocl->p_ctrl  = p_ctrl;
-	p_tile_data_impl_ocl->pitch   = 0;
 	p_tile_data_impl_ocl->texture = NULL;
 	// sampler and img can never be null so we initialize it to default stuff
 	p_tile_data_impl_ocl->texture = p_ctrl->default_2dimg;
@@ -667,38 +670,22 @@ void Ctrl_OpenCLGpu_WaitTileInner(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Tile *p_tile_data
 
 /* Macro to define MoveTo and MoveFrom logic */
 #define OpenCL_Move(type)                                                                              \
-	HitTile flat_tile = *p_tile;                                                                       \
-	size_t  pitch     = p_tile_data_ocl->pitch;                                                        \
-	if (pitch == 0) {                                                                                  \
-		hit_tileFlattenDims(&flat_tile);                                                               \
-		pitch = (flat_tile.baseExtent) * flat_tile.origAcumCard[1];                                    \
-	}                                                                                                  \
-	HitTile *p_parent = flat_tile.ref;                                                                 \
-	if (flat_tile.memStatus == HIT_MS_NOT_OWNER)                                                       \
-		while (p_parent->memStatus == HIT_MS_NOT_OWNER)                                                \
-			p_parent = p_parent->ref;                                                                  \
-	else                                                                                               \
-		p_parent = &flat_tile;                                                                         \
-	size_t parent_offset[HIT_MAXDIMS]; /* ijkl */                                                      \
-	for (int i = 0; i < HIT_MAXDIMS; i++)                                                              \
-		parent_offset[i] = hit_tileDimBegin(flat_tile, i) - hit_tileDimBegin(*p_parent, i);            \
 	size_t zero_offset[3] = {0};       /* xyz */                                                       \
-	size_t dev_offset[3]  = {0};       /* xyz */                                                       \
 	size_t size[3]        = {1, 1, 1}; /* xyz */                                                       \
-	int    transfer_dims  = ((hit_tileDims(flat_tile) < 3) ? hit_tileDims(flat_tile) : 3);             \
+	size_t dev_offset[3]  = {0};       /* xyz */                                                       \
+	dev_offset[0]         = p_tile_data_impl->offset * p_tile->baseExtent;                             \
+	int transfer_dims     = ((hit_tileDims(*p_tile) < 3) ? hit_tileDims(*p_tile) : 3);                 \
 	for (int i = 0; i < transfer_dims; i++) {                                                          \
-		dev_offset[i] = parent_offset[hit_tileDims(flat_tile) - 1 - i];                                \
-		size[i]       = flat_tile.card[hit_tileDims(flat_tile) - 1 - i];                               \
+		size[i] = p_tile->card[hit_tileDims(*p_tile) - 1 - i];                                         \
 	}                                                                                                  \
-	dev_offset[0] *= flat_tile.baseExtent;                                                             \
-	size[0] *= flat_tile.baseExtent;                                                                   \
-	switch (hit_tileDims(flat_tile)) {                                                                 \
+	size[0] *= p_tile->baseExtent;                                                                     \
+	switch (hit_tileDims(*p_tile)) {                                                                   \
 		case 1:                                                                                        \
 			OPENCL_ASSERT_OP(                                                                          \
 				clEnqueue##type##Buffer(cmd_queue, p_tile_data_ocl->device_data,                       \
-										CL_FALSE, parent_offset[0] * flat_tile.baseExtent,             \
-										(size_t)flat_tile.acumCard * flat_tile.baseExtent,             \
-										flat_tile.data, 0, NULL,                                       \
+										CL_FALSE, dev_offset[0],                                       \
+										(size_t)p_tile->acumCard * p_tile->baseExtent,                 \
+										p_tile->data, 0, NULL,                                         \
 										p_task->event.event.p_event_cl));                              \
 			break;                                                                                     \
 		case 2:                                                                                        \
@@ -707,9 +694,9 @@ void Ctrl_OpenCLGpu_WaitTileInner(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Tile *p_tile_data
 					cmd_queue,                                                                         \
 					p_tile_data_ocl->device_data,                                                      \
 					CL_FALSE, dev_offset, zero_offset, size,                                           \
-					pitch, 0,                                                                          \
-					flat_tile.baseExtent * flat_tile.origAcumCard[1], 0,                               \
-					flat_tile.data, 0, NULL,                                                           \
+					p_tile->baseExtent * p_tile_data_impl->origAcumCard[1], 0,                         \
+					p_tile->baseExtent * p_tile->origAcumCard[1], 0,                                   \
+					p_tile->data, 0, NULL,                                                             \
 					p_task->event.event.p_event_cl));                                                  \
 			break;                                                                                     \
 		case 3:                                                                                        \
@@ -718,36 +705,35 @@ void Ctrl_OpenCLGpu_WaitTileInner(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Tile *p_tile_data
 					cmd_queue,                                                                         \
 					p_tile_data_ocl->device_data,                                                      \
 					CL_FALSE, dev_offset, zero_offset, size,                                           \
-					flat_tile.baseExtent * flat_tile.origAcumCard[2],                                  \
-					flat_tile.baseExtent * flat_tile.origAcumCard[1],                                  \
-					flat_tile.baseExtent * flat_tile.origAcumCard[2],                                  \
-					flat_tile.baseExtent * flat_tile.origAcumCard[1],                                  \
-					flat_tile.data, 0, NULL,                                                           \
+					p_tile->baseExtent * p_tile_data_impl->origAcumCard[2],                            \
+					p_tile->baseExtent * p_tile_data_impl->origAcumCard[1],                            \
+					p_tile->baseExtent * p_tile->origAcumCard[2],                                      \
+					p_tile->baseExtent * p_tile->origAcumCard[1],                                      \
+					p_tile->data, 0, NULL,                                                             \
 					p_task->event.event.p_event_cl));                                                  \
 			break;                                                                                     \
 		case 4:                                                                                        \
-			dev_offset[0] += parent_offset[0] * flat_tile.origAcumCard[1] * flat_tile.baseExtent;      \
-			char *p_host_data = (char *)flat_tile.data;                                                \
-			for (int i = 0; i < hit_tileDimCard(flat_tile, 0); i++) {                                  \
+			char *p_host_data = (char *)p_tile->data;                                                  \
+			for (int i = 0; i < hit_tileDimCard(*p_tile, 0); i++) {                                    \
 				OPENCL_ASSERT_OP(                                                                      \
 					clEnqueue##type##BufferRect(                                                       \
 						cmd_queue,                                                                     \
 						p_tile_data_ocl->device_data,                                                  \
 						CL_FALSE, dev_offset, zero_offset, size,                                       \
-						flat_tile.baseExtent * flat_tile.origAcumCard[3],                              \
-						flat_tile.baseExtent * flat_tile.origAcumCard[2],                              \
-						flat_tile.baseExtent * flat_tile.origAcumCard[3],                              \
-						flat_tile.baseExtent * flat_tile.origAcumCard[2],                              \
+						p_tile->baseExtent * p_tile_data_impl->origAcumCard[3],                        \
+						p_tile->baseExtent * p_tile_data_impl->origAcumCard[2],                        \
+						p_tile->baseExtent * p_tile->origAcumCard[3],                                  \
+						p_tile->baseExtent * p_tile->origAcumCard[2],                                  \
 						(void *)p_host_data, 0, NULL,                                                  \
 						p_task->event.event.p_event_cl));                                              \
-				dev_offset[0] += flat_tile.origAcumCard[1] * flat_tile.baseExtent;                     \
-				p_host_data += flat_tile.origAcumCard[1] * flat_tile.baseExtent;                       \
+				dev_offset[0] += p_tile_data_impl->origAcumCard[1] * p_tile->baseExtent;               \
+				p_host_data += p_tile->origAcumCard[1] * p_tile->baseExtent;                           \
 			}                                                                                          \
 			break;                                                                                     \
 		default:                                                                                       \
 			fprintf(stderr, "[Ctrl_OpenCL_Gpu] Internal Error: "                                       \
 							"Number of dimensions not supported for non-owner tile in mem move: %d\n", \
-					hit_tileDims(flat_tile));                                                          \
+					hit_tileDims(*p_tile));                                                            \
 			exit(EXIT_FAILURE);                                                                        \
 	}
 
@@ -806,10 +792,11 @@ void Ctrl_OpenCLGpu_MoveToWait(Ctrl_OpenCL_Tile *p_tile_data, Ctrl_TaskQueue *p_
 }
 
 void Ctrl_OpenCLGpu_ExecTaskMoveTo(Ctrl_Task *p_task, Ctrl_OpenCLGpu *p_ctrl) {
-	HitTile          *p_tile          = &p_task->tile;
-	Ctrl_Tile        *p_tile_data     = (Ctrl_Tile *)p_tile->ext;
-	Ctrl_OpenCL_Tile *p_tile_data_ocl = p_tile_data->p_impls[p_ctrl->global_id].tile.p_opencl;
-	cl_command_queue  cmd_queue       = p_ctrl->htd_driver_stream;
+	HitTile          *p_tile           = &p_task->tile;
+	Ctrl_Tile        *p_tile_data      = (Ctrl_Tile *)p_tile->ext;
+	Ctrl_Tile_Impl   *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
+	Ctrl_OpenCL_Tile *p_tile_data_ocl  = p_tile_data_impl->tile.p_opencl;
+	cl_command_queue  cmd_queue        = p_ctrl->htd_driver_stream;
 
 	// Enqueue the transfer operation
 	OpenCL_Move(Write);
@@ -873,11 +860,11 @@ void Ctrl_OpenCLGpu_MoveFromWait(Ctrl_OpenCL_Tile *p_tile_data, Ctrl_TaskQueue *
 }
 
 void Ctrl_OpenCLGpu_ExecTaskMoveFrom(Ctrl_Task *p_task, Ctrl_OpenCLGpu *p_ctrl) {
-	HitTile          *p_tile          = &p_task->tile;
-	Ctrl_Tile        *p_tile_data     = (Ctrl_Tile *)p_tile->ext;
-	Ctrl_OpenCL_Tile *p_tile_data_ocl = p_tile_data->p_impls[p_ctrl->global_id].tile.p_opencl;
-
-	cl_command_queue cmd_queue = p_ctrl->dth_driver_stream;
+	HitTile          *p_tile           = &p_task->tile;
+	Ctrl_Tile        *p_tile_data      = (Ctrl_Tile *)p_tile->ext;
+	Ctrl_Tile_Impl   *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
+	Ctrl_OpenCL_Tile *p_tile_data_ocl  = p_tile_data_impl->tile.p_opencl;
+	cl_command_queue  cmd_queue        = p_ctrl->dth_driver_stream;
 
 	// Enqueue the transfer operation
 	OpenCL_Move(Read);
@@ -1046,7 +1033,6 @@ void Ctrl_OpenCLGpu_EvalTaskKernelLaunch(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Task *p_ta
 			Ctrl_Tile        *p_tile_data      = (Ctrl_Tile *)(p_tile->ext);
 			Ctrl_Tile_Impl   *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
 			Ctrl_OpenCL_Tile *p_tile_data_ocl  = p_tile_data_impl->tile.p_opencl;
-			KHitTile         *p_ktile          = (KHitTile *)((char *)p_task->p_arguments + p_task->p_displacements[i]);
 
 			if (hit_tileIsNull(*p_tile)) {
 				fprintf(stderr, "Warning: Launching task %s, skipping null tile on parameter %d (starting at 0)\n", p_task->p_func_name, i);
@@ -1054,20 +1040,15 @@ void Ctrl_OpenCLGpu_EvalTaskKernelLaunch(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Task *p_ta
 				continue;
 			}
 
-			if (p_tile_data_impl->device_status == CTRL_TILE_UNALLOC) {
+			if (p_tile_data_impl->device_memowner == HIT_MS_NOMEM) {
 				fprintf(stderr, "[Ctrl_OpenCL] Internal Error: Launching kernel %s with a tile with no device memory as parameter %d (starting at 0)\n", p_task->p_func_name, i);
 				fflush(stderr);
 				exit(EXIT_FAILURE);
 			}
 
-			// TODO @sergioalo care for other dimensions
-			if (p_tile_data_ocl->pitch != 0) {
-				p_ktile->origAcumCard[1] = p_tile_data_ocl->pitch / p_tile->baseExtent;
-			}
-
 			// if tile's role is IN or IO, is not updated on device and host has memory allocated transfer it
 			if (p_task->p_roles[i] != KERNEL_OUT && p_tile_data_impl->device_status == CTRL_TILE_INVALID &&
-				p_tile_data->host_status != CTRL_TILE_UNALLOC && p_ctrl->dependance_mode == CTRL_MODE_IMPLICIT) {
+				p_tile->memStatus != HIT_MS_NOMEM && p_ctrl->dependance_mode == CTRL_MODE_IMPLICIT) {
 				if (p_tile_data->host_status != CTRL_TILE_VALID) {
 					for (int j = 0; j < Ctrl_GetNCtrls(); j++) {
 						Ctrl_Tile_Impl *p_tile_impl_j = &p_tile_data->p_impls[j];
@@ -1128,7 +1109,7 @@ void Ctrl_OpenCLGpu_EvalTaskKernelLaunch(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Task *p_ta
 				Ctrl_GenericEvent_StreamWait(p_tile_data_ocl->dev_last_kernel_write_event, p_host_kernel_queue);
 			}
 
-			if (p_tile_data->host_status != CTRL_TILE_UNALLOC && !(p_tile_data_impl->device_status == CTRL_TILE_VALID && p_tile_data->host_status == CTRL_TILE_INVALID)) {
+			if (p_tile->memStatus != HIT_MS_NOMEM && !(p_tile_data_impl->device_status == CTRL_TILE_VALID && p_tile_data->host_status == CTRL_TILE_INVALID)) {
 				Ctrl_GenericEvent_StreamWait(p_tile_data_ocl->host_last_htd_event, p_host_kernel_queue);
 				Ctrl_GenericEvent_StreamWait(p_tile_data_ocl->dev_last_htd_event, p_host_kernel_queue);
 			}
@@ -1140,7 +1121,7 @@ void Ctrl_OpenCLGpu_EvalTaskKernelLaunch(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Task *p_ta
 					Ctrl_GenericEvent_StreamWait(p_tile_data_ocl->dev_last_kernel_read_event, p_host_kernel_queue);
 				}
 
-				if (p_tile_data->host_status != CTRL_TILE_UNALLOC && !(p_tile_data_impl->device_status == CTRL_TILE_VALID && p_tile_data->host_status == CTRL_TILE_INVALID)) {
+				if (p_tile->memStatus != HIT_MS_NOMEM && !(p_tile_data_impl->device_status == CTRL_TILE_VALID && p_tile_data->host_status == CTRL_TILE_INVALID)) {
 					Ctrl_GenericEvent_StreamWait(p_tile_data_ocl->host_last_dth_event, p_host_kernel_queue);
 					Ctrl_GenericEvent_StreamWait(p_tile_data_ocl->dev_last_dth_event, p_host_kernel_queue);
 				}
@@ -1231,6 +1212,24 @@ void Ctrl_OpenCLGpu_SyncWait(Ctrl_OpenCLGpu *p_ctrl, Ctrl_TaskQueue *p_queue) {
 	Ctrl_GenericEvent_StreamWait(p_ctrl->dev_seq_event, p_queue);
 }
 
+bool Ctrl_OpenCLGpu_AllocPinned(Ctrl_OpenCLGpu *p_ctrl, HitTile *p_tile, int flags) {
+	// don't alloc pinned mem if explicitly requested or no request made and default is to not use pinned
+	if (!(flags & CTRL_MEM_PINNED) && ((flags | p_ctrl->default_alloc_mode) & CTRL_MEM_NOPINNED))
+		return false;
+
+	cl_int     err;
+	Ctrl_Tile *p_tile_data = (Ctrl_Tile *)(p_tile->ext);
+
+	p_tile_data->pinned        = CTRL_TYPE_OPENCL_GPU;
+	p_tile_data->p_pinned_data = (void *)clCreateBuffer(p_ctrl->context, CL_MEM_ALLOC_HOST_PTR, (size_t)p_tile->origAcumCard[0] * p_tile->baseExtent, NULL, &err);
+	OPENCL_ASSERT_ERROR(err);
+	p_tile_data->p_pin_queue = (void *)p_ctrl->pin_queue;
+	OPENCL_ASSERT_OP(clRetainCommandQueue(p_tile_data->p_pin_queue));
+	p_tile->data = clEnqueueMapBuffer(p_ctrl->pin_queue, (cl_mem)p_tile_data->p_pinned_data, CL_TRUE, CL_MAP_READ | CL_MAP_WRITE, 0, (size_t)p_tile->origAcumCard[0] * p_tile->baseExtent, 0, NULL, NULL, &err);
+	OPENCL_ASSERT_ERROR(err);
+	return true;
+}
+
 void Ctrl_OpenCLGpu_EvalTaskAllocTile(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Task *p_task) {
 	cl_int err;
 
@@ -1243,50 +1242,44 @@ void Ctrl_OpenCLGpu_EvalTaskAllocTile(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Task *p_task)
 
 	Ctrl_OpenCL_Tile *p_tile_data_ocl = p_tile_data_impl->tile.p_opencl;
 
-	// TODO @sergioalo pinned for multiple devices?
-	if (p_tile_data->host_status == CTRL_TILE_UNALLOC && (p_task->flags & CTRL_MEM_ALLOC_HOST || !(p_task->flags & CTRL_MEM_ALLOC_DEV))) {
-		// Allocate host mem
-		if ((p_task->flags & CTRL_MEM_PINNED) || (!(p_task->flags & CTRL_MEM_NOPINNED) && p_ctrl->default_alloc_mode == CTRL_MEM_PINNED)) {
-			// Allocate host "pinned" memory
-			p_tile_data->pinned        = CTRL_TYPE_OPENCL_GPU;
-			p_tile_data->p_pinned_data = (void *)clCreateBuffer(p_ctrl->context, CL_MEM_ALLOC_HOST_PTR, (size_t)p_tile->acumCard * p_tile->baseExtent, NULL, &err);
-			OPENCL_ASSERT_ERROR(err);
-			p_tile_data->p_pin_queue = (void *)p_ctrl->pin_queue;
-			OPENCL_ASSERT_OP(clRetainCommandQueue(p_tile_data->p_pin_queue));
-			p_tile->data = clEnqueueMapBuffer(p_ctrl->pin_queue, (cl_mem)p_tile_data->p_pinned_data, CL_TRUE, CL_MAP_READ | CL_MAP_WRITE, 0, (size_t)p_tile->acumCard * p_tile->baseExtent, 0, NULL, NULL, &err);
-			OPENCL_ASSERT_ERROR(err);
-		} else {
-			// Allocate host memory the usual way
-			p_tile_data->pinned = CTRL_TYPE_NULL;
-			p_tile->data        = (void *)malloc((size_t)p_tile->acumCard * p_tile->baseExtent);
-		}
-		p_tile_data->host_status = CTRL_TILE_INVALID;
-		p_tile->memPtr           = p_tile->data;
-	}
-
 	if (p_task->flags & CTRL_MEM_ALLOC_DEV || !(p_task->flags & CTRL_MEM_ALLOC_HOST)) {
-		if (p_tile_data_impl->device_status != CTRL_TILE_UNALLOC) {
-			fprintf(stderr, "[Ctrl_OpenCL] Warning: Device memory already allocated for this tile, ignoring this call.\n");
+		if (p_tile_data_impl->device_memowner == HIT_MS_OWNER) {
+			fprintf(stderr, "[Ctrl_OpenCL] Warning: This tile already owns a memory image on this device, ignoring this call.\n");
 			fflush(stderr);
 			return;
 		}
-		// Allocate device mem
-		if (p_task->flags & CTRL_MEM_ALIGNED && hit_tileDims(*p_tile) == 2) {
-			// aligned mem for texture usage
-			cl_uint device_pitch;
-			OPENCL_ASSERT_OP(clGetDeviceInfo(p_ctrl->device_id, CL_DEVICE_IMAGE_PITCH_ALIGNMENT, sizeof(cl_uint), &device_pitch, NULL));
-			// TODO @sergioalo what to do if this is 0?
-			if (device_pitch == 0) {
-				fprintf(stderr, "[Ctrl_OpenCLGPU_CreateTex] Error: Unsupported device. Current Controller OpenCL texture implementation only supports creating textures from existing buffers. This is a OpenCL 2.x feature.\n");
+
+		int dims = hit_tileDims(*p_tile);
+		// Allocate device memory
+		if (p_task->flags & CTRL_MEM_ALIGNED && hit_tileDims(*p_tile) > 1) {
+			size_t alignment = p_ctrl->alignment;
+			if (alignment == 0) {
+				// allow OpenCL to choose the alignment
+				cl_uint device_pitch; // In elements
+				OPENCL_ASSERT_OP(clGetDeviceInfo(p_ctrl->device_id, CL_DEVICE_IMAGE_PITCH_ALIGNMENT, sizeof(cl_uint), &device_pitch, NULL));
+				alignment = device_pitch * p_tile->baseExtent;
+				// OpenCL device does not support image pitch alignment, fallback
+				if (alignment == 0)
+					alignment = CTRL_DEFAULT_TILE_ALIGNMENT;
+			}
+			Ctrl_Tile_UpdateOrigAcumCards(p_tile_data_impl->origAcumCard, dims, p_tile->card, alignment / p_tile->baseExtent);
+			p_tile_data_ocl->device_data = clCreateBuffer(p_ctrl->context, CL_MEM_READ_WRITE, p_tile_data_impl->origAcumCard[0] * p_tile->baseExtent, NULL, &err);
+			OPENCL_ASSERT_ERROR(err);
+
+			// reject algnments not divisible by base extent
+			if (alignment % p_tile->baseExtent != 0) {
+				fprintf(stderr, "[Ctrl_Cuda] Error: tile alignment %lu is not divisible by type size %lu. \n", alignment, p_tile->baseExtent);
 				exit(EXIT_FAILURE);
 			}
-			p_tile_data_ocl->pitch       = ((p_tile->card[1] + device_pitch - 1) / device_pitch) * device_pitch * p_tile->baseExtent;
-			p_tile_data_ocl->device_data = clCreateBuffer(p_ctrl->context, CL_MEM_READ_WRITE, p_tile->card[0] * p_tile_data_ocl->pitch, NULL, &err);
 		} else {
-			p_tile_data_ocl->device_data = clCreateBuffer(p_ctrl->context, CL_MEM_READ_WRITE, ((size_t)(p_tile->acumCard)) * (p_tile->baseExtent), NULL, &err);
+			p_tile_data_ocl->device_data = clCreateBuffer(p_ctrl->context, CL_MEM_READ_WRITE, (size_t)(p_tile->acumCard) * p_tile->baseExtent, NULL, &err);
+			OPENCL_ASSERT_ERROR(err);
+			Ctrl_Tile_UpdateOrigAcumCards(p_tile_data_impl->origAcumCard, dims, p_tile->card, 0);
 		}
-		OPENCL_ASSERT_ERROR(err);
-		p_tile_data_impl->device_status = CTRL_TILE_INVALID;
+
+		p_tile_data_impl->device_status   = CTRL_TILE_INVALID;
+		p_tile_data_impl->device_memowner = HIT_MS_OWNER;
+		p_tile_data_impl->offset          = 0;
 	}
 }
 
@@ -1299,20 +1292,24 @@ void Ctrl_OpenCLGpu_EvalTaskSelectTile(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Task *p_task
 	Ctrl_Tile        *p_tile_data        = (Ctrl_Tile *)(p_tile->ext);
 	Ctrl_Tile_Impl   *p_tile_data_impl   = &p_tile_data->p_impls[p_ctrl->global_id];
 	Ctrl_OpenCL_Tile *p_tile_data_ocl    = p_tile_data_impl->tile.p_opencl;
-	Ctrl_Tile        *p_parent_data      = ((Ctrl_Tile *)(p_parent->ext));
+	Ctrl_Tile        *p_parent_data      = (Ctrl_Tile *)(p_parent->ext);
 	Ctrl_Tile_Impl   *p_parent_data_impl = &p_parent_data->p_impls[p_ctrl->global_id];
 	Ctrl_OpenCL_Tile *p_parent_data_ocl  = p_parent_data_impl->tile.p_opencl;
 
-	if (p_tile->memStatus == HIT_MS_NOT_OWNER) {
-		p_tile_data_impl->device_status = p_parent_data_impl->device_status;
-		if (p_parent_data_ocl->pitch != 0) {
-			fprintf(stderr, "[Ctrl_OpenCLGpu_EvalTaskSelectTile] Error: subselections of tiles with padding on the device (allocated with CTRL_MEM_ALIGNED) not supported.\n");
-			exit(EXIT_FAILURE);
+	if (p_parent_data_impl->device_memowner != HIT_MS_NOMEM) {
+		p_tile_data_impl->device_status   = p_parent_data_impl->device_status;
+		p_tile_data_impl->device_memowner = HIT_MS_NOT_OWNER;
+
+		for (int i = 0; i < HIT_MAXDIMS + 1; i++) {
+			p_tile_data_impl->origAcumCard[i] = p_parent_data_impl->origAcumCard[i];
 		}
 
-		/* Use parent buffers. Offset added inside the kernels (device pointers can't be edited in host scope). */
+		HitInd offset = Ctrl_Tile_ParentDeviceOffset(p_tile, p_tile_data_impl);
+
+		// Use parent buffers. Offset added inside the kernels (device pointers can't be edited in host scope).
 		p_tile_data_ocl->device_data = p_parent_data_ocl->device_data;
 		p_tile_data->p_pinned_data   = p_parent_data->p_pinned_data;
+		p_tile_data_impl->offset     = offset + p_parent_data_impl->offset;
 	}
 }
 
@@ -1344,10 +1341,8 @@ void Ctrl_OpenCLGpu_EvalTaskFreeTile(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Task *p_task) 
 	Ctrl_GenericEvent_Release(p_tile_data_ocl->dev_last_htd_event);
 	Ctrl_GenericEvent_Release(p_tile_data_ocl->last_op);
 
-	if (p_tile->memStatus == HIT_MS_OWNER) {
-		if (p_tile_data_impl->device_status != CTRL_TILE_UNALLOC) {
-			OPENCL_ASSERT_OP(clReleaseMemObject(p_tile_data_ocl->device_data));
-		}
+	if (p_tile_data_impl->device_memowner == HIT_MS_OWNER) {
+		OPENCL_ASSERT_OP(clReleaseMemObject(p_tile_data_ocl->device_data));
 	}
 
 	// Remove tle from tile linked list
@@ -1390,13 +1385,13 @@ void Ctrl_OpenCLGpu_EvalTaskMoveTo(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Task *p_task) {
 
 	if (hit_tileIsNull(*p_tile)) return;
 
-	if (p_tile_data->host_status == CTRL_TILE_UNALLOC) {
+	if (p_tile->memStatus == HIT_MS_NOMEM) {
 		fprintf(stderr, "[Ctrl_OpenCL] Internal Error: Tryinng to move tile from host to device but host memory was not allocated\n");
 		fflush(stderr);
 		exit(EXIT_FAILURE);
 	}
 
-	if (p_tile_data_impl->device_status == CTRL_TILE_UNALLOC) {
+	if (p_tile_data_impl->device_memowner == HIT_MS_NOMEM) {
 		fprintf(stderr, "[Ctrl_OpenCL] Internal Error: Tryinng to move tile from host to device but device memory was not allocated\n");
 		fflush(stderr);
 		exit(EXIT_FAILURE);
@@ -1419,13 +1414,13 @@ void Ctrl_OpenCLGpu_EvalTaskMoveFrom(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Task *p_task) 
 
 	if (hit_tileIsNull(*p_tile)) return;
 
-	if (p_tile_data->host_status == CTRL_TILE_UNALLOC) {
+	if (p_tile->memStatus == HIT_MS_NOMEM) {
 		fprintf(stderr, "[Ctrl_OpenCL] Internal Error: Trying to move tile from device to host but host memory was not allocated\n");
 		fflush(stderr);
 		exit(EXIT_FAILURE);
 	}
 
-	if (p_tile_data_impl->device_status == CTRL_TILE_UNALLOC) {
+	if (p_tile_data_impl->device_memowner == HIT_MS_NOMEM) {
 		fprintf(stderr, "[Ctrl_OpenCL] Internal Error: Trying to move tile from device to host but device memory was not allocated\n");
 		fflush(stderr);
 		exit(EXIT_FAILURE);

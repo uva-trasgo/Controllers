@@ -11,19 +11,19 @@
 
 /*
  * <license>
- *
+ * 
  * Hitmap v1.4
- *
+ * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
- * or use for commercial purpose, public redistribution, in source or binary forms, with or
- * without modifications, is NOT ALLOWED without the previous authorization of the copyright
+ * or use for commercial purpose, public redistribution, in source or binary forms, with or 
+ * without modifications, is NOT ALLOWED without the previous authorization of the copyright 
  * holder. The origin of this software must not be misrepresented; you must not claim that you
  * wrote the original software. If you use this software for any purpose (e.g. publication),
  * a reference to the software package and the authors must be included.
- *
+ * 
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
  * THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
  * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
@@ -31,14 +31,14 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Copyright (c) 2007-2026, Trasgo Group, Universidad de Valladolid.
+ * 
+ * Copyright (c) 2007-2024, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
- *
+ * 
  * More information on http://trasgo.infor.uva.es/
- *
+ * 
  * </license>
- */
+*/
 
 #ifndef _HitFile_
 #define _HitFile_
@@ -47,6 +47,7 @@
 #include "hit_shape.h"
 #include "hit_tile.h"
 #include "hit_error.h"
+
 
 /**
  * Reads the structure of an Harwell-Boeing graph.
@@ -57,7 +58,8 @@
  * @return A new sparse HitShape.
  * @note Returns a CSR shape.
  */
-#define hit_fileHBRead(hbfile) hit_fileHBRead_toCSR_Internal((hbfile), 1, (hit_Rank), __FILE__, __LINE__)
+ #define hit_fileHBRead(hbfile)       hit_fileHBRead_toCSR_Internal((hbfile), 1, (hit_Rank), __FILE__, __LINE__)
+
 
 /**
  * Reads the structure of an Harwell-Boeing matrix.
@@ -68,7 +70,10 @@
  * @return A new sparse HitShape.
  * @note Returns a CSR shape.
  */
-#define hit_fileHBMatrixRead(hbfile) hit_fileHBRead_toCSR_Internal((hbfile), 0, (hit_Rank), __FILE__, __LINE__)
+ #define hit_fileHBMatrixRead(hbfile) hit_fileHBRead_toCSR_Internal((hbfile), 0, (hit_Rank), __FILE__, __LINE__)
+
+
+
 
 /**
  * Reads the structure of an Harwell-Boeing graph or matrix.
@@ -82,11 +87,13 @@
  * @return A new sparse HitCShape.
  */
 HitShape hit_fileHBRead_toCSR_Internal(const char *fileName, int create_graph, int rank,
-									   const char *file, int line);
+		                          const char * file, int line);
+
+
 
 #define hit_fileMMMatrixRead(hbfile) hit_fileMMRead_toCSR_Internal((hbfile), 0, (hit_Rank), __FILE__, __LINE__)
 HitShape hit_fileMMRead_toCSR_Internal(const char *fileName, int create_graph, int rank,
-									   const char *file, int line);
+		                          const char * file, int line);
 /**
  * Reads the structure of an Harwell-Boeing graph or matrix.
  * @note Only the root processor (hit_Rank == 0) read the graph.
@@ -99,7 +106,9 @@ HitShape hit_fileMMRead_toCSR_Internal(const char *fileName, int create_graph, i
  * @return A new sparse HitBShape.
  */
 HitShape hit_fileHBRead_toBitmap_Internal(const char *fileName, int create_graph, int rank,
-										  const char *file, int line);
+        const char * file, int line);
+
+
 
 /**
  * Reads the structure of an Harwell-Boeing graph.
@@ -129,7 +138,7 @@ HitShape hit_fileHBRead_toBitmap_Internal(const char *fileName, int create_graph
  * @param hbfile The path of the file.
  * @return The number of vertices of the sparse file.
  */
-#define hit_fileHBVertices(hbfile) hit_fileHBVerticesInternal((hbfile), (hit_Rank), __FILE__, __LINE__)
+#define hit_fileHBVertices(hbfile) hit_fileHBVerticesInternal((hbfile),(hit_Rank),__FILE__,__LINE__)
 
 /**
  * Reads the number of vertices from a Harwell-Boeing graph file.
@@ -140,7 +149,8 @@ HitShape hit_fileHBRead_toBitmap_Internal(const char *fileName, int create_graph
  * @param line The number of line of the code.
  * @return The number of vertices of the sparse file.
  */
-int hit_fileHBVerticesInternal(const char *hbfile, int rank, const char *file, int line);
+int hit_fileHBVerticesInternal(const char * hbfile, int rank, const char * file, int line);
+
 
 /**
  * Reads a Harwell-Boeing graph and writes it in a square adjancency matrix.
@@ -154,7 +164,7 @@ int hit_fileHBVerticesInternal(const char *hbfile, int rank, const char *file, i
  * @param file The file of code.
  * @param line The number of line of the code.
  */
-#define hit_fileHBReadDense(hbfile, tileP) hit_fileHBReadDenseInternal((hbfile), (hit_Rank), (tileP), __FILE__, __LINE__)
+#define hit_fileHBReadDense(hbfile,tileP) hit_fileHBReadDenseInternal((hbfile),(hit_Rank),(tileP),__FILE__,__LINE__)
 
 /**
  * Reads a Harwell-Boeing graph and writes it in a square adjancency matrix.
@@ -166,17 +176,19 @@ int hit_fileHBVerticesInternal(const char *hbfile, int rank, const char *file, i
  * @param file The file of code.
  * @param line The number of line of the code.
  */
-int hit_fileHBReadDenseInternal(const char *hbfile, int rank, void *tileP, const char *file, int line);
+int hit_fileHBReadDenseInternal(const char * hbfile, int rank, void * tileP, const char * file, int line);
+
 
 /**
  * Output function for CSR and Bitmap shapes to HB.
  * @note http://people.sc.fsu.edu/~jburkardt/data/hb/hb.html
  * @todo @javfres Add another output function for Dense.
  */
-void hit_fileHBWriteInternal(const char *hbfile, HitShape shape, int rank, const char *file, int line);
-#define hit_fileHBWrite(hbfile, shape) hit_fileHBWriteInternal((hbfile), (shape), (hit_Rank), __FILE__, __LINE__)
-void hit_fileHBWriteBitmapInternal(const char *hbfile, HitShape shape, int rank, const char *file, int line);
-#define hit_fileHBWriteBitmap(hbfile, shape) hit_fileHBWriteBitmapInternal((hbfile), (shape), (hit_Rank), __FILE__, __LINE__)
+void hit_fileHBWriteInternal(const char * hbfile, HitShape shape, int rank, const char * file, int line);
+#define hit_fileHBWrite(hbfile,shape) hit_fileHBWriteInternal((hbfile),(shape),(hit_Rank),__FILE__,__LINE__)
+void hit_fileHBWriteBitmapInternal(const char * hbfile, HitShape shape, int rank, const char * file, int line);
+#define hit_fileHBWriteBitmap(hbfile,shape) hit_fileHBWriteBitmapInternal((hbfile),(shape),(hit_Rank),__FILE__,__LINE__)
+
 
 /**
  * @todo @javfres Adapt the CSR input/output functions to the new sparse structure.
@@ -185,10 +197,13 @@ void hit_fileHBWriteBitmapInternal(const char *hbfile, HitShape shape, int rank,
  * This functions do not consider this change. In fact, HB format do not support it neither
  * so a conversion is needed.
  */
-HitShape hit_fileCSRReadInternal(const char *csrfile, int rank, const char *cfile, int line);
-void     hit_fileCSRWriteInternal(const char *csrfile, HitShape shape, int rank, const char *cfile, int line);
-#define hit_fileCSRRead(csrfile)         hit_fileCSRReadInternal((csrfile), (hit_Rank), __FILE__, __LINE__)
-#define hit_fileCSRWrite(csrfile, shape) hit_fileCSRWriteInternal((csrfile), (shape), (hit_Rank), __FILE__, __LINE__)
+HitShape hit_fileCSRReadInternal(const char * csrfile, int rank, const char * cfile, int line);
+void hit_fileCSRWriteInternal(const char * csrfile, HitShape shape, int rank, const char * cfile, int line);
+#define hit_fileCSRRead(csrfile) hit_fileCSRReadInternal((csrfile),(hit_Rank),__FILE__,__LINE__)
+#define hit_fileCSRWrite(csrfile,shape) hit_fileCSRWriteInternal((csrfile),(shape),(hit_Rank),__FILE__,__LINE__)
+
+
+
 
 /* END OF HEADER FILE _HitFile_ */
 #endif

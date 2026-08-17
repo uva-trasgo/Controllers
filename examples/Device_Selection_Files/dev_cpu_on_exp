@@ -1,6 +1,6 @@
 node manticore
-	proc 0 0
-		cpu 48 1-2 1
+	proc 0 numa = 0
+		cpu threads=48 numa_range=1-2 memmoves=1
 node gorgon
-	proc 0 1
-		cpu 32 2-3 1
+	proc 0 numa = 1
+		cpu threads=32 numa_range=2-3 memmoves=1

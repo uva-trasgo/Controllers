@@ -19,13 +19,13 @@
  * parallel programming language and it aims to simplify parallel programming,
  * providing functionalities to create, manipulate, distribute, and communicate
  * tiles and hierarchies of tiles.
- *
+ * 
  * Hitmap library supports functionalities to:
- * - Create and manipulate hierarchical dense or sparse data structures based on
+ * - Create and manipulate hierarchical dense or sparse data structures based on 
  *   arrays and graphs
  * - Generate a virtual topology structure arranging the available physical
  *   processors.
- * - Mapping domains and data to the different processor with chosen partitioning
+ * - Mapping domains and data to the different processor with chosen partitioning 
  *   and load-balancing techniques.
  * - Automatically determine inactive processors at any stage of the computation,
  *   preventing them to interfere with the active processors activities.
@@ -40,10 +40,10 @@
  * The library functionalities can be classified in three sets or modules:
  * - \ref Tiling "Tiling module": Functionalities to manage
  *   	data structures and its hierarchical tiling.
- * - \ref Mapping "Mapping module": Functionalities to automatically part domains
- *   and distribute data.
- * - \ref Comm "Communication module": Functionalities to create reusable
- *   communication patterns for distributed hierarchical tiles.
+ * - \ref Mapping "Mapping module": Functionalities to automatically part domains 
+ *   and distribute data. 
+ * - \ref Comm "Communication module": Functionalities to create reusable 
+ *   communication patterns for distributed hierarchical tiles. 
  *
  * @section ExtLib	External Libraries
  *
@@ -59,11 +59,11 @@
  * 				<a href="http://math.nist.gov/~KRemington/harwell_io/README.html">Distribution Documentation for Harwell-Boeing I/O in C</a>.
  *
  * \li <em>Metis 4.0.1</em>
- * 			METIS is a set of serial programs for partitioning graphs, partitioning finite
- * 			element meshes, and producing fill reducing orderings for sparse matrices.
- * 			The algorithms implemented in METIS are based on the multilevel recursive-bisection,
+ * 			METIS is a set of serial programs for partitioning graphs, partitioning finite 
+ * 			element meshes, and producing fill reducing orderings for sparse matrices. 
+ * 			The algorithms implemented in METIS are based on the multilevel recursive-bisection, 
  * 			multilevel k-way, and multi-constraint partitioning schemes developed at <em>Karipys
- * 			Lab (University of Minnesota, USA)</em>.
+ * 			Lab (University of Minnesota, USA)</em>. 
  * 			It is distributed under <a href="http://www.apache.org/licenses/LICENSE-2.0">Apache License Version 2.0</a>. See more information in <a href="http://glaros.dtc.umn.edu/gkhome/metis/metis/overview">METIS - Serial Graph Partitioning and Fill-reducing Matrix Ordering</a>.
  *
  * @section ExamplesSec	Application examples
@@ -79,7 +79,7 @@
  *
  * The Hitmap library started as a research prototype in the context of the Trasgo framework
  * project around 2005. In 2007 it took the form of an independent library and since then it
- * has been evolving and being used for research purposes.
+ * has been evolving and being used for research purposes. 
  *
  * There are several research publications related to the Hitmap library, its development, use,
  * advantages, performance, and comparisons with other related works.
@@ -89,19 +89,19 @@
  *
  * @section License Hitmap license
  * <license>
- *
+ * 
  * Hitmap v1.4
- *
+ * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
- * or use for commercial purpose, public redistribution, in source or binary forms, with or
- * without modifications, is NOT ALLOWED without the previous authorization of the copyright
+ * or use for commercial purpose, public redistribution, in source or binary forms, with or 
+ * without modifications, is NOT ALLOWED without the previous authorization of the copyright 
  * holder. The origin of this software must not be misrepresented; you must not claim that you
  * wrote the original software. If you use this software for any purpose (e.g. publication),
  * a reference to the software package and the authors must be included.
- *
+ * 
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
  * THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
  * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
@@ -109,28 +109,28 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Copyright (c) 2007-2026, Trasgo Group, Universidad de Valladolid.
+ * 
+ * Copyright (c) 2007-2024, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
- *
+ * 
  * More information on http://trasgo.infor.uva.es/
- *
+ * 
  * </license>
  *
  */
 
-/**
- * @page Examples Application examples
- *
- * Documentation of the application examples included with the Hitmap library.
- */
+ /**
+  * @page Examples Application examples
+  *
+  * Documentation of the application examples included with the Hitmap library.
+  */
 
-/**
+ /**
  *
  * @defgroup Tiling Tiling module
  * 		Functionalities for managing hierarchical titling data structures.
  *
- * 		This module contains functionalities for creation, allocation, hierarchical tiling,
+ * 		This module contains functionalities for creation, allocation, hierarchical tiling, 
  * 		and elements access for dense and sparse data structures (arrays and graphs).
  *
  * @defgroup FileOps Input/output management
@@ -167,7 +167,7 @@
 /**
  * Version of this Hitmap library release
  */
-#define HITMAP_VERSION 1.3
+#define HITMAP_VERSION	1.3
 
 #include "hit_funcop.h"
 
@@ -175,7 +175,7 @@
 #include "hit_layout.h"
 #include "hit_pattern.h"
 
-// #include "hit_shape.h"
+//#include "hit_shape.h"
 #include "hit_sshape.h"
 #include "hit_cshape.h"
 #include "hit_bshape.h"
@@ -189,6 +189,7 @@
 #include "hit_mctile.h"
 #include "hit_mbtile.h"
 
+
 #include "hit_utils.h"
 #include "hit_env.h"
 #include "hit_file.h"
@@ -197,5 +198,6 @@
 
 #include "hit_domain.h"
 #include "hit_view.h"
+
 
 #endif

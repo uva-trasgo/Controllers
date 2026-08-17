@@ -10,19 +10,19 @@
 
 /*
  * <license>
- *
+ * 
  * Hitmap v1.4
- *
+ * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
- * or use for commercial purpose, public redistribution, in source or binary forms, with or
- * without modifications, is NOT ALLOWED without the previous authorization of the copyright
+ * or use for commercial purpose, public redistribution, in source or binary forms, with or 
+ * without modifications, is NOT ALLOWED without the previous authorization of the copyright 
  * holder. The origin of this software must not be misrepresented; you must not claim that you
  * wrote the original software. If you use this software for any purpose (e.g. publication),
  * a reference to the software package and the authors must be included.
- *
+ * 
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
  * THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
  * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
@@ -30,19 +30,21 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Copyright (c) 2007-2026, Trasgo Group, Universidad de Valladolid.
+ * 
+ * Copyright (c) 2007-2024, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
- *
+ * 
  * More information on http://trasgo.infor.uva.es/
- *
+ * 
  * </license>
- */
+*/
 
 #ifndef _HitMBTile_
 #define _HitMBTile_
 
+
 #include "hit_tile.h"
+
 
 /* 1. DECLARATION AND INITIALIZATION OF THE VARIABLES */
 /**
@@ -64,7 +66,8 @@
  * @param baseExtent 	Size of the base type for the elements.
  * @param shape			Shape of the new bitmap sparse domain.
  */
-void hit_mbTileDomainShapeInternal(void *newVarP, size_t baseExtent, HitShape shape);
+void hit_mbTileDomainShapeInternal(void * newVarP, size_t baseExtent, HitShape shape);
+
 
 /**
  * Allocate a previously declared mbTile.
@@ -72,6 +75,7 @@ void hit_mbTileDomainShapeInternal(void *newVarP, size_t baseExtent, HitShape sh
  * @param newVarP	A pointer to the HitTile.
  */
 #define hit_mbTileAlloc(var) hit_mbTileAllocInternal(var, #var, __FILE__, __LINE__)
+
 
 /**
  * Allocate a previously declared mbTile.
@@ -94,9 +98,12 @@ void hit_mbTileAllocInternal(void *newVarP, const char *name, const char *file, 
  * @see hit_mbTileDomainShape
  * @see hit_mbTileAlloc
  */
-#define hit_mbTileDomainShapeAlloc(var, baseType, shape)         \
+#define hit_mbTileDomainShapeAlloc(var, baseType, shape)	\
 	hit_mbTileDomainShapeInternal(var, sizeof(baseType), shape); \
 	hit_mbTileAllocInternal(var, #var, __FILE__, __LINE__);
+
+
+
 
 /* 2. INDEX ACCESS FUNCTIONS */
 /**
@@ -107,7 +114,7 @@ void hit_mbTileAllocInternal(void *newVarP, const char *name, const char *file, 
  * @param local2 The second coordinate.
  * @return The index element.
  */
-HitInd hit_mbTileElemAtIndex(void *varP, HitInd local1, HitInd local2);
+HitInd hit_mbTileElemAtIndex(void * varP, HitInd local1, HitInd local2);
 
 /**
  * Gets the index of a sparse element in global coordinates.
@@ -117,7 +124,9 @@ HitInd hit_mbTileElemAtIndex(void *varP, HitInd local1, HitInd local2);
  * @param local2 The second coordinate.
  * @return The index element.
  */
-HitInd hit_mbTileGraphElemAtIndex(void *varP, HitInd pos1, HitInd pos2);
+HitInd hit_mbTileGraphElemAtIndex(void * varP, HitInd pos1, HitInd pos2);
+
+
 
 /* 3. ELEMENT ACCESS FUNCTIONS */
 /**
@@ -128,7 +137,7 @@ HitInd hit_mbTileGraphElemAtIndex(void *varP, HitInd pos1, HitInd pos2);
  * @param pos2 The second global coordinate.
  * @return The tile element.
  */
-#define hit_mbTileElemAt(var, pos1, pos2) ((var).data[hit_bTileElemAtIndex(&(var), (pos1), (pos2))])
+#define hit_mbTileElemAt(var, pos1, pos2) ((var).data[hit_bTileElemAtIndex(&(var),(pos1),(pos2))])
 
 /**
  * Gets a edge from a tile defined in graph coordinates.
@@ -138,7 +147,8 @@ HitInd hit_mbTileGraphElemAtIndex(void *varP, HitInd pos1, HitInd pos2);
  * @param pos2 The second global coordinate.
  * @return The tile element.
  */
-#define hit_mbTileGraphElemAt(var, pos1, pos2) ((var).data[hit_mbTileGraphElemAtIndex(&(var), (pos1), (pos2))])
+#define hit_mbTileGraphElemAt(var, pos1, pos2) ((var).data[hit_mbTileGraphElemAtIndex(&(var),(pos1),(pos2))])
+
 
 /**
  * Gets a element from the bitmap matrix tile when using an iterator.
@@ -147,14 +157,18 @@ HitInd hit_mbTileGraphElemAtIndex(void *varP, HitInd pos1, HitInd pos2);
  * @param iterY Variable iterator y.
  */
 #define hit_mbTileElemIteratorAt(var, iterX, iterY) \
-	((var).data[(iterX) * (hit_bShapeCard(hit_tileShape(var), 1)) + (iterY)])
+	((var).data[(iterX)*(hit_bShapeCard(hit_tileShape(var),1))+(iterY)])
 
-// 4. OTHER FUNCTIONS
+
+
+// 4. OTHER FUNCTIONS  
 /**
  * Cleans a Bitmap Tile Matrix.
  * @param tileP The Tile.
  */
-void hit_mbTileClear(void *tileP);
+void hit_mbTileClear(void * tileP);
+
+
 
 /* END OF HEADER FILE _HitMBTile_ */
 #endif

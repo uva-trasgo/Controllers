@@ -28,7 +28,7 @@ def run(conf: config.Config, output: TextIO, version: str, mode: str):
 	else:
 		sizes_list = [1024, 1536, 2048, 4096, 6144, 8192]
 
-	affinity = str(proc.affinity)
+	affinity = str(proc.numa)
 	for policy in ["Sync", "Async"]:
 		if version == "ctrl":
 			hwloc_bind = ""

@@ -1,4 +1,4 @@
 node manticore
-	proc 0 1
-		cuda 0
-		cpu 1 1-2 0
+	proc 0 numa = 1
+		cuda dev=0
+		cuda threads=1 numa_range=1-2 memoves=0

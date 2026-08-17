@@ -1,12 +1,12 @@
 node manticore
-	proc 0 1
-		cuda 0
-		cuda 1
-		cpu 1 0-1 0
+	proc 0 numa = 1
+		cuda dev=0
+		cuda dev=1
+		cpu threads=1 numa_range=0-1 memmoves=0
 node gorgon
-	proc 0 7
-		cuda 0
-		cuda 1
-		cuda 2
-		cuda 3
-		cpu 1 7-8 0
+	proc 0 numa = 7
+		cuda dev=0
+		cuda dev=1
+		cuda dev=2
+		cuda dev=3
+		cpu threads=1 numa_range=7-8 memmoves=0

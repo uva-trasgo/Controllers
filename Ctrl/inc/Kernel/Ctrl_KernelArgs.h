@@ -216,8 +216,6 @@
 #define CTRL_KERNEL_ARG_LIST_SIZE_19(role, type, name, ...) sizeof(type) + CTRL_KERNEL_ARG_LIST_SIZE_18(__VA_ARGS__)
 #define CTRL_KERNEL_ARG_LIST_SIZE_20(role, type, name, ...) sizeof(type) + CTRL_KERNEL_ARG_LIST_SIZE_19(__VA_ARGS__)
 
-// TODO: quitar este TODO de abajo, WAI, el compilador se encarga de ello.
-// TODO @waxa los siguientes macrosw funcionan pero generean casteos anidados de mas, arreglar esto en un futuro
 /*
  * List store: Store a copy of the values in a contiguos buffer
  */
@@ -379,20 +377,13 @@
 			exit(EXIT_FAILURE);                                                                                                             \
 			break;                                                                                                                          \
 	}                                                                                                                                       \
-	K##hit_type k_##name;                                                                                                                   \
- 	memcpy(&k_##name, &k_##name##_void, sizeof(KHitTile));                                                                                  \
 	for (int i = 0; i < HIT_MAXDIMS + 1; i++)                                                                                               \
-		k_##name.origAcumCard[i] = name->origAcumCard[i];                                                                                   \
+		k_##name##_void.origAcumCard[i] = ((Ctrl_Tile *)name->ext)->p_impls[p_ctrl->id].origAcumCard[i];                                    \
 	for (int i = 0; i < HIT_MAXDIMS; i++)                                                                                                   \
-		k_##name.card[i] = hit_tileDimCard((*name), i);                                                                                     \
+		k_##name##_void.card[i] = hit_tileDimCard((*name), i);                                                                              \
 	/* Offset for subselections. Most times will be 0. */                                                                                   \
-	{                                                                                                                                       \
-		hit_type *p_parent = name;                                                                                                          \
-		while (p_parent->memStatus == HIT_MS_NOT_OWNER)                                                                                     \
-			p_parent = p_parent->ref;                                                                                                       \
-		k_##name.offset = ((size_t)name->data - (size_t)p_parent->data) / name->baseExtent;                                                 \
-	}                                                                                                                                       \
-	*((K##hit_type *)(list)) = k_##name;
+	k_##name##_void.offset = ((Ctrl_Tile *)name->ext)->p_impls[p_ctrl->id].offset;                                                          \
+	*((KHitTile *)(list)) = k_##name##_void;
 
 /*
  * List store for Ktile types: Store a copy of the values in a contiguos buffer, also casting to kTiles and transferring memory

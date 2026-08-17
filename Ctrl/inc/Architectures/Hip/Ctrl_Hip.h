@@ -28,6 +28,7 @@
 #include "Core/Ctrl_TexDesc.h"
 #include "Core/Ctrl_Tile.h"
 #include "Core/Ctrl_Type.h"
+#include "Core/Ctrl_Config.h"
 
 #include "Kernel/Ctrl_ImplType.h"
 #include "Kernel/Ctrl_KernelProto.h"
@@ -83,6 +84,7 @@ typedef struct Ctrl_Hip {
 	Ctrl_TaskQueue  *p_htd_host_stream;       /**< Host queue for HTD memory transfers */
 	hipStream_t      dth_driver_stream;       /**< HIP stream for DTH memory transfers */
 	Ctrl_TaskQueue  *p_dth_host_stream;       /**< Host queue for DTH memory transfers */
+	int              alignment;               /**< Alignment in bytes to use when allocating aligned tiles on this device */
 } Ctrl_Hip;
 
 /**
@@ -90,11 +92,9 @@ typedef struct Ctrl_Hip {
  *
  * @param p_ctrl Controller to be created.
  * @param policy Policy for this ctrl to be used.
- * @param args Space separated string containing the params for this ctrl. Contains:
- * 		- Device: index of the device to be used.
- * 		- [OPTIONAL] Streams: number of streams to use to execute kernels. Default 1.
+ * @param dev Configuration for this ctrl. @see DEVICE_SELECTION.md for more information.
  */
-void Ctrl_Hip_Create(Ctrl_Hip *p_ctrl, Ctrl_Policy policy, char *args);
+void Ctrl_Hip_Create(Ctrl_Hip *p_ctrl, Ctrl_Policy policy, Ctrl_Config_Dev dev);
 
 /**
  * Evaluate a task on a HIP ctrl.
@@ -218,5 +218,18 @@ void *Ctrl_Hip_GetDevPtr(Ctrl_Hip *p_ctrl, HitTile *p_tile);
  * @return Duration of the last op over \p p_tile in seconds.
  */
 double Ctrl_Hip_TimeLastOp(Ctrl_Hip *p_ctrl, HitTile *p_tile);
+
+/**
+ * @brief Try to allocate pinned memory for \p p_tile
+ *
+ * This function may not actually allocate memory depending on flags and \p p_ctrl.
+ * Use the return value to check this.
+ *
+ * @param p_ctrl Ctrl to allocate memory
+ * @param p_tile Tile to allocate memory for
+ * @param flags Ctrl tile allocation flags
+ * @return Wether memory was allocated or not
+ */
+bool Ctrl_Hip_AllocPinned(Ctrl_Hip *p_ctrl, HitTile *p_tile, int flags);
 ///@endcond
 #endif /* _CTRL_HIP_H_ */

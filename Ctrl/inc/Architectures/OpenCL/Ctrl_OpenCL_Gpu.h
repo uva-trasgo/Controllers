@@ -28,6 +28,7 @@
 #include "Core/Ctrl_TexDesc.h"
 #include "Core/Ctrl_Tile.h"
 #include "Core/Ctrl_Type.h"
+#include "Core/Ctrl_Config.h"
 
 #include "Kernel/Ctrl_ImplType.h"
 #include "Kernel/Ctrl_KernelProto.h"
@@ -84,6 +85,7 @@ typedef struct Ctrl_OpenCLGpu {
 	Ctrl_TaskQueue             *p_dth_host_stream;       /**< Host queue for DTH memory transfers */
 	cl_command_queue            pin_queue;               /**< Queue for mapping and unmapping map operations when allocating pinned memory */
 	cl_mem                      default_2dimg;           /**< It's not allowed to pass null in place of an image to a kernel, so this is used in its place */
+	int                         alignment;               /**< Alignment in bytes to use when allocating aligned tiles on this device */
 
 	#ifdef _CTRL_OPENCL_GPU_PROFILING_
 	int platform;
@@ -130,12 +132,9 @@ extern "C" {
  *
  * @param p_ctrl Controller to be created.
  * @param policy Policy for this ctrl to be used.
- * @param args Space separated string containing the params for this ctrl. Contains:
- * 		- Platform: index of the OpenCL platform to be used.
- * 		- Device: index of the device to be used.
- * 		- [OPTIONAL] Streams: number of OpenCL queues to use to execute kernels. Default 1.
+ * @param dev Configuration for this ctrl. @see DEVICE_SELECTION.md for more information.
  */
-void Ctrl_OpenCLGpu_Create(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Policy policy, char *args);
+void Ctrl_OpenCLGpu_Create(Ctrl_OpenCLGpu *p_ctrl, Ctrl_Policy policy, Ctrl_Config_Dev dev);
 
 /**
  * Evaluate a task on a OpenCL ctrl.
@@ -254,6 +253,19 @@ void Ctrl_OpenCLGpu_CreateTex(Ctrl_OpenCLGpu *p_ctrl, HitTile *p_tile, Ctrl_TexD
  * @return Duration of the last op over \p p_tile in seconds.
  */
 double Ctrl_OpenCLGpu_TimeLastOp(Ctrl_OpenCLGpu *p_ctrl, HitTile *p_tile);
+
+/**
+ * @brief Try to allocate pinned memory for \p p_tile
+ *
+ * This function may not actually allocate memory depending on flags and \p p_ctrl.
+ * Use the return value to check this.
+ *
+ * @param p_ctrl Ctrl to allocate memory
+ * @param p_tile Tile to allocate memory for
+ * @param flags Ctrl tile allocation flags
+ * @return Wether memory was allocated or not
+ */
+bool Ctrl_OpenCLGpu_AllocPinned(Ctrl_OpenCLGpu *p_ctrl, HitTile *p_tile, int flags);
 
 #ifdef __cplusplus
 }

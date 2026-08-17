@@ -38,7 +38,7 @@ def run(config: config.Config, output: TextIO, version: str):
 			# TODO print warning? delete file somehow?
 			return
 		dev = proc.devices[0]
-		hwloc_bind = f"hwloc-bind --cpubind node:{proc.affinity} --membind node:{proc.affinity}"
+		hwloc_bind = f"hwloc-bind --cpubind node:{proc.numa} --membind node:{proc.numa}"
 		app_path = f"{path}/HSOpticalFlow_{utils.arch_formatter[dev.arch]}_Ref_Multi"
 		dev_args = dev.get_ref_params()
 	else:
@@ -53,7 +53,7 @@ def run(config: config.Config, output: TextIO, version: str):
 
 		print(res.stderr, end = "")
 		if res.returncode == 0:
-			output.write(f"{version}, async, {proc.affinity}, {alpha}, {levels}, {solves}, {warps}, {frames}, {res.stdout}")
+			output.write(f"{version}, async, {proc.numa}, {alpha}, {levels}, {solves}, {warps}, {frames}, {res.stdout}")
 
 
 acc_refs = {

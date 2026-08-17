@@ -33,6 +33,7 @@
 #include "Core/Ctrl_TexDesc.h"
 #include "Core/Ctrl_Tile.h"
 #include "Core/Ctrl_Type.h"
+#include "Core/Ctrl_Config.h"
 
 #include "Kernel/Ctrl_ImplType.h"
 #include "Kernel/Ctrl_KernelProto.h"
@@ -105,6 +106,7 @@ typedef struct Ctrl_Cuda {
 	Ctrl_TaskQueue  *p_dth_host_stream;       /**< Host queue for DTH memory transfers */
 	int             *p_stream_op_count;       /**< Counter of the operations sent to each driver stream */
 	int             *p_stream_indexes;        /**< Current stream indexes to send ops to */
+	int              alignment;               /**< Alignment in bytes to use when allocating aligned tiles on this device */
 } Ctrl_Cuda;
 
 /**
@@ -112,11 +114,9 @@ typedef struct Ctrl_Cuda {
  *
  * @param p_ctrl Controller to be created.
  * @param policy Policy for this ctrl to be used.
- * @param args Space separated string containing the params for this ctrl. Contains:
- * 		- Device: index of the device to be used.
- * 		- [OPTIONAL] Streams: number of streams to use to execute kernels. Default 1.
+ * @param dev Configuration for this ctrl. @see DEVICE_SELECTION.md for more information.
  */
-void Ctrl_Cuda_Create(Ctrl_Cuda *p_ctrl, Ctrl_Policy policy, char *args);
+void Ctrl_Cuda_Create(Ctrl_Cuda *p_ctrl, Ctrl_Policy policy, Ctrl_Config_Dev dev);
 
 /**
  * Evaluate a task on a CUDA ctrl.
@@ -248,5 +248,19 @@ void *Ctrl_Cuda_GetDevPtr(Ctrl_Cuda *p_ctrl, HitTile *p_tile);
  * @return Duration of the last op over \p p_tile in seconds.
  */
 double Ctrl_Cuda_TimeLastOp(Ctrl_Cuda *p_ctrl, HitTile *p_tile);
+
+/**
+ * @brief Try to allocate pinned memory for \p p_tile
+ *
+ * This function may not actually allocate memory depending on flags and \p p_ctrl.
+ * Use the return value to check this.
+ *
+ * @param p_ctrl Ctrl to allocate memory
+ * @param p_tile Tile to allocate memory for
+ * @param flags Ctrl tile allocation flags
+ * @return Wether memory was allocated or not
+ */
+bool Ctrl_Cuda_AllocPinned(Ctrl_Cuda *p_ctrl, HitTile *p_tile, int flags);
+
 ///@endcond
 #endif /* _CTRL_CUDA_H_ */

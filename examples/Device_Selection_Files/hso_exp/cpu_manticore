@@ -1,4 +1,4 @@
 node manticore
-	proc 0 0
-		cpu 88 0-0 1
-		cpu 1 0-1 0
+	proc 0 numa = 0
+		cpu threads=88 numa_range=0-0 memmoves=1
+		cpu threads=1 numa_range=0-1 memmoves=0

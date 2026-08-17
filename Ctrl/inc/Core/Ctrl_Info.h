@@ -19,11 +19,11 @@ typedef struct Ctrl_Info {
 	char  device_name[CTRL_MAX_DEV_NAME];   /**< Name of the device */
 	char  platform_name[CTRL_MAX_DEV_NAME]; /**< Name of the platform of the device (only for OpenCL GPU and FPGA ctrls)*/
 	int   host_affinity;                    /**< Index of numa node to use as host */
-	int   n_kernel_queues;                  /**< Number of kernel queues in this device (empty on CPU ctrls)*/
+	int   n_kernel_queues;                  /**< Number of kernel queues in this device */
 	int   n_threads;                        /**< Number of threads used to execute kernels (only for CPU ctrls)*/
 	int   numa_range_min;                   /**< End of the range of numa nodes of the device. Inclusive. Indexes as reported by hwloc. (only for CPU ctrls)*/
 	int   numa_range_max;                   /**< End of the range of numa nodes of the device. Not inclusive. Indexes as reported by hwloc. (only for CPU ctrls)*/
-	int   mem_transfers;                    /**< Boolean. Ctrl only uses host memory and memory copies are a noop. (only for CPU ctrls)*/
+	int   mem_transfers;                    /**< Boolean. Whether the ctrl uses separate buffers for host and device data (true) or only host buffers with 0 copy (false). (only for CPU ctrls)*/
 } Ctrl_Info;
 
 /**

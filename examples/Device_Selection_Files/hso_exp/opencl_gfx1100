@@ -1,4 +1,4 @@
 node gorgon
-	proc 0 5
-		opencl 0 0
-		cpu 1 5-5 0
+	proc 0 numa = 5
+		opencl platform=0 dev=0
+		cuda threads=1 numa_range=5-5 memoves=0

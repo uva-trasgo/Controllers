@@ -36,13 +36,13 @@ def run(config: config.Config, output: TextIO, version: str):
 			app_path += "_nopin"
 		dev_args = config.path
 	elif version.startswith("ref"):
-		hwloc_bind = f"hwloc-bind --cpubind node:{proc.affinity} --membind node:{proc.affinity}"
+		hwloc_bind = f"hwloc-bind --cpubind node:{proc.numa} --membind node:{proc.numa}"
 		app_path = f"{path}/HSOpticalFlow_{utils.arch_formatter[dev.arch]}_Ref"
 		if not version.endswith("_nopin"):
 			app_path += "_pin"
 		dev_args = dev.get_ref_params()
 	elif version == "sycl":
-		hwloc_bind = f"hwloc-bind --cpubind node:{proc.affinity} --membind node:{proc.affinity}"
+		hwloc_bind = f"hwloc-bind --cpubind node:{proc.numa} --membind node:{proc.numa}"
 		app_path = "/frontend/sergioalo/oneAPI-samples/DirectProgramming/C++SYCL/StructuredGrids/guided_HSOpticalFlow_SYCLMigration/build/bin/02_sycl_migrated_optimized"
 	else:
 		raise ValueError(f"Unknown version for HSOpticalFlow benchmark {version}")
@@ -56,7 +56,7 @@ def run(config: config.Config, output: TextIO, version: str):
 
 	print(res.stderr, end = "")
 	if res.returncode == 0:
-		output.write(f"{version}, async, {proc.affinity}, {alpha}, {levels}, {solves}, {warps}, {res.stdout}")
+		output.write(f"{version}, async, {proc.numa}, {alpha}, {levels}, {solves}, {warps}, {res.stdout}")
 
 
 def plot(conf_dir: os.DirEntry):

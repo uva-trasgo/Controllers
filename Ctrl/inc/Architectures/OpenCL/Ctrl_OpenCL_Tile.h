@@ -28,7 +28,6 @@ typedef struct Ctrl_OpenCL_Tile {
 	cl_mem                 device_data;                  /**< OpenCL buffer for device image of this tile */
 	cl_mem                 texture;                      /**< OpenCL image for texture use of this tile */
 	cl_sampler             sampler;                      /**< OpenCL image sampler, for texture use of this tile */
-	size_t                 pitch;                        /**< Pitch of the device image in bytes. Useful when using texture memory. */
 	Ctrl_GenericEvent      host_last_kernel_read_event;  /**< Host event to sincronyze tasks, represents last write operation on device*/
 	Ctrl_GenericEvent      host_last_kernel_write_event; /**< Host event to sincronyze tasks, represents last read operation on device*/
 	Ctrl_GenericEvent      host_last_dth_event;          /**< Host event to sincronyze tasks, represents last DTH comunication*/

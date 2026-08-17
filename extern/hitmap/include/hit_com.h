@@ -12,24 +12,24 @@
  * @date Mar 2013
  * @version 1.6
  * @author Arturo Gonzalez-Escribano
- * @date Dec 2024
+ * @date Dec 2024 
  */
 
 /*
  * <license>
- *
+ * 
  * Hitmap v1.4
- *
+ * 
  * This software is provided to enhance knowledge and encourage progress in the scientific
  * community. It should be used only for research and educational purposes. Any reproduction
- * or use for commercial purpose, public redistribution, in source or binary forms, with or
- * without modifications, is NOT ALLOWED without the previous authorization of the copyright
+ * or use for commercial purpose, public redistribution, in source or binary forms, with or 
+ * without modifications, is NOT ALLOWED without the previous authorization of the copyright 
  * holder. The origin of this software must not be misrepresented; you must not claim that you
  * wrote the original software. If you use this software for any purpose (e.g. publication),
  * a reference to the software package and the authors must be included.
- *
+ * 
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF 
  * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
  * THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
  * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
@@ -37,12 +37,12 @@
  * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Copyright (c) 2007-2026, Trasgo Group, Universidad de Valladolid.
+ * 
+ * Copyright (c) 2007-2024, Trasgo Group, Universidad de Valladolid.
  * All rights reserved.
- *
+ * 
  * More information on http://trasgo.infor.uva.es/
- *
+ * 
  * </license>
  */
 
@@ -169,24 +169,25 @@ typedef MPI_Aint HitAint;
  * Transform a C type into the equivalent HitType for a comm object
  * @hideinitializer
  */
-#define hit_comTranslateType(type) _Generic((type){0}, \
-	char: HIT_CHAR,                                    \
-	signed char: HIT_SIGNED_CHAR,                      \
-	unsigned char: HIT_UNSIGNED_CHAR,                  \
-	short: HIT_SHORT,                                  \
-	unsigned short: HIT_UNSIGNED_SHORT,                \
-	int: HIT_INT,                                      \
-	unsigned int: HIT_UNSIGNED_INT,                    \
-	long: HIT_LONG,                                    \
-	unsigned long: HIT_UNSIGNED_LONG,                  \
-	float: HIT_FLOAT,                                  \
-	double: HIT_DOUBLE,                                \
-	long double: HIT_LONG_DOUBLE,                      \
-	_Bool: HIT_BOOL,                                   \
-	float _Complex: HIT_COMPLEX,                       \
-	_Complex: HIT_DOUBLE_COMPLEX,                      \
-	long double _Complex: HIT_LONG_DOUBLE_COMPLEX)
-// No default value. Error when the type is unknown
+#define hit_comTranslateType( type )	_Generic( (type){0}, \
+		char: HIT_CHAR,				\
+		signed char: HIT_SIGNED_CHAR,		\
+		unsigned char: HIT_UNSIGNED_CHAR,	\
+		short: HIT_SHORT,			\
+		unsigned short: HIT_UNSIGNED_SHORT,	\
+		int: HIT_INT,				\
+		unsigned int: HIT_UNSIGNED_INT,		\
+		long: HIT_LONG,				\
+		unsigned long: HIT_UNSIGNED_LONG,	\
+		float: HIT_FLOAT,			\
+		double: HIT_DOUBLE,			\
+		long double: HIT_LONG_DOUBLE,		\
+		_Bool: HIT_BOOL,			\
+		float _Complex: HIT_COMPLEX,		\
+		_Complex: HIT_DOUBLE_COMPLEX,		\
+		long double _Complex: HIT_LONG_DOUBLE_COMPLEX	\
+		)
+		// No default value. Error when the type is unknown
 
 /** @} */
 
@@ -390,8 +391,7 @@ HitType hit_comTypeRec(const void *varP, HitType baseType);
  *
  * @param type The HitType to free.
  */
-#define hit_comFreeType(type) \
-	if (type != HIT_TYPE_NULL) MPI_Type_free(&type);
+#define hit_comFreeType(type) if (type != HIT_TYPE_NULL) MPI_Type_free(&type);
 
 /**
  * Creates a Hit datatype from a general set of datatypes, and block sizes.
@@ -424,10 +424,10 @@ HitType hit_comTypeRec(const void *varP, HitType baseType);
  * @param base_type Base type of the array
  * @param count Number of elements in the array
  */
-#define hit_comTypeArray(new_type, native_type, count)       \
-	{                                                        \
-		MPI_Type_contiguous((count), native_type, new_type); \
-		MPI_Type_commit(new_type);                           \
+#define hit_comTypeArray(new_type, native_type, count) \
+	{ \
+	MPI_Type_contiguous((count), native_type, new_type); \
+	MPI_Type_commit(new_type); \
 	}
 
 /* Hit COMMUNICATION STRUCTURE */
@@ -459,7 +459,7 @@ typedef struct {
 	MPI_Status  statusRecv;  /**< MPI status recv struct. */
 	HitOp       operation;   /**< MPI operation. */
 
-	int                     count;     /**< Count for all to all. */
+	int         count;       /**< Count for all to all. */
 	struct HitComAlltoallv *alltoallv; /**< Pointer to the struct to extend. */
 } HitCom;
 
@@ -525,7 +525,7 @@ extern HitCom HIT_COM_NULL;
 								MPI_REQUEST_NULL, MPI_REQUEST_NULL, { 0,0,0,0,0 }, \
 								{ 0,0,0,0,0 },0,0,NULL}
 */
-#define HIT_COM_NULL_STATIC {        \
+#define HIT_COM_NULL_STATIC {            \
 	.commType    = HIT_COMTYPE_NULL, \
 	.myself      = MPI_PROC_NULL,    \
 	.sendTo      = MPI_PROC_NULL,    \
@@ -890,11 +890,11 @@ void hit_comUpdateOriginData(HitCom *com, const void *tileP);
  *
  * @param lay The Layout
  */
-#define hit_comAllowDims(lay)                                 \
-	{                                                         \
-		int hit_i;                                            \
-		for (hit_i = 0; hit_i < hit_layNumDims(lay); hit_i++) \
-			hit_comAllowDim(&lay, hit_i);                     \
+#define hit_comAllowDims(lay) \
+	{ \
+	int hit_i; \
+	for (hit_i = 0; hit_i < hit_layNumDims(lay); hit_i++) \
+		hit_comAllowDim(&lay, hit_i); \
 	}
 
 /**
@@ -1352,7 +1352,7 @@ void hit_comFree(HitCom issue);
  *
  * @param ... Set of tags.
  */
-#define hit_comTagSet(...) enum { __VA_ARGS__ }
+#define hit_comTagSet( ... ) enum { __VA_ARGS__ }
 
 /** @name Activate/Wait for Communication*/
 /** @{ */
@@ -1436,11 +1436,11 @@ void hit_comDoSparseUpdate(HitCom *issue);
  *
  * @param comm \e HitCom communication
  */
-#define hit_comDoSendRecv(comm)    \
-	{                              \
-		hit_comStartSend(&(comm)); \
-		hit_comDoRecv(&(comm));    \
-		hit_comEndSend(&(comm));   \
+#define hit_comDoSendRecv(comm) \
+	{ \
+	hit_comStartSend(&(comm)); \
+	hit_comDoRecv(&(comm)); \
+	hit_comEndSend(&(comm)); \
 	}
 
 /* Hit MPI COMM DO A COMPLETE COMM. ISSUE */
@@ -1457,11 +1457,11 @@ void hit_comDo(HitCom *issue);
  * @hideinitializer
  * @param com A HitCom object or a constructor
  */
-#define hit_comDoOnce(com)        \
-	{                             \
-		HitCom __HIT_COM__ = com; \
-		hit_comDo(&__HIT_COM__);  \
-		hit_comFree(__HIT_COM__); \
+#define hit_comDoOnce(com) \
+	{ \
+	HitCom __HIT_COM__ = com; \
+	hit_comDo(&__HIT_COM__); \
+	hit_comFree(__HIT_COM__); \
 	}
 /** @} */
 
@@ -1473,10 +1473,10 @@ void hit_comDo(HitCom *issue);
  * @param file Code file.
  * @param numLine Line number.
  */
-#define hit_error_noinit(name)                                                                       \
-	{                                                                                                \
-		fprintf(stderr, "Hit Programmer, RunTime-Error: %s, in %s[%d]\n", name, __FILE__, __LINE__); \
-		exit(HIT_ERR_USER);                                                                          \
+#define hit_error_noinit(name) \
+	{ \
+	fprintf(stderr, "Hit Programmer, RunTime-Error: %s, in %s[%d]\n", name, __FILE__, __LINE__); \
+	exit(HIT_ERR_USER); \
 	}
 
 /** hit_error: Redefines hit_error to include MPI information.
@@ -1488,11 +1488,11 @@ void hit_comDo(HitCom *issue);
  * @param numLine Line number.
  */
 #undef hit_error
-#define hit_error(name, file, numLine)                                                                             \
-	{                                                                                                              \
-		fprintf(stderr, "Hit Programmer, RunTime-Error Rank(%d): %s, in %s[%d]\n", hit_Rank, name, file, numLine); \
-		MPI_Finalize();                                                                                            \
-		exit(HIT_ERR_USER);                                                                                        \
+#define hit_error(name, file, numLine) \
+	{ \
+	fprintf(stderr, "Hit Programmer, RunTime-Error Rank(%d): %s, in %s[%d]\n", hit_Rank, name, file, numLine); \
+	MPI_Finalize(); \
+	exit(HIT_ERR_USER); \
 	}
 
 /* Com Barrier, use the active communicator in layout */
@@ -1504,7 +1504,7 @@ void hit_comDo(HitCom *issue);
  * @param lay A HitLayout.
  * @author arturo Mar 2013
  */
-#define hit_comBarrier(lay) MPI_Barrier(lay.pTopology[0]->comm)
+#define hit_comBarrier( lay ) MPI_Barrier( lay.pTopology[0]->comm )
 // #define hit_comBarrier( lay ) MPI_Barrier( *(MPI_Comm *) lay.pTopology[0].lowLevel )
 
 /* REDUCE HIT OPERATIONS */

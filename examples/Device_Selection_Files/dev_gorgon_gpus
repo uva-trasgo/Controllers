@@ -1,9 +1,9 @@
 node gorgon
-	proc 0 0
-		cuda 0 4
-	proc 1 0
-		cuda 1 4
-	proc 2 0
-		cuda 2 4
-	proc 3 0
-		cuda 3 4
+	proc 0 numa = 0
+		cuda dev=0 kstreams=4
+	proc 1 numa = 0
+		cuda dev=1 kstreams=4
+	proc 2 numa = 0
+		cuda dev=2 kstreams=4
+	proc 3 numa = 0
+		cuda dev=3 kstreams=4

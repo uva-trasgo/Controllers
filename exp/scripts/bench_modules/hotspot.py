@@ -32,7 +32,7 @@ def run(conf: config.Config, output: TextIO, version: str, mode: str):
 		height = "4"
 		iter_per_cpy = "1"
 
-	affinity = str(proc.affinity)
+	affinity = str(proc.numa)
 	for policy in ["Sync", "Async"]:
 		if version == "ctrl":
 			hwloc_bind = ""

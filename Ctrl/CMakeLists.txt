@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 # Common files and include dirs
 set(CTRL_INCLUDE_DIRS ${CTRL_INCLUDE_DIRS} ${CMAKE_SOURCE_DIR}/Ctrl/inc)
-set(CTRL_SOURCES ${CTRL_SOURCES} src/Core/Ctrl_Core.c)
+set(CTRL_SOURCES ${CTRL_SOURCES} src/Core/Ctrl_Core.c src/Core/Ctrl_Config.c)
 
 # Support for Cpu
 if(SUPPORT_CPU)

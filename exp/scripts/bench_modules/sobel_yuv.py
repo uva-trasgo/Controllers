@@ -29,7 +29,7 @@ def run(conf: config.Config, output: TextIO, version: str, mode: str):
 	frames_list = [20, 30, 40, 50, 60, 70, 100]
 	baselines = ["FTF", "MTF", "MTM", "FTM"]
 
-	affinity = str(proc.affinity)
+	affinity = str(proc.numa)
 	for policy in ["Sync", "Async"]:
 		for base in baselines:
 			if version == "ctrl":

@@ -36,8 +36,11 @@
  * Represents an attachment of a tile to a single Controller object.
  */
 typedef struct Ctrl_Tile_Impl {
-	Ctrl_Type type;
-	int       device_status;
+	Ctrl_Type type;                          /**< Type of the ctrl this tile corresponds to */
+	int       device_status;                 /**< Status of this tile memory image on this device, can be CTRL_TILE_UNALLOC, CTRL_TILE_INVALID, CTRL_TILE_VALID */
+	int       device_memowner;               /**< Ownership status of the memory of this tile on this device */
+	HitInd    origAcumCard[HIT_MAXDIMS + 1]; /**< Original accumulated cardinalities of this tile on this device. Used to compute dimensional accesses */
+	HitInd    offset;                        /**< Offset with respect to the original allocated memory in elements, needed for subselections on OpenCL and FPGA */
 	union {
 		#ifdef _CTRL_ARCH_CPU_
 		Ctrl_Cpu_Tile *p_cpu;
@@ -58,7 +61,7 @@ typedef struct Ctrl_Tile_Impl {
 		#ifdef _CTRL_ARCH_FPGA_
 		Ctrl_FPGA_Tile *p_fpga;
 		#endif // _CTRL_ARCH_FPGA_
-	} tile;
+	} tile; /**<Specific tile fields for the corresponding backend */
 } Ctrl_Tile_Impl;
 
 // TODO @sergioalo pinned should probably use a different enum type
@@ -85,9 +88,60 @@ typedef struct Ctrl_Tile_List {
 	struct Ctrl_Tile_List *p_next;
 } Ctrl_Tile_List;
 
-#define CTRL_TILE_UNALLOC 0
-#define CTRL_TILE_INVALID 1
-#define CTRL_TILE_VALID   2
+// TODO this could now be a bool
+#define CTRL_TILE_INVALID 0
+#define CTRL_TILE_VALID   1
+
+/**
+ * Default fallback alignment for ctrl tiles, precedence order is: explicit, driver (eg. cudaMallocPitched), this.
+ * In bytes.
+ */
+#define CTRL_DEFAULT_TILE_ALIGNMENT 128
+
+/**
+ * Adjust \p p_origAcumCards to cardinalities to transform on memory owner, as in hitmap's \e hit_tileUpdateAcumCards
+ * but allowing padding in the last dimension
+ *
+ * @note 1D tiles ignore alignment.
+ *
+ * @param[out] p_origAcumCard Original accumulated cardinalities to update. Should have size \e HIT_MAX_DIMS+1
+ * @param dims Dimensions of the tile. (0< \p dims <= \e HIT_MAX_DIMS)
+ * @param p_card Cardinalities of the tile. Should have size \e HIT_MAX_DIMS
+ * @param alignment Alignment for the last dimension. In elements. 0 or 1 mean no alignment.
+ */
+static inline void Ctrl_Tile_UpdateOrigAcumCards(HitInd *p_origAcumCard, int dims, HitInd *p_card, size_t alignment) {
+	if (alignment == 0)
+		alignment = 1;
+
+	size_t pitch = ((p_card[dims - 1] + alignment - 1) / alignment) * alignment;
+
+	// ignore alignment on 1D tiles
+	if (dims == 1)
+		pitch = p_card[0];
+
+	p_origAcumCard[dims]     = 1;
+	p_origAcumCard[dims - 1] = pitch;
+	for (int i = dims - 2; i >= 0; i--) {
+		p_origAcumCard[i] = p_origAcumCard[i + 1] * p_card[i];
+	}
+}
+
+/**
+ * Get the offset of a tile with respect to its parent on a device
+ *
+ * @param p_tile Tile to get the offset of
+ * @param p_tile_data_impl Handle of \p p_tile on the device
+ * @return The offset of \p p_tile device image with respect to its parent
+ */
+static inline HitInd Ctrl_Tile_ParentDeviceOffset(HitTile *p_tile, Ctrl_Tile_Impl *p_tile_data_impl) {
+	// shape of p_tile in tile coordinates with respect to the parent
+	HitShape tile_shape = hit_tileShapeArray2Tile(p_tile->ref, p_tile->shape);
+	HitInd   offset     = 0;
+	for (int i = 0; i < hit_tileDims(*p_tile); i++) {
+		offset += hit_shapeSig(tile_shape, i).begin * p_tile_data_impl->origAcumCard[i + 1];
+	}
+	return offset;
+}
 
 ///@endcond
 #endif // _CTRL_CORE_TILE_H_

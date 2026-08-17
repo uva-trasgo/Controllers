@@ -1,4 +1,4 @@
 node gorgon
-	proc 0 5
-		hip 0
-		cpu 1 5-6 0
+	proc 0 numa = 5
+		hip dev=0
+		cuda threads=1 numa_range=5-6 memoves=0

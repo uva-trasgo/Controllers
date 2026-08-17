@@ -22,6 +22,7 @@
 #include "Core/Ctrl_TaskQueue.h"
 #include "Core/Ctrl_TexDesc.h"
 #include "Core/Ctrl_Type.h"
+#include "Core/Ctrl_Config.h"
 
 #include "Kernel/Ctrl_KernelArgs.h"
 
@@ -515,6 +516,12 @@ int Ctrl_GetNCtrls();
 Ctrl_Info Ctrl_GetInfo(Ctrl *p_ctrl);
 
 /**
+ * Return the weights for all active processes found in the device selection configuration file
+ * @note This function can only be called after ParseConfig
+ */
+HitWeights Ctrl_GetWeights();
+
+/**
  * @brief Return the duration of the last kernel or memory transfer operation performed over \p tile by ctrl \p ctrl.
  *
  * This performs an implicit wait of \p tile to make sure the last task enqueued has finished.
@@ -572,18 +579,18 @@ void Ctrl_LaunchHostTask(Ctrl_Task task);
 int Ctrl_Thread_Init();
 
 /**
- * Parse device selection configuration file and create all ctrls specified in it.
+ * Initialize weights array. Part of device config parse.
  *
- * @param file path to config file.
- * @note This function can only be called after Ctrl_Init and before Ctrl_Finalize
+ * @param com_weight weight of this process (default 1)
  */
-void Ctrl_ParseConfig(const char *file);
+void Ctrl_InitWeights(float com_weight);
 
 /**
- * Return the weights for all active processes found in the device selection configuration file
- * @note This function can only be called after ParseConfig
+ * Init Controllers core
+ *
+ * @param cfg Config information
  */
-HitWeights Ctrl_ConfigWeights();
+void Ctrl_InitCore(Ctrl_Config cfg);
 
 /**
  * Function to choose the best implementation for a given kernel.

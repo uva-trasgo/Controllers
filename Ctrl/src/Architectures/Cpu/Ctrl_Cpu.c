@@ -198,12 +198,22 @@ void Ctrl_Cpu_EvalTaskSetDependanceMode(Ctrl_Cpu *p_ctrl, Ctrl_Task *p_task);
  ******** CPU Controller functions **********
  ********************************************/
 
-void Ctrl_Cpu_Create(Ctrl_Cpu *p_ctrl, Ctrl_Policy policy, char *args) {
-	p_ctrl->policy    = policy;
-	p_ctrl->n_cores   = atoi(strtok(args, " "));
-	int numa_begin    = atoi(strtok(NULL, "-"));
-	int numa_end      = atoi(strtok(NULL, " "));
-	p_ctrl->mem_moves = atoi(strtok(NULL, ""));
+void Ctrl_Cpu_Create(Ctrl_Cpu *p_ctrl, Ctrl_Policy policy, Ctrl_Config_Dev dev) {
+	p_ctrl->policy = policy;
+
+	p_ctrl->n_cores = atoi(Ctrl_Config_GetVal(dev, "threads", NULL));
+	if (p_ctrl->n_cores <= 0) {
+		fprintf(stderr, "[Ctrl_Cpu] Warning: invalid number of threads requested: %d; defaulting to 1.", p_ctrl->n_cores);
+		fflush(stderr);
+		p_ctrl->n_cores = 1;
+	}
+
+	// NOTE strtok can't be used for numa_range because literal strings are immutable
+	char *numa_str    = Ctrl_Config_GetVal(dev, "numa_range", "0-0");
+	int   numa_begin  = atoi(numa_str);
+	int   numa_end    = atoi(strchr(numa_str, '-') + 1);
+	p_ctrl->mem_moves = atoi(Ctrl_Config_GetVal(dev, "memmoves", "0"));
+	p_ctrl->alignment = atoi(Ctrl_Config_GetVal(dev, "align", "0"));
 
 	p_ctrl->p_tile_list_head = NULL;
 	p_ctrl->p_tile_list_tail = NULL;
@@ -312,9 +322,10 @@ void Ctrl_Cpu_ThreadInit(Ctrl_Cpu *p_ctrl, hwloc_topology_t topo) {
 }
 
 void Ctrl_Cpu_GetInfo(Ctrl_Cpu *p_ctrl, Ctrl_Info *p_info) {
-	p_info->type          = "CPU";
-	p_info->n_threads     = p_ctrl->n_cores;
-	p_info->mem_transfers = p_ctrl->mem_moves;
+	p_info->type            = "CPU";
+	p_info->n_threads       = p_ctrl->n_cores;
+	p_info->mem_transfers   = p_ctrl->mem_moves;
+	p_info->n_kernel_queues = 1;
 
 	int n_nodes = hwloc_get_nbobjs_inside_cpuset_by_type(p_ctrl->topo, p_ctrl->device_cpuset, HWLOC_OBJ_NUMANODE);
 
@@ -376,8 +387,8 @@ void *Ctrl_Cpu_GetDevPtr(Ctrl_Cpu *p_ctrl, HitTile *p_tile) {
 	// tile not attached
 	if (p_tile_data_cpu == NULL) return NULL;
 	// tile not allocated on device
-	if (p_ctrl->mem_moves && p_tile_data_impl->device_status == CTRL_TILE_UNALLOC) return NULL;
-	if (!p_ctrl->mem_moves && p_tile_data->host_status == CTRL_TILE_UNALLOC) return NULL;
+	if (p_ctrl->mem_moves && p_tile_data_impl->device_memowner == HIT_MS_NOMEM) return NULL;
+	if (!p_ctrl->mem_moves && p_tile->memStatus == HIT_MS_NOMEM) return NULL;
 
 	return p_tile_data_cpu->p_device_data;
 }
@@ -390,9 +401,12 @@ void Ctrl_Cpu_InitTile(Ctrl_Cpu *p_ctrl, Ctrl_Task *p_task) {
 	Ctrl_Tile *p_tile_data = (Ctrl_Tile *)(p_task->p_tile->ext);
 	p_tile_data->valid_impls++;
 
-	Ctrl_Cpu_Tile *p_tile_data_impl_cpu                = (Ctrl_Cpu_Tile *)malloc(sizeof(Ctrl_Cpu_Tile));
-	p_tile_data->p_impls[p_ctrl->global_id].type       = CTRL_TYPE_CPU;
-	p_tile_data->p_impls[p_ctrl->global_id].tile.p_cpu = p_tile_data_impl_cpu;
+	Ctrl_Tile_Impl *p_tile_data_impl     = &p_tile_data->p_impls[p_ctrl->global_id];
+	Ctrl_Cpu_Tile  *p_tile_data_impl_cpu = (Ctrl_Cpu_Tile *)malloc(sizeof(Ctrl_Cpu_Tile));
+	p_tile_data_impl->type               = CTRL_TYPE_CPU;
+	p_tile_data_impl->tile.p_cpu         = p_tile_data_impl_cpu;
+	p_tile_data_impl->device_status      = CTRL_TILE_INVALID;
+	p_tile_data_impl->device_memowner    = HIT_MS_NOMEM;
 
 	p_tile_data_impl_cpu->p_ctrl = p_ctrl;
 
@@ -550,54 +564,57 @@ void Ctrl_Cpu_StreamConsume(Ctrl_TaskQueue *p_stream, Ctrl_Cpu *p_ctrl) {
 #define CTRL_CPU_MOVEDTH 1
 
 void Ctrl_Cpu_ExecMemcpy(HitTile *p_tile, Ctrl_Cpu *p_ctrl, int direction) {
-	Ctrl_Tile     *p_tile_data     = (Ctrl_Tile *)p_tile->ext;
-	Ctrl_Cpu_Tile *p_tile_data_cpu = p_tile_data->p_impls[p_ctrl->global_id].tile.p_cpu;
+	Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)p_tile->ext;
+	Ctrl_Tile_Impl *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
+	Ctrl_Cpu_Tile  *p_tile_data_cpu  = p_tile_data_impl->tile.p_cpu;
 
-	HitTile flat_tile = *p_tile;
-	hit_tileFlattenDims(&flat_tile);
-
-	void *src, *dst;
+	void   *p_src, *p_dst;
+	HitInd *p_src_origAcumCard, *p_dst_origAcumCard;
 	switch (direction) {
 		case CTRL_CPU_MOVEHTD:
-			src = flat_tile.data;
-			dst = p_tile_data_cpu->p_device_data;
+			p_src              = p_tile->data;
+			p_src_origAcumCard = p_tile->origAcumCard;
+			p_dst              = p_tile_data_cpu->p_device_data;
+			p_dst_origAcumCard = p_tile_data_impl->origAcumCard;
 			break;
 		case CTRL_CPU_MOVEDTH:
-			dst = flat_tile.data;
-			src = p_tile_data_cpu->p_device_data;
+			p_dst              = p_tile->data;
+			p_dst_origAcumCard = p_tile->origAcumCard;
+			p_src              = p_tile_data_cpu->p_device_data;
+			p_src_origAcumCard = p_tile_data_impl->origAcumCard;
 			break;
 		default:
 			fprintf(stderr, "[Ctrl_Cpu] Internal error: invalid memcpy direction %d\n", direction);
 			exit(EXIT_FAILURE);
 	}
 
-	switch (hit_tileDims(flat_tile)) {
+	switch (hit_tileDims(*p_tile)) {
 		case 1:
-			memcpy(dst, src, (size_t)flat_tile.acumCard * flat_tile.baseExtent);
+			memcpy(p_dst, p_src, (size_t)p_tile->acumCard * p_tile->baseExtent);
 			break;
 		case 2:
-			for (HitInd i = 0; i < flat_tile.card[0]; i++)
-				memcpy((void *)((char *)dst + flat_tile.baseExtent * i * flat_tile.origAcumCard[1]),
-					   (void *)((char *)src + flat_tile.baseExtent * i * flat_tile.origAcumCard[1]),
-					   (size_t)flat_tile.card[1] * flat_tile.baseExtent);
+			for (HitInd i = 0; i < p_tile->card[0]; i++)
+				memcpy((void *)((char *)p_dst + p_tile->baseExtent * i * p_dst_origAcumCard[1]),
+					   (void *)((char *)p_src + p_tile->baseExtent * i * p_src_origAcumCard[1]),
+					   (size_t)p_tile->card[1] * p_tile->baseExtent);
 			break;
 		case 3:
-			for (HitInd i = 0; i < flat_tile.card[0]; i++)
-				for (HitInd j = 0; j < flat_tile.card[1]; j++)
-					memcpy((void *)((char *)dst + flat_tile.baseExtent * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2])),
-						   (void *)((char *)src + flat_tile.baseExtent * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2])),
-						   (size_t)flat_tile.card[2] * flat_tile.baseExtent);
+			for (HitInd i = 0; i < p_tile->card[0]; i++)
+				for (HitInd j = 0; j < p_tile->card[1]; j++)
+					memcpy((void *)((char *)p_dst + p_tile->baseExtent * (i * p_dst_origAcumCard[1] + j * p_dst_origAcumCard[2])),
+						   (void *)((char *)p_src + p_tile->baseExtent * (i * p_src_origAcumCard[1] + j * p_src_origAcumCard[2])),
+						   (size_t)p_tile->card[2] * p_tile->baseExtent);
 			break;
 		case 4:
-			for (HitInd i = 0; i < flat_tile.card[0]; i++)
-				for (HitInd j = 0; j < flat_tile.card[1]; j++)
-					for (HitInd k = 0; k < flat_tile.card[2]; k++)
-						memcpy((void *)((char *)dst + flat_tile.baseExtent * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2] + k * flat_tile.origAcumCard[3])),
-							   (void *)((char *)src + flat_tile.baseExtent * (i * flat_tile.origAcumCard[1] + j * flat_tile.origAcumCard[2] + k * flat_tile.origAcumCard[3])),
-							   (size_t)flat_tile.card[3] * flat_tile.baseExtent);
+			for (HitInd i = 0; i < p_tile->card[0]; i++)
+				for (HitInd j = 0; j < p_tile->card[1]; j++)
+					for (HitInd k = 0; k < p_tile->card[2]; k++)
+						memcpy((void *)((char *)p_dst + p_tile->baseExtent * (i * p_dst_origAcumCard[1] + j * p_dst_origAcumCard[2] + k * p_dst_origAcumCard[3])),
+							   (void *)((char *)p_src + p_tile->baseExtent * (i * p_src_origAcumCard[1] + j * p_src_origAcumCard[2] + k * p_src_origAcumCard[3])),
+							   (size_t)p_tile->card[3] * p_tile->baseExtent);
 			break;
 		default:
-			fprintf(stderr, "[Ctrl_Cpu] Error: Number of dimensions not supported for non-owner tile in mem move: %d\n", flat_tile.shape.info.sig.numDims);
+			fprintf(stderr, "[Ctrl_Cpu] Error: Number of dimensions not supported in mem move: %d\n", hit_tileDims(*p_tile));
 			exit(EXIT_FAILURE);
 	}
 }
@@ -686,7 +703,7 @@ void Ctrl_Cpu_EvalTaskKernelLaunch(Ctrl_Cpu *p_ctrl, Ctrl_Task *p_task) {
 			}
 
 			if (p_ctrl->mem_moves) {
-				if (p_tile_data_impl->device_status == CTRL_TILE_UNALLOC) {
+				if (p_tile_data_impl->device_memowner == HIT_MS_NOMEM) {
 					fprintf(stderr, "[Ctrl_Cpu] Internal Error: Launching kernel %s with memory movements active, with a tile with no device memory as parameter %d (starting at 0)\n", p_task->p_func_name, i);
 					fflush(stderr);
 					exit(EXIT_FAILURE);
@@ -694,7 +711,7 @@ void Ctrl_Cpu_EvalTaskKernelLaunch(Ctrl_Cpu *p_ctrl, Ctrl_Task *p_task) {
 
 				// if tile's role is IN or IO, is not updated on device and host has memory allocated transfer it
 				if (p_task->p_roles[i] != KERNEL_OUT && p_tile_data_impl->device_status == CTRL_TILE_INVALID &&
-					p_tile_data->host_status != CTRL_TILE_UNALLOC && p_ctrl->dependance_mode == CTRL_MODE_IMPLICIT) {
+					p_tile->memStatus != HIT_MS_NOMEM && p_ctrl->dependance_mode == CTRL_MODE_IMPLICIT) {
 					if (p_tile_data->host_status == CTRL_TILE_INVALID) {
 						for (int j = 0; j < Ctrl_GetNCtrls(); j++) {
 							Ctrl_Tile_Impl *p_tile_impl_j = &p_tile_data->p_impls[j];
@@ -749,17 +766,17 @@ void Ctrl_Cpu_EvalTaskKernelLaunch(Ctrl_Cpu *p_ctrl, Ctrl_Task *p_task) {
 					fflush(stderr);
 				}
 
-				if (p_tile_data->host_status != CTRL_TILE_UNALLOC && !(p_tile_data_impl->device_status == CTRL_TILE_VALID && p_tile_data->host_status == CTRL_TILE_INVALID)) {
+				if (p_tile->memStatus != HIT_MS_NOMEM && !(p_tile_data_impl->device_status == CTRL_TILE_VALID && p_tile_data->host_status == CTRL_TILE_INVALID)) {
 					Ctrl_GenericEvent_StreamWait(p_tile_data_cpu->last_htd_event, p_ctrl->p_kernel_stream);
 				}
 
 				if (p_task->p_roles[i] != KERNEL_IN) {
-					if (p_tile_data->host_status != CTRL_TILE_UNALLOC && !(p_tile_data_impl->device_status == CTRL_TILE_VALID && p_tile_data->host_status == CTRL_TILE_INVALID)) {
+					if (p_tile->memStatus != HIT_MS_NOMEM && !(p_tile_data_impl->device_status == CTRL_TILE_VALID && p_tile_data->host_status == CTRL_TILE_INVALID)) {
 						Ctrl_GenericEvent_StreamWait(p_tile_data_cpu->last_dth_event, p_ctrl->p_kernel_stream);
 					}
 				}
 			} else {
-				if (p_tile_data->host_status == CTRL_TILE_UNALLOC) {
+				if (p_tile->memStatus == HIT_MS_NOMEM) {
 					fprintf(stderr, "[Ctrl_Cpu] Internal Error: Launching kernel %s with a tile with no memory allocated as parameter %d (starting at 0)\n", p_task->p_func_name, i);
 					fflush(stderr);
 					exit(EXIT_FAILURE);
@@ -767,9 +784,8 @@ void Ctrl_Cpu_EvalTaskKernelLaunch(Ctrl_Cpu *p_ctrl, Ctrl_Task *p_task) {
 
 				for (int j = 0; j < Ctrl_GetNCtrls(); j++) {
 					Ctrl_Tile_Impl *p_tile_impl_j = &p_tile_data->p_impls[j];
-					if (p_tile_data_impl->type == CTRL_TYPE_NULL) {
+					if (p_tile_data_impl->type == CTRL_TYPE_NULL)
 						continue;
-					}
 
 					if (p_task->p_roles[i] != KERNEL_OUT && p_tile_data->host_status == CTRL_TILE_INVALID && p_tile_impl_j->device_status == CTRL_TILE_VALID) {
 						// TODO @sergioalo if tiles had ptr to associated abstract ctrl normal movefrom could be used and this switch removed
@@ -904,38 +920,53 @@ void Ctrl_Cpu_EvalTaskAllocTile(Ctrl_Cpu *p_ctrl, Ctrl_Task *p_task) {
 
 	Ctrl_Cpu_Tile *p_tile_data_cpu = p_tile_data_impl->tile.p_cpu;
 
-	if ((p_task->flags & CTRL_MEM_ALLOC_HOST || !(p_task->flags & CTRL_MEM_ALLOC_DEV)) && p_tile_data->host_status == CTRL_TILE_UNALLOC) {
-		// Allocate memory for the host image of the data inside the tile, equivalent to hit_tileAlloc(p_tile);
-		p_tile->data             = (void *)malloc((size_t)p_tile->acumCard * p_tile->baseExtent);
-		p_tile->memPtr           = p_tile->data;
-		p_tile_data->host_status = CTRL_TILE_INVALID;
-		p_tile_data->pinned      = CTRL_TYPE_NULL;
-	}
+	bool req_hmem = p_task->flags & CTRL_MEM_ALLOC_HOST || !(p_task->flags & CTRL_MEM_ALLOC_DEV);
+	bool req_dmem = p_task->flags & CTRL_MEM_ALLOC_DEV || !(p_task->flags & CTRL_MEM_ALLOC_HOST);
 
 	// make device memory point to already allocated host memory
-	if (!p_ctrl->mem_moves && p_tile_data->host_status != CTRL_TILE_UNALLOC) {
+	if (!p_ctrl->mem_moves && p_tile->memStatus == HIT_MS_OWNER) {
 		p_tile_data_cpu->p_device_data = p_tile->data;
-		return;
+		for (int i = 0; i < HIT_MAXDIMS + 1; i++) {
+			p_tile_data_impl->origAcumCard[i] = p_tile->origAcumCard[i];
+		}
 	}
 
-	if ((p_ctrl->mem_moves && (p_task->flags & CTRL_MEM_ALLOC_DEV || !(p_task->flags & CTRL_MEM_ALLOC_HOST))) ||
-		(!p_ctrl->mem_moves && (p_task->flags & CTRL_MEM_ALLOC_DEV) && !(p_task->flags & CTRL_MEM_ALLOC_HOST) && p_tile_data->host_status == CTRL_TILE_UNALLOC)) {
+	if ((p_ctrl->mem_moves && req_dmem && p_tile_data_impl->device_memowner != HIT_MS_OWNER) ||
+		(!p_ctrl->mem_moves && req_dmem && !req_hmem && p_tile->memStatus != HIT_MS_OWNER)) {
 
-		if (p_tile_data_impl->device_status != CTRL_TILE_UNALLOC) {
-			fprintf(stderr, "[Ctrl_Cpu] Warning: Device memory already allocated for this tile, ignoring this call.\n");
-			fflush(stderr);
-			return;
+		int dims = hit_tileDims(*p_tile);
+		// Allocate device memory
+		if (p_task->flags & CTRL_MEM_ALIGNED && hit_tileDims(*p_tile) > 1) {
+			size_t alignment = p_ctrl->alignment == 0 ? CTRL_DEFAULT_TILE_ALIGNMENT : p_ctrl->alignment;
+
+			// reject algnments not divisible by base extent
+			if (alignment % p_tile->baseExtent != 0) {
+				fprintf(stderr, "[Ctrl_Cuda] Error: tile alignment %lu is not divisible by type size %lu.\n", alignment, p_tile->baseExtent);
+				exit(EXIT_FAILURE);
+			}
+
+			Ctrl_Tile_UpdateOrigAcumCards(p_tile_data_impl->origAcumCard, dims, p_tile->card, alignment / p_tile->baseExtent);
+			p_tile_data_cpu->p_device_data = (void *)hwloc_alloc_membind(p_ctrl->topo, p_tile_data_impl->origAcumCard[0] * p_tile->baseExtent, p_ctrl->device_cpuset, HWLOC_MEMBIND_BIND, 0);
+
+		} else {
+			p_tile_data_cpu->p_device_data = (void *)hwloc_alloc_membind(p_ctrl->topo, (size_t)p_tile->acumCard * p_tile->baseExtent, p_ctrl->device_cpuset, HWLOC_MEMBIND_BIND, 0);
+			Ctrl_Tile_UpdateOrigAcumCards(p_tile_data_impl->origAcumCard, dims, p_tile->card, 0);
 		}
-		p_tile_data_cpu->p_device_data = (void *)hwloc_alloc_membind(p_ctrl->topo, (size_t)p_tile->acumCard * p_tile->baseExtent, p_ctrl->device_cpuset, HWLOC_MEMBIND_BIND, 0);
 
 		if (p_ctrl->mem_moves) {
-			p_tile_data_impl->device_status = CTRL_TILE_INVALID;
+			p_tile_data_impl->device_status   = CTRL_TILE_INVALID;
+			p_tile_data_impl->device_memowner = HIT_MS_OWNER;
 		} else {
 			p_tile_data->host_status = CTRL_TILE_INVALID;
 			p_tile_data->pinned      = CTRL_TYPE_CPU;
 			p_tile->data             = p_tile_data_cpu->p_device_data;
 			p_tile->memPtr           = p_tile->data;
+			p_tile->memStatus        = HIT_MS_OWNER;
+			for (int i = 0; i < HIT_MAXDIMS + 1; i++) {
+				p_tile->origAcumCard[i] = p_tile_data_impl->origAcumCard[i];
+			}
 		}
+		p_tile_data_impl->offset = 0;
 	}
 }
 
@@ -948,14 +979,24 @@ void Ctrl_Cpu_EvalTaskSelectTile(Ctrl_Cpu *p_ctrl, Ctrl_Task *p_task) {
 	Ctrl_Tile      *p_tile_data        = (Ctrl_Tile *)(p_tile->ext);
 	Ctrl_Tile_Impl *p_tile_data_impl   = &p_tile_data->p_impls[p_ctrl->global_id];
 	Ctrl_Cpu_Tile  *p_tile_data_cpu    = p_tile_data_impl->tile.p_cpu;
-	Ctrl_Tile      *p_parent_data      = ((Ctrl_Tile *)(p_tile->ref->ext));
+	Ctrl_Tile      *p_parent_data      = (Ctrl_Tile *)(p_parent->ext);
 	Ctrl_Tile_Impl *p_parent_data_impl = &p_parent_data->p_impls[p_ctrl->global_id];
 	Ctrl_Cpu_Tile  *p_parent_data_cpu  = p_parent_data_impl->tile.p_cpu;
 
-	if (p_tile->memStatus == HIT_MS_NOT_OWNER) {
-		p_tile_data_impl->device_status = p_parent_data_impl->device_status;
+	if ((p_ctrl->mem_moves && p_parent_data_impl->device_memowner != HIT_MS_NOMEM) || (!p_ctrl->mem_moves && p_parent->memStatus != HIT_MS_NOMEM)) {
+		if (p_ctrl->mem_moves) {
+			p_tile_data_impl->device_status   = p_parent_data_impl->device_status;
+			p_tile_data_impl->device_memowner = HIT_MS_NOT_OWNER;
+		}
 
-		p_tile_data_cpu->p_device_data = (char *)p_parent_data_cpu->p_device_data + ((char *)p_tile->data - (char *)p_parent->data);
+		for (int i = 0; i < HIT_MAXDIMS + 1; i++) {
+			p_tile_data_impl->origAcumCard[i] = p_parent_data_impl->origAcumCard[i];
+		}
+
+		HitInd offset = Ctrl_Tile_ParentDeviceOffset(p_tile, p_tile_data_impl);
+
+		p_tile_data_cpu->p_device_data = (char *)p_parent_data_cpu->p_device_data + (offset * p_tile->baseExtent);
+		p_tile_data_impl->offset       = offset + p_parent_data_impl->offset;
 	}
 }
 
@@ -1003,11 +1044,9 @@ void Ctrl_Cpu_EvalTaskFreeTile(Ctrl_Cpu *p_ctrl, Ctrl_Task *p_task) {
 	// Free node
 	free(p_tile_data_cpu->p_tile_elem);
 
-	if (p_tile->memStatus == HIT_MS_OWNER) {
-		// Free device image of the tile
-		if (p_tile_data_impl->device_status != CTRL_TILE_UNALLOC) {
-			hwloc_free(p_ctrl->topo, p_tile_data_cpu->p_device_data, (size_t)p_tile->acumCard * p_tile->baseExtent);
-		}
+	// Free device image of the tile
+	if (p_tile_data_impl->device_memowner == HIT_MS_OWNER) {
+		hwloc_free(p_ctrl->topo, p_tile_data_cpu->p_device_data, (size_t)p_tile->acumCard * p_tile->baseExtent);
 	}
 
 	// Clear tile fields
@@ -1031,13 +1070,13 @@ void Ctrl_Cpu_EvalTaskMoveTo(Ctrl_Cpu *p_ctrl, Ctrl_Task *p_task) {
 
 	// If transfers are active and tile is not updated perform the transfer
 	if (p_ctrl->mem_moves) {
-		if (p_tile_data->host_status == CTRL_TILE_UNALLOC) {
+		if (p_tile->memStatus == HIT_MS_NOMEM) {
 			fprintf(stderr, "[Ctrl_Cpu] Internal Error: Tryinng to move tile from host to device but host memory was not allocated\n");
 			fflush(stderr);
 			exit(EXIT_FAILURE);
 		}
 
-		if (p_tile_data_impl->device_status == CTRL_TILE_UNALLOC) {
+		if (p_tile_data_impl->device_memowner == HIT_MS_NOMEM) {
 			fprintf(stderr, "[Ctrl_Cpu] Internal Error: Tryinng to move tile from host to device but device memory was not allocated\n");
 			fflush(stderr);
 			exit(EXIT_FAILURE);
@@ -1064,13 +1103,13 @@ void Ctrl_Cpu_EvalTaskMoveFrom(Ctrl_Cpu *p_ctrl, Ctrl_Task *p_task) {
 
 	// If transfers are active and tile is not updated perform the transfer
 	if (p_ctrl->mem_moves) {
-		if (p_tile_data->host_status == CTRL_TILE_UNALLOC) {
+		if (p_tile->memStatus == HIT_MS_NOMEM) {
 			fprintf(stderr, "[Ctrl_Cpu] Internal Error: Trying to move tile from device to host but host memory was not allocated\n");
 			fflush(stderr);
 			exit(EXIT_FAILURE);
 		}
 
-		if (p_tile_data_impl->device_status == CTRL_TILE_UNALLOC) {
+		if (p_tile_data_impl->device_memowner == HIT_MS_NOMEM) {
 			fprintf(stderr, "[Ctrl_Cpu] Internal Error: Trying to move tile from device to host but device memory was not allocated\n");
 			fflush(stderr);
 			exit(EXIT_FAILURE);

@@ -21,7 +21,6 @@ typedef struct Ctrl_Hip_Tile {
 	struct Ctrl_Hip       *p_ctrl;                       /**< Pointer to the ctrl to which this tile is associated */
 	struct Ctrl_Tile_List *p_tile_elem;                  /**< Node of the linked list containing all tiles of the ctrl to which this tile is associated */
 	void                  *p_device_data;                /**< Pointer to device image of this tile */
-	size_t                 pitch;                        /**< Pitch of the device image in bytes. Useful when using texture memory. */
 	hipTextureObject_t     texture;                      /**< For texture memory allocations. */
 	Ctrl_GenericEvent      host_last_kernel_read_event;  /**< Host event to sincronyze tasks, represents last write operation on device*/
 	Ctrl_GenericEvent      host_last_kernel_write_event; /**< Host event to sincronyze tasks, represents last read operation on device*/

@@ -24,6 +24,7 @@
 #include "Core/Ctrl_TexDesc.h"
 #include "Core/Ctrl_Tile.h"
 #include "Core/Ctrl_Type.h"
+#include "Core/Ctrl_Config.h"
 
 #include "Kernel/Ctrl_ImplType.h"
 #include "Kernel/Ctrl_KernelProto.h"
@@ -72,6 +73,7 @@ typedef struct Ctrl_Cpu {
 	Ctrl_TaskQueue        *p_moveFrom_stream; /**< CPU stream for host to device memory transfers */
 	Ctrl_GenericEvent      seq_event;         /**< Event used for sync policy */
 	int                    dependance_mode;   /**< Dependance mode to be used by this ctrl */
+	int                    alignment;         /**< Alignment in bytes to use when allocating aligned tiles on this device */
 } Ctrl_Cpu;
 
 #ifdef __cplusplus
@@ -82,15 +84,9 @@ extern "C" {
  *
  * @param p_ctrl Controller to be created.
  * @param policy Policy for this ctrl to be used.
- * @param args Space separated string containing the params for this ctrl. Contains:
- * 		- n_cores: Number of cores to be used.
- * 		- numa_begin: Start of the range of numa nodes to be used as device. Inclusive.
- * 		- numa_end: End of the range of numa nodes to be used as device. Not inclusive.
- * 		- mem_moves: Flag to indicate if copies between device and host should be made or accesses should be zero copies.
- *
- * If range of numa nodes is empty or invalid (numa_start > numa_end), the entire machine is used.
+ * @param dev Configuration for this ctrl. @see DEVICE_SELECTION.md for more information.
  */
-void Ctrl_Cpu_Create(Ctrl_Cpu *p_ctrl, Ctrl_Policy policy, char *args);
+void Ctrl_Cpu_Create(Ctrl_Cpu *p_ctrl, Ctrl_Policy policy, Ctrl_Config_Dev dev);
 
 /**
  * Evaluate a task on a CPU ctrl.

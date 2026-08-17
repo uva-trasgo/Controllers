@@ -497,16 +497,17 @@ void Ctrl_FPGA_ExtractKernels(Ctrl_FPGA *p_ctrl, char *kernel_files[CTRL_FPGA_MA
 	}
 }
 
-void Ctrl_FPGA_Create(Ctrl_FPGA *p_ctrl, Ctrl_Policy policy, char *args) {
+void Ctrl_FPGA_Create(Ctrl_FPGA *p_ctrl, Ctrl_Policy policy, Ctrl_Config_Dev dev) {
 	cl_int err;
 
-	p_ctrl->policy           = policy;
-	p_ctrl->type_id          = next_fpga_id++;
-	int   platform           = atoi(strtok(args, " ")); // Platform used to choose between available FPGAs, or emu.
-	int   device             = atoi(strtok(NULL, " "));
-	char *streams            = strtok(NULL, " ");
-	p_ctrl->n_kernel_streams = streams == NULL ? 1 : atoi(streams);
+	p_ctrl->policy    = policy;
+	p_ctrl->type_id   = next_fpga_id++;
+	p_ctrl->alignment = atoi(Ctrl_Config_GetVal(dev, "align", "0"));
 
+	int platform = atoi(Ctrl_Config_GetVal(dev, "platform", NULL));
+	int device   = atoi(Ctrl_Config_GetVal(dev, "dev", NULL));
+
+	p_ctrl->n_kernel_streams = atoi(Ctrl_Config_GetVal(dev, "kstreams", "1"));
 	if (p_ctrl->n_kernel_streams <= 0) {
 		p_ctrl->n_kernel_streams = 1;
 		fprintf(stderr, "[Ctrl_FPGA] Warning: Tried to create FPGA Ctrl with less than one queue; defaulting to 1.\n");
@@ -757,9 +758,12 @@ void Ctrl_FPGA_InitTile(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 	Ctrl_Tile *p_tile_data = (Ctrl_Tile *)(p_task->p_tile->ext);
 	p_tile_data->valid_impls++;
 
-	Ctrl_FPGA_Tile *p_tile_data_impl_fpga               = (Ctrl_FPGA_Tile *)malloc(sizeof(Ctrl_FPGA_Tile));
-	p_tile_data->p_impls[p_ctrl->global_id].type        = CTRL_TYPE_FPGA;
-	p_tile_data->p_impls[p_ctrl->global_id].tile.p_fpga = p_tile_data_impl_fpga;
+	Ctrl_Tile_Impl *p_tile_data_impl      = &p_tile_data->p_impls[p_ctrl->global_id];
+	Ctrl_FPGA_Tile *p_tile_data_impl_fpga = (Ctrl_FPGA_Tile *)malloc(sizeof(Ctrl_FPGA_Tile));
+	p_tile_data_impl->type                = CTRL_TYPE_FPGA;
+	p_tile_data_impl->tile.p_opencl       = p_tile_data_impl_fpga;
+	p_tile_data_impl->device_status       = CTRL_TILE_INVALID;
+	p_tile_data_impl->device_memowner     = HIT_MS_NOMEM;
 
 	p_tile_data_impl_fpga->p_ctrl = p_ctrl;
 
@@ -822,34 +826,22 @@ void Ctrl_FPGA_WaitTileInner(Ctrl_FPGA *p_ctrl, Ctrl_Tile *p_tile_data) {
 
 /* Macro to define MoveTo and MoveFrom logic */
 #define OpenCL_Move(type)                                                                              \
-	HitTile flat_tile = *p_tile;                                                                       \
-	hit_tileFlattenDims(&flat_tile);                                                                   \
-	HitTile *p_parent = flat_tile.ref;                                                                 \
-	if (flat_tile.memStatus == HIT_MS_NOT_OWNER)                                                       \
-		while (p_parent->memStatus == HIT_MS_NOT_OWNER)                                                \
-			p_parent = p_parent->ref;                                                                  \
-	else                                                                                               \
-		p_parent = &flat_tile;                                                                         \
-	size_t parent_offset[HIT_MAXDIMS]; /* ijkl */                                                      \
-	for (int i = 0; i < HIT_MAXDIMS; i++)                                                              \
-		parent_offset[i] = hit_tileDimBegin(flat_tile, i) - hit_tileDimBegin(*p_parent, i);            \
 	size_t zero_offset[3] = {0};       /* xyz */                                                       \
-	size_t dev_offset[3]  = {0};       /* xyz */                                                       \
 	size_t size[3]        = {1, 1, 1}; /* xyz */                                                       \
-	int    transfer_dims  = ((hit_tileDims(flat_tile) < 3) ? hit_tileDims(flat_tile) : 3);             \
+	size_t dev_offset[3]  = {0};       /* xyz */                                                       \
+	dev_offset[0]         = p_tile_data_impl->offset * p_tile->baseExtent;                             \
+	int transfer_dims     = ((hit_tileDims(*p_tile) < 3) ? hit_tileDims(*p_tile) : 3);                 \
 	for (int i = 0; i < transfer_dims; i++) {                                                          \
-		dev_offset[i] = parent_offset[hit_tileDims(flat_tile) - 1 - i];                                \
-		size[i]       = flat_tile.card[hit_tileDims(flat_tile) - 1 - i];                               \
+		size[i] = p_tile->card[hit_tileDims(*p_tile) - 1 - i];                                         \
 	}                                                                                                  \
-	dev_offset[0] *= flat_tile.baseExtent;                                                             \
-	size[0] *= flat_tile.baseExtent;                                                                   \
-	switch (hit_tileDims(flat_tile)) {                                                                 \
+	size[0] *= p_tile->baseExtent;                                                                     \
+	switch (hit_tileDims(*p_tile)) {                                                                   \
 		case 1:                                                                                        \
 			OPENCL_ASSERT_OP(                                                                          \
 				clEnqueue##type##Buffer(cmd_queue, p_tile_data_fpga->device_data,                      \
-										CL_FALSE, parent_offset[0] * flat_tile.baseExtent,             \
-										(size_t)flat_tile.acumCard * flat_tile.baseExtent,             \
-										flat_tile.data, 0, NULL,                                       \
+										CL_FALSE, dev_offset[0] * p_tile->baseExtent,                  \
+										(size_t)p_tile->acumCard * p_tile->baseExtent,                 \
+										p_tile->data, 0, NULL,                                         \
 										p_task->event.event.p_event_cl));                              \
 			break;                                                                                     \
 		case 2:                                                                                        \
@@ -858,9 +850,9 @@ void Ctrl_FPGA_WaitTileInner(Ctrl_FPGA *p_ctrl, Ctrl_Tile *p_tile_data) {
 					cmd_queue,                                                                         \
 					p_tile_data_fpga->device_data,                                                     \
 					CL_FALSE, dev_offset, zero_offset, size,                                           \
-					flat_tile.baseExtent * flat_tile.origAcumCard[1], 0,                               \
-					flat_tile.baseExtent * flat_tile.origAcumCard[1], 0,                               \
-					flat_tile.data, 0, NULL,                                                           \
+					p_tile->baseExtent * p_tile_data_impl->origAcumCard[1], 0,                         \
+					p_tile->baseExtent * p_tile->origAcumCard[1], 0,                                   \
+					p_tile->data, 0, NULL,                                                             \
 					p_task->event.event.p_event_cl));                                                  \
 			break;                                                                                     \
 		case 3:                                                                                        \
@@ -869,36 +861,35 @@ void Ctrl_FPGA_WaitTileInner(Ctrl_FPGA *p_ctrl, Ctrl_Tile *p_tile_data) {
 					cmd_queue,                                                                         \
 					p_tile_data_fpga->device_data,                                                     \
 					CL_FALSE, dev_offset, zero_offset, size,                                           \
-					flat_tile.baseExtent * flat_tile.origAcumCard[2],                                  \
-					flat_tile.baseExtent * flat_tile.origAcumCard[1],                                  \
-					flat_tile.baseExtent * flat_tile.origAcumCard[2],                                  \
-					flat_tile.baseExtent * flat_tile.origAcumCard[1],                                  \
-					flat_tile.data, 0, NULL,                                                           \
+					p_tile->baseExtent * p_tile_data_impl->origAcumCard[2],                            \
+					p_tile->baseExtent * p_tile_data_impl->origAcumCard[1],                            \
+					p_tile->baseExtent * p_tile->origAcumCard[2],                                      \
+					p_tile->baseExtent * p_tile->origAcumCard[1],                                      \
+					p_tile->data, 0, NULL,                                                             \
 					p_task->event.event.p_event_cl));                                                  \
 			break;                                                                                     \
 		case 4:                                                                                        \
-			dev_offset[0] += parent_offset[0] * flat_tile.origAcumCard[1] * flat_tile.baseExtent;      \
-			char *p_host_data = (char *)flat_tile.data;                                                \
-			for (int i = 0; i < hit_tileDimCard(flat_tile, 0); i++) {                                  \
+			char *p_host_data = (char *)p_tile->data;                                                  \
+			for (int i = 0; i < hit_tileDimCard(*p_tile, 0); i++) {                                    \
 				OPENCL_ASSERT_OP(                                                                      \
 					clEnqueue##type##BufferRect(                                                       \
 						cmd_queue,                                                                     \
 						p_tile_data_fpga->device_data,                                                 \
 						CL_FALSE, dev_offset, zero_offset, size,                                       \
-						flat_tile.baseExtent * flat_tile.origAcumCard[3],                              \
-						flat_tile.baseExtent * flat_tile.origAcumCard[2],                              \
-						flat_tile.baseExtent * flat_tile.origAcumCard[3],                              \
-						flat_tile.baseExtent * flat_tile.origAcumCard[2],                              \
+						p_tile->baseExtent * p_tile_data_impl->origAcumCard[3],                        \
+						p_tile->baseExtent * p_tile_data_impl->origAcumCard[2],                        \
+						p_tile->baseExtent * p_tile->origAcumCard[3],                                  \
+						p_tile->baseExtent * p_tile->origAcumCard[2],                                  \
 						(void *)p_host_data, 0, NULL,                                                  \
 						p_task->event.event.p_event_cl));                                              \
-				dev_offset[0] += flat_tile.origAcumCard[1] * flat_tile.baseExtent;                     \
-				p_host_data += flat_tile.origAcumCard[1] * flat_tile.baseExtent;                       \
+				dev_offset[0] += p_tile_data_impl->origAcumCard[1] * p_tile->baseExtent;               \
+				p_host_data += p_tile->origAcumCard[1] * p_tile->baseExtent;                           \
 			}                                                                                          \
 			break;                                                                                     \
 		default:                                                                                       \
 			fprintf(stderr, "[Ctrl_FPGA] Internal Error: "                                             \
 							"Number of dimensions not supported for non-owner tile in mem move: %d\n", \
-					hit_tileDims(flat_tile));                                                          \
+					hit_tileDims(*p_tile));                                                            \
 			exit(EXIT_FAILURE);                                                                        \
 	}
 
@@ -957,11 +948,11 @@ void Ctrl_FPGA_MoveToWait(Ctrl_FPGA_Tile *p_tile_data, Ctrl_TaskQueue *p_queue) 
 }
 
 void Ctrl_FPGA_ExecTaskMoveTo(Ctrl_Task *p_task, Ctrl_FPGA *p_ctrl) {
-	HitTile        *p_tile           = &p_task->tile;
-	Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)p_tile->ext;
-	Ctrl_FPGA_Tile *p_tile_data_fpga = p_tile_data->p_impls[p_ctrl->global_id].tile.p_fpga;
-
-	cl_command_queue cmd_queue = p_ctrl->htd_driver_stream;
+	HitTile         *p_tile           = &p_task->tile;
+	Ctrl_Tile       *p_tile_data      = (Ctrl_Tile *)p_tile->ext;
+	Ctrl_Tile_Impl  *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
+	Ctrl_FPGA_Tile  *p_tile_data_fpga = p_tile_data_impl->tile.p_fpga;
+	cl_command_queue cmd_queue        = p_ctrl->htd_driver_stream;
 
 	// Enqueue the transfer operation
 	OpenCL_Move(Write);
@@ -1025,11 +1016,11 @@ void Ctrl_FPGA_MoveFromWait(Ctrl_FPGA_Tile *p_tile_data, Ctrl_TaskQueue *p_queue
 }
 
 void Ctrl_FPGA_ExecTaskMoveFrom(Ctrl_Task *p_task, Ctrl_FPGA *p_ctrl) {
-	HitTile        *p_tile           = &p_task->tile;
-	Ctrl_Tile      *p_tile_data      = (Ctrl_Tile *)p_tile->ext;
-	Ctrl_FPGA_Tile *p_tile_data_fpga = p_tile_data->p_impls[p_ctrl->global_id].tile.p_fpga;
-
-	cl_command_queue cmd_queue = p_ctrl->dth_driver_stream;
+	HitTile         *p_tile           = &p_task->tile;
+	Ctrl_Tile       *p_tile_data      = (Ctrl_Tile *)p_tile->ext;
+	Ctrl_Tile_Impl  *p_tile_data_impl = &p_tile_data->p_impls[p_ctrl->global_id];
+	Ctrl_FPGA_Tile  *p_tile_data_fpga = p_tile_data_impl->tile.p_fpga;
+	cl_command_queue cmd_queue        = p_ctrl->dth_driver_stream;
 
 	// Enqueue the transfer operation
 	OpenCL_Move(Read);
@@ -1206,7 +1197,7 @@ void Ctrl_FPGA_EvalTaskKernelLaunch(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 				continue;
 			}
 
-			if (p_tile_data_impl->device_status == CTRL_TILE_UNALLOC) {
+			if (p_tile_data_impl->device_memowner == HIT_MS_NOMEM) {
 				fprintf(stderr, "[Ctrl_FPGA] Internal Error: Launching kernel %s with a tile with no device memory as parameter %d (starting at 0)\n", p_task->p_func_name, i);
 				fflush(stderr);
 				exit(EXIT_FAILURE);
@@ -1214,7 +1205,7 @@ void Ctrl_FPGA_EvalTaskKernelLaunch(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 
 			// if tile's role is IN or IO, is not updated on device and host has memory allocated transfer it
 			if (p_task->p_roles[i] != KERNEL_OUT && p_tile_data_impl->device_status == CTRL_TILE_INVALID &&
-				p_tile_data->host_status != CTRL_TILE_UNALLOC && p_ctrl->dependance_mode == CTRL_MODE_IMPLICIT) {
+				p_tile->memStatus != HIT_MS_NOMEM && p_ctrl->dependance_mode == CTRL_MODE_IMPLICIT) {
 				if (p_tile_data->host_status != CTRL_TILE_VALID) {
 					for (int j = 0; j < Ctrl_GetNCtrls(); j++) {
 						Ctrl_Tile_Impl *p_tile_impl_j = &p_tile_data->p_impls[j];
@@ -1275,7 +1266,7 @@ void Ctrl_FPGA_EvalTaskKernelLaunch(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 				Ctrl_GenericEvent_StreamWait(p_tile_data_fpga->dev_last_kernel_write_event, p_host_kernel_queue);
 			}
 
-			if (p_tile_data->host_status != CTRL_TILE_UNALLOC && !(p_tile_data_impl->device_status == CTRL_TILE_VALID && p_tile_data->host_status == CTRL_TILE_INVALID)) {
+			if (p_tile->memStatus != HIT_MS_NOMEM && !(p_tile_data_impl->device_status == CTRL_TILE_VALID && p_tile_data->host_status == CTRL_TILE_INVALID)) {
 				Ctrl_GenericEvent_StreamWait(p_tile_data_fpga->host_last_htd_event, p_host_kernel_queue);
 				Ctrl_GenericEvent_StreamWait(p_tile_data_fpga->dev_last_htd_event, p_host_kernel_queue);
 			}
@@ -1287,7 +1278,7 @@ void Ctrl_FPGA_EvalTaskKernelLaunch(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 					Ctrl_GenericEvent_StreamWait(p_tile_data_fpga->dev_last_kernel_read_event, p_host_kernel_queue);
 				}
 
-				if (p_tile_data->host_status != CTRL_TILE_UNALLOC && !(p_tile_data_impl->device_status == CTRL_TILE_VALID && p_tile_data->host_status == CTRL_TILE_INVALID)) {
+				if (p_tile->memStatus != HIT_MS_NOMEM && !(p_tile_data_impl->device_status == CTRL_TILE_VALID && p_tile_data->host_status == CTRL_TILE_INVALID)) {
 					Ctrl_GenericEvent_StreamWait(p_tile_data_fpga->host_last_dth_event, p_host_kernel_queue);
 					Ctrl_GenericEvent_StreamWait(p_tile_data_fpga->dev_last_dth_event, p_host_kernel_queue);
 				}
@@ -1378,6 +1369,23 @@ void Ctrl_FPGA_SyncWait(Ctrl_FPGA *p_ctrl, Ctrl_TaskQueue *p_queue) {
 	Ctrl_GenericEvent_StreamWait(p_ctrl->dev_seq_event, p_queue);
 }
 
+bool Ctrl_FPGA_AllocPinned(Ctrl_FPGA *p_ctrl, HitTile *p_tile, int flags) {
+	// don't alloc pinned mem if explicitly requested
+	if (!(flags & CTRL_MEM_PINNED) && (flags & CTRL_MEM_NOPINNED))
+		return false;
+
+	cl_int     err;
+	Ctrl_Tile *p_tile_data = (Ctrl_Tile *)(p_tile->ext);
+
+	// Allocate host memory
+	p_tile_data->pinned      = CTRL_TYPE_FPGA;
+	p_tile_data->host_status = CTRL_TILE_INVALID;
+	posix_memalign(&p_tile->data, AOCL_ALIGNMENT, (size_t)p_tile->origAcumCard[0] * p_tile->baseExtent);
+	p_tile->memPtr = p_tile->data;
+
+	return true;
+}
+
 void Ctrl_FPGA_EvalTaskAllocTile(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 	cl_int err;
 
@@ -1390,25 +1398,36 @@ void Ctrl_FPGA_EvalTaskAllocTile(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 
 	Ctrl_FPGA_Tile *p_tile_data_fpga = p_tile_data_impl->tile.p_fpga;
 
-	// TODO @sergioalo fpga requires aligned memory, what to do if mem was already allocated by another ctrl?
-	if (p_tile_data->host_status == CTRL_TILE_UNALLOC && (p_task->flags & CTRL_MEM_ALLOC_HOST || !(p_task->flags & CTRL_MEM_ALLOC_DEV))) {
-		// Allocate host memory
-		p_tile_data->pinned      = CTRL_TYPE_NULL;
-		p_tile_data->host_status = CTRL_TILE_INVALID;
-		posix_memalign(&p_tile->data, AOCL_ALIGNMENT, (size_t)p_tile->acumCard * p_tile->baseExtent);
-		p_tile->memPtr = p_tile->data;
-	}
-
 	if (p_task->flags & CTRL_MEM_ALLOC_DEV || !(p_task->flags & CTRL_MEM_ALLOC_HOST)) {
-		if (p_tile_data_impl->device_status != CTRL_TILE_UNALLOC) {
-			fprintf(stderr, "[Ctrl_FPGA] Warning: Device memory already allocated for this tile, ignoring this call.\n");
+		if (p_tile_data_impl->device_memowner == HIT_MS_OWNER) {
+			fprintf(stderr, "[Ctrl_FPGA] Warning: This tile already owns a memory image on this device, ignoring this call.\n");
 			fflush(stderr);
 			return;
 		}
+
+		int dims = hit_tileDims(*p_tile);
 		// Allocate device memory
-		p_tile_data_impl->device_status = CTRL_TILE_INVALID;
-		p_tile_data_fpga->device_data   = clCreateBuffer(p_ctrl->context, CL_MEM_READ_WRITE, ((size_t)(p_tile->acumCard)) * (p_tile->baseExtent), NULL, &err);
-		OPENCL_ASSERT_ERROR(err);
+		if (p_task->flags & CTRL_MEM_ALIGNED && hit_tileDims(*p_tile) > 1) {
+			size_t alignment = p_ctrl->alignment == 0 ? CTRL_DEFAULT_TILE_ALIGNMENT : p_ctrl->alignment;
+
+			// reject algnments not divisible by base extent
+			if (alignment % p_tile->baseExtent != 0) {
+				fprintf(stderr, "[Ctrl_Cuda] Error: tile alignment %lu is not divisible by type size %lu. \n", alignment, p_tile->baseExtent);
+				exit(EXIT_FAILURE);
+			}
+
+			Ctrl_Tile_UpdateOrigAcumCards(p_tile_data_impl->origAcumCard, dims, p_tile->card, alignment / p_tile->baseExtent);
+			p_tile_data_fpga->device_data = clCreateBuffer(p_ctrl->context, CL_MEM_READ_WRITE, p_tile_data_impl->origAcumCard[0] * p_tile->baseExtent, NULL, &err);
+			OPENCL_ASSERT_ERROR(err);
+		} else {
+			// Allocate device memory
+			p_tile_data_fpga->device_data = clCreateBuffer(p_ctrl->context, CL_MEM_READ_WRITE, (size_t)(p_tile->acumCard) * p_tile->baseExtent, NULL, &err);
+			OPENCL_ASSERT_ERROR(err);
+			Ctrl_Tile_UpdateOrigAcumCards(p_tile_data_impl->origAcumCard, dims, p_tile->card, 0);
+		}
+		p_tile_data_impl->device_status   = CTRL_TILE_INVALID;
+		p_tile_data_impl->device_memowner = HIT_MS_OWNER;
+		p_tile_data_impl->offset;
 	}
 }
 
@@ -1430,6 +1449,20 @@ void Ctrl_FPGA_EvalTaskSelectTile(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 
 		/* Use parent buffers. Offset added inside the kernels (device pointers can't be edited in host scope). */
 		p_tile_data_fpga->device_data = p_parent_data_fpga->device_data;
+	}
+	if (p_parent_data_impl->device_memowner != HIT_MS_NOMEM) {
+		p_tile_data_impl->device_status   = p_parent_data_impl->device_status;
+		p_tile_data_impl->device_memowner = HIT_MS_NOT_OWNER;
+
+		for (int i = 0; i < HIT_MAXDIMS + 1; i++) {
+			p_tile_data_impl->origAcumCard[i] = p_parent_data_impl->origAcumCard[i];
+		}
+
+		HitInd offset = Ctrl_Tile_ParentDeviceOffset(p_tile, p_tile_data_impl);
+
+		// Use parent buffers. Offset added inside the kernels (device pointers can't be edited in host scope).
+		p_tile_data_fpga->device_data = p_parent_data_fpga->device_data;
+		p_tile_data_impl->offset      = offset + p_parent_data_impl->offset;
 	}
 }
 
@@ -1461,10 +1494,8 @@ void Ctrl_FPGA_EvalTaskFreeTile(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 	Ctrl_GenericEvent_Release(p_tile_data_fpga->dev_last_htd_event);
 	Ctrl_GenericEvent_Release(p_tile_data_fpga->last_op);
 
-	if (p_tile->memStatus == HIT_MS_OWNER) {
-		if (p_tile_data_impl->device_status != CTRL_TILE_UNALLOC) {
-			OPENCL_ASSERT_OP(clReleaseMemObject(p_tile_data_fpga->device_data));
-		}
+	if (p_tile_data_impl->device_memowner == HIT_MS_OWNER) {
+		OPENCL_ASSERT_OP(clReleaseMemObject(p_tile_data_fpga->device_data));
 	}
 
 	// Remove tle from tile linked list
@@ -1507,13 +1538,13 @@ void Ctrl_FPGA_EvalTaskMoveTo(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 
 	if (hit_tileIsNull(*p_tile)) return;
 
-	if (p_tile_data->host_status == CTRL_TILE_UNALLOC) {
+	if (p_tile->memStatus == HIT_MS_NOMEM) {
 		fprintf(stderr, "[Ctrl_FPGA] Internal Error: Tryinng to move tile from host to device but host memory was not allocated\n");
 		fflush(stderr);
 		exit(EXIT_FAILURE);
 	}
 
-	if (p_tile_data_impl->device_status == CTRL_TILE_UNALLOC) {
+	if (p_tile_data_impl->device_memowner == HIT_MS_NOMEM) {
 		fprintf(stderr, "[Ctrl_FPGA] Internal Error: Tryinng to move tile from host to device but device memory was not allocated\n");
 		fflush(stderr);
 		exit(EXIT_FAILURE);
@@ -1537,13 +1568,13 @@ void Ctrl_FPGA_EvalTaskMoveFrom(Ctrl_FPGA *p_ctrl, Ctrl_Task *p_task) {
 
 	if (hit_tileIsNull(*p_tile)) return;
 
-	if (p_tile_data->host_status == CTRL_TILE_UNALLOC) {
+	if (p_tile->memStatus == HIT_MS_NOMEM) {
 		fprintf(stderr, "[Ctrl_FPGA] Internal Error: Trying to move tile from device to host but host memory was not allocated\n");
 		fflush(stderr);
 		exit(EXIT_FAILURE);
 	}
 
-	if (p_tile_data_impl->device_status == CTRL_TILE_UNALLOC) {
+	if (p_tile_data_impl->device_memowner == HIT_MS_NOMEM) {
 		fprintf(stderr, "[Ctrl_FPGA] Internal Error: Trying to move tile from device to host but device memory was not allocated\n");
 		fflush(stderr);
 		exit(EXIT_FAILURE);
